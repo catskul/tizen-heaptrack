@@ -180,6 +180,14 @@ struct backtrace_view
   size_t len;
 };
 
+/* Open debug file whose name is placed in gnu_debuglink section.
+   Check the crc32 sum and search file with debug data. On success returns
+   descriptor of that file on fail -1.  */
+
+extern int backtrace_open_debugfile (int descriptor, const char *filename,
+				     backtrace_error_callback, void *data,
+				     struct backtrace_state *state);
+
 /* Create a view of SIZE bytes from DESCRIPTOR at OFFSET.  Store the
    result in *VIEW.  Returns 1 on success, 0 on error.  */
 extern int backtrace_get_view (struct backtrace_state *state, int descriptor,

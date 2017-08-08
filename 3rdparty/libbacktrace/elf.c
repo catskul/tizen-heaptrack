@@ -35,6 +35,9 @@ POSSIBILITY OF SUCH DAMAGE.  */
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <errno.h>
 
 #ifdef HAVE_DL_ITERATE_PHDR
 #include <link.h>
@@ -42,6 +45,32 @@ POSSIBILITY OF SUCH DAMAGE.  */
 
 #include "backtrace.h"
 #include "internal.h"
+#include "filenames.h"
+
+/* The following is from pathmax.h.  */
+/* Non-POSIX BSD systems might have gcc's limits.h, which doesn't define
+   PATH_MAX but might cause redefinition warnings when sys/param.h is
+   later included (as on MORE/BSD 4.3).  */
+#if defined _POSIX_VERSION || (defined HAVE_LIMITS_H && !defined __GNUC__)
+# include <limits.h>
+#endif
+
+#ifndef _POSIX_PATH_MAX
+# define _POSIX_PATH_MAX 255
+#endif
+
+/* Don't include sys/param.h if it already has been.  */
+#if defined HAVE_SYS_PARAM_H && !defined PATH_MAX && !defined MAXPATHLEN
+# include <sys/param.h>
+#endif
+
+#if !defined PATH_MAX && defined MAXPATHLEN
+# define PATH_MAX MAXPATHLEN
+#endif
+
+#ifndef PATH_MAX
+# define PATH_MAX _POSIX_PATH_MAX
+#endif
 
 #ifndef HAVE_DL_ITERATE_PHDR
 
@@ -283,6 +312,821 @@ struct elf_syminfo_data
   size_t count;
 };
 
+/* Information to read ELF note section.  */
+
+typedef struct
+{
+  unsigned char namesz[4];
+  unsigned char descsz[4];
+  unsigned char type[4];
+  unsigned char name[1];
+} Elf_External_Note;
+
+/* Information about type of the file.  */
+
+enum type_of_file
+{
+  LINK = 1,
+  REGULAR = 2
+};
+
+/* Information about debug paths.  */
+
+enum debug_path
+{
+  CURRENT,
+  CURRENT_DEBUG,
+  USR_LIB_DEBUG,
+  USR_LIB_DEBUG_PATH_TO_EXE,
+  DEBUG_PATH_MAX
+};
+
+/* Type of the ELF file.  */
+
+enum type_of_elf
+{
+  DYN = -1,
+  INVALID = 0,
+  EXEC = 1
+};
+
+/* Paths to debug file.  */
+
+static const char *const debug_file_path[DEBUG_PATH_MAX]
+  = {"", ".debug/", "/usr/lib/debug/", "/usr/lib/debug"};
+
+/* Cast from void pointer to uint32_t.  */
+
+static uint32_t
+getl32 (void *p)
+{
+  char *addr = (char *) p;
+  uint32_t v = 0;
+  v = *((uint32_t *) addr);
+  return v;
+}
+
+/* Function that produce a crc32 value for input buffer.  */
+
+static unsigned long
+gnu_debuglink_crc32 (unsigned long crc, const unsigned char *buf, size_t len)
+{
+  static const unsigned long crc32_table[256]
+    = {0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,
+       0xe963a535, 0x9e6495a3, 0x0edb8832, 0x79dcb8a4, 0xe0d5e91e, 0x97d2d988,
+       0x09b64c2b, 0x7eb17cbd, 0xe7b82d07, 0x90bf1d91, 0x1db71064, 0x6ab020f2,
+       0xf3b97148, 0x84be41de, 0x1adad47d, 0x6ddde4eb, 0xf4d4b551, 0x83d385c7,
+       0x136c9856, 0x646ba8c0, 0xfd62f97a, 0x8a65c9ec, 0x14015c4f, 0x63066cd9,
+       0xfa0f3d63, 0x8d080df5, 0x3b6e20c8, 0x4c69105e, 0xd56041e4, 0xa2677172,
+       0x3c03e4d1, 0x4b04d447, 0xd20d85fd, 0xa50ab56b, 0x35b5a8fa, 0x42b2986c,
+       0xdbbbc9d6, 0xacbcf940, 0x32d86ce3, 0x45df5c75, 0xdcd60dcf, 0xabd13d59,
+       0x26d930ac, 0x51de003a, 0xc8d75180, 0xbfd06116, 0x21b4f4b5, 0x56b3c423,
+       0xcfba9599, 0xb8bda50f, 0x2802b89e, 0x5f058808, 0xc60cd9b2, 0xb10be924,
+       0x2f6f7c87, 0x58684c11, 0xc1611dab, 0xb6662d3d, 0x76dc4190, 0x01db7106,
+       0x98d220bc, 0xefd5102a, 0x71b18589, 0x06b6b51f, 0x9fbfe4a5, 0xe8b8d433,
+       0x7807c9a2, 0x0f00f934, 0x9609a88e, 0xe10e9818, 0x7f6a0dbb, 0x086d3d2d,
+       0x91646c97, 0xe6635c01, 0x6b6b51f4, 0x1c6c6162, 0x856530d8, 0xf262004e,
+       0x6c0695ed, 0x1b01a57b, 0x8208f4c1, 0xf50fc457, 0x65b0d9c6, 0x12b7e950,
+       0x8bbeb8ea, 0xfcb9887c, 0x62dd1ddf, 0x15da2d49, 0x8cd37cf3, 0xfbd44c65,
+       0x4db26158, 0x3ab551ce, 0xa3bc0074, 0xd4bb30e2, 0x4adfa541, 0x3dd895d7,
+       0xa4d1c46d, 0xd3d6f4fb, 0x4369e96a, 0x346ed9fc, 0xad678846, 0xda60b8d0,
+       0x44042d73, 0x33031de5, 0xaa0a4c5f, 0xdd0d7cc9, 0x5005713c, 0x270241aa,
+       0xbe0b1010, 0xc90c2086, 0x5768b525, 0x206f85b3, 0xb966d409, 0xce61e49f,
+       0x5edef90e, 0x29d9c998, 0xb0d09822, 0xc7d7a8b4, 0x59b33d17, 0x2eb40d81,
+       0xb7bd5c3b, 0xc0ba6cad, 0xedb88320, 0x9abfb3b6, 0x03b6e20c, 0x74b1d29a,
+       0xead54739, 0x9dd277af, 0x04db2615, 0x73dc1683, 0xe3630b12, 0x94643b84,
+       0x0d6d6a3e, 0x7a6a5aa8, 0xe40ecf0b, 0x9309ff9d, 0x0a00ae27, 0x7d079eb1,
+       0xf00f9344, 0x8708a3d2, 0x1e01f268, 0x6906c2fe, 0xf762575d, 0x806567cb,
+       0x196c3671, 0x6e6b06e7, 0xfed41b76, 0x89d32be0, 0x10da7a5a, 0x67dd4acc,
+       0xf9b9df6f, 0x8ebeeff9, 0x17b7be43, 0x60b08ed5, 0xd6d6a3e8, 0xa1d1937e,
+       0x38d8c2c4, 0x4fdff252, 0xd1bb67f1, 0xa6bc5767, 0x3fb506dd, 0x48b2364b,
+       0xd80d2bda, 0xaf0a1b4c, 0x36034af6, 0x41047a60, 0xdf60efc3, 0xa867df55,
+       0x316e8eef, 0x4669be79, 0xcb61b38c, 0xbc66831a, 0x256fd2a0, 0x5268e236,
+       0xcc0c7795, 0xbb0b4703, 0x220216b9, 0x5505262f, 0xc5ba3bbe, 0xb2bd0b28,
+       0x2bb45a92, 0x5cb36a04, 0xc2d7ffa7, 0xb5d0cf31, 0x2cd99e8b, 0x5bdeae1d,
+       0x9b64c2b0, 0xec63f226, 0x756aa39c, 0x026d930a, 0x9c0906a9, 0xeb0e363f,
+       0x72076785, 0x05005713, 0x95bf4a82, 0xe2b87a14, 0x7bb12bae, 0x0cb61b38,
+       0x92d28e9b, 0xe5d5be0d, 0x7cdcefb7, 0x0bdbdf21, 0x86d3d2d4, 0xf1d4e242,
+       0x68ddb3f8, 0x1fda836e, 0x81be16cd, 0xf6b9265b, 0x6fb077e1, 0x18b74777,
+       0x88085ae6, 0xff0f6a70, 0x66063bca, 0x11010b5c, 0x8f659eff, 0xf862ae69,
+       0x616bffd3, 0x166ccf45, 0xa00ae278, 0xd70dd2ee, 0x4e048354, 0x3903b3c2,
+       0xa7672661, 0xd06016f7, 0x4969474d, 0x3e6e77db, 0xaed16a4a, 0xd9d65adc,
+       0x40df0b66, 0x37d83bf0, 0xa9bcae53, 0xdebb9ec5, 0x47b2cf7f, 0x30b5ffe9,
+       0xbdbdf21c, 0xcabac28a, 0x53b39330, 0x24b4a3a6, 0xbad03605, 0xcdd70693,
+       0x54de5729, 0x23d967bf, 0xb3667a2e, 0xc4614ab8, 0x5d681b02, 0x2a6f2b94,
+       0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d};
+  const unsigned char *end;
+
+  crc = ~crc & 0xffffffff;
+  for (end = buf + len; buf < end; ++buf)
+    crc = crc32_table[(crc ^ *buf) & 0xff] ^ (crc >> 8);
+  return ~crc & 0xffffffff;
+}
+
+/* Generate crc32 sum from the file.  */
+
+static unsigned long
+get_crc32 (int descriptor)
+{
+  unsigned char buffer[8 * 1024];
+  memset (buffer, 0, 8 * 1024);
+  unsigned long file_crc = 0;
+  ssize_t count;
+
+  while ((count = read (descriptor, buffer, sizeof (buffer))) > 0)
+    file_crc = gnu_debuglink_crc32 (file_crc, buffer, count);
+
+  return file_crc;
+}
+
+/* Get length of the path.  */
+
+static int
+pathlen (const char *buffer)
+{
+  int len;
+
+  len = strlen (buffer);
+  while (len > 1 && !IS_DIR_SEPARATOR (buffer[len - 1]))
+    --len;
+  return len > 1 ? len : -1;
+}
+
+/* Verify crc32 sum.  */
+
+static int
+check_sum (int descriptor, char *debug_link, int offset, int section_size)
+{
+  unsigned long crc32_debug_link;
+  unsigned long crc32_debug_file;
+  offset += 1;
+  offset = (offset + 3) & ~3;
+  if (offset >= section_size)
+    return 0;
+  crc32_debug_link = getl32 (debug_link + offset);
+  crc32_debug_file = get_crc32 (descriptor);
+  return crc32_debug_link == crc32_debug_file;
+}
+
+/* Process elf header. Verify magic number, version, etc, of the ELF
+   header. Return 1 if the file type is EXE, -1 if type of the file
+   is DYN and 0 on the fail.  */
+
+static int
+process_elf_header (struct backtrace_state *state, int descriptor,
+		    backtrace_error_callback error_callback, void *data,
+		    int exe, off_t *shoff_out, unsigned int *shnum_out,
+		    unsigned int *shstrndx_out, b_elf_ehdr *ehdr_out)
+{
+  struct backtrace_view ehdr_view;
+
+  if (!backtrace_get_view (state, descriptor, 0, sizeof *ehdr_out,
+			   error_callback, data, &ehdr_view))
+    goto fail;
+
+  memcpy (ehdr_out, ehdr_view.data, sizeof *ehdr_out);
+
+  backtrace_release_view (state, &ehdr_view, error_callback, data);
+
+  if (ehdr_out->e_ident[EI_MAG0] != ELFMAG0
+      || ehdr_out->e_ident[EI_MAG1] != ELFMAG1
+      || ehdr_out->e_ident[EI_MAG2] != ELFMAG2
+      || ehdr_out->e_ident[EI_MAG3] != ELFMAG3)
+    {
+      error_callback (data, "executable file is not ELF", 0);
+      goto fail;
+    }
+  if (ehdr_out->e_ident[EI_VERSION] != EV_CURRENT)
+    {
+      error_callback (data, "executable file is unrecognized ELF version", 0);
+      goto fail;
+    }
+
+#if BACKTRACE_ELF_SIZE == 32
+#define BACKTRACE_ELFCLASS ELFCLASS32
+#else
+#define BACKTRACE_ELFCLASS ELFCLASS64
+#endif
+
+  if (ehdr_out->e_ident[EI_CLASS] != BACKTRACE_ELFCLASS)
+    {
+      error_callback (data, "executable file is unexpected ELF class", 0);
+      goto fail;
+    }
+
+  if (ehdr_out->e_ident[EI_DATA] != ELFDATA2LSB
+      && ehdr_out->e_ident[EI_DATA] != ELFDATA2MSB)
+    {
+      error_callback (data, "executable file has unknown endianness", 0);
+      goto fail;
+    }
+
+  /* If the executable is ET_DYN, it is either a PIE, or we are running
+     directly a shared library with .interp.  We need to wait for
+     dl_iterate_phdr in that case to determine the actual base_address.  */
+  if (exe && ehdr_out->e_type == ET_DYN)
+    return -1;
+
+  *shoff_out = ehdr_out->e_shoff;
+  *shnum_out = ehdr_out->e_shnum;
+  *shstrndx_out = ehdr_out->e_shstrndx;
+
+  if ((*shnum_out == 0 || *shstrndx_out == SHN_XINDEX) && *shoff_out != 0)
+    {
+      struct backtrace_view shdr_view;
+      const b_elf_shdr *shdr;
+
+      if (!backtrace_get_view(state, descriptor, *shoff_out,
+			      sizeof (b_elf_shdr), error_callback,
+			      data, &shdr_view))
+        goto fail;
+
+      shdr = (const b_elf_shdr *) shdr_view.data;
+
+      if (*shnum_out == 0)
+	*shnum_out = shdr->sh_size;
+
+      if (*shstrndx_out == SHN_XINDEX)
+	{
+	  *shstrndx_out = shdr->sh_link;
+
+	  /* Versions of the GNU binutils between 2.12 and 2.18 did
+	     not handle objects with more than SHN_LORESERVE sections
+	     correctly.  All large section indexes were offset by
+	     0x100.  There is more information at
+	     http://sourceware.org/bugzilla/show_bug.cgi?id-5900 .
+	     Fortunately these object files are easy to detect, as the
+	     GNU binutils always put the section header string table
+	     near the end of the list of sections.  Thus if the
+	     section header string table index is larger than the
+	     number of sections, then we know we have to subtract
+	     0x100 to get the real section index.  */
+	  if (*shstrndx_out >= *shnum_out
+	      && *shstrndx_out >= SHN_LORESERVE + 0x100)
+	    *shstrndx_out -= 0x100;
+	}
+      backtrace_release_view (state, &shdr_view, error_callback, data);
+    }
+  return 1;
+ fail:
+  return 0;
+}
+
+
+/* Get content of the specifying section.  */
+
+static unsigned char *
+elf_get_section_by_name (struct backtrace_state *state, int descriptor,
+			 backtrace_error_callback error_callback, void *data,
+			 int *section_data_len_out, const char *section_name)
+{
+  b_elf_ehdr ehdr;
+  off_t shoff;
+  unsigned int shnum;
+  unsigned int shstrndx;
+  struct backtrace_view shdrs_view;
+  int shdrs_view_valid;
+  const b_elf_shdr *shdrs;
+  const b_elf_shdr *shstrhdr;
+  size_t shstr_size;
+  off_t shstr_off;
+  struct backtrace_view names_view;
+  struct backtrace_view section_view;
+  int names_view_valid;
+  const char *names;
+  unsigned int i;
+  int section_view_valid;
+  unsigned char *section_data;
+
+  section_view_valid = 0;
+  shdrs_view_valid = 0;
+  names_view_valid = 0;
+  section_data = NULL;
+
+  if (!process_elf_header (state, descriptor, error_callback, data, 0,
+			    &shoff, &shnum, &shstrndx, &ehdr))
+    goto exit;
+
+  if (!backtrace_get_view (state, descriptor, shoff + sizeof (b_elf_shdr),
+			   (shnum - 1) * sizeof (b_elf_shdr), error_callback,
+			   data, &shdrs_view))
+    goto exit;
+
+  shdrs_view_valid = 1;
+  shdrs = (const b_elf_shdr *) shdrs_view.data;
+
+  /* Read the section names.  */
+
+  shstrhdr = &shdrs[shstrndx - 1];
+  shstr_size = shstrhdr->sh_size;
+  shstr_off = shstrhdr->sh_offset;
+
+  if (!backtrace_get_view (state, descriptor, shstr_off, shstr_size,
+			   error_callback, data, &names_view))
+    goto exit;
+
+  names_view_valid = 1;
+  names = (const char *) names_view.data;
+
+  for (i = 1; i < shnum; ++i)
+    {
+      const b_elf_shdr *shdr;
+      unsigned int sh_name;
+      const char *name;
+      shdr = &shdrs[i - 1];
+      sh_name = shdr->sh_name;
+      if (sh_name >= shstr_size)
+	{
+	  error_callback (data, "ELF section name out of range", 0);
+	  goto exit;
+	}
+
+      name = names + sh_name;
+
+      if (strcmp (name, section_name) == 0)
+	{
+	  if (backtrace_get_view (state, descriptor, shdr->sh_offset,
+				  shdr->sh_size, error_callback, data,
+				  &section_view))
+	    {
+	      section_view_valid = 1;
+	      section_data
+		= backtrace_alloc (state, shdr->sh_size, error_callback, data);
+	      if (section_data == NULL)
+		goto exit;
+	      memcpy (section_data, section_view.data, shdr->sh_size);
+	      *section_data_len_out = shdr->sh_size;
+	    }
+	  break;
+	}
+    }
+
+ exit:
+  if (shdrs_view_valid)
+    backtrace_release_view (state, &shdrs_view, error_callback, data);
+  if (names_view_valid)
+    backtrace_release_view (state, &names_view, error_callback, data);
+  if (section_view_valid)
+    backtrace_release_view (state, &section_view, error_callback, data);
+  return section_data;
+}
+
+
+/* Verify type of the file.  */
+
+static int
+backtrace_readlink (const char *filename,
+		    backtrace_error_callback error_callback, void *data)
+{
+  struct stat link_stat;
+  int file_type;
+  mode_t mode;
+
+  memset (&link_stat, 0, sizeof (struct stat));
+
+  if (lstat (filename, &link_stat) == -1)
+    {
+      if (errno != ENOENT)
+	error_callback (data, filename, errno);
+      file_type = -1;
+    }
+
+  mode = link_stat.st_mode & S_IFMT;
+
+  switch (mode)
+    {
+    case S_IFLNK:
+      file_type = LINK;
+      break;
+    case S_IFREG:
+      file_type = REGULAR;
+      break;
+    default:
+      file_type = -1;
+    }
+  return file_type;
+}
+
+/* Resolve full name of the link. In this case we can't use realpath function
+   because it could be undefined on some platfroms, also it allocates memory
+   by malloc, which we can't use.  */
+
+static int
+resolve_realname (const char *filename, char *buffer,
+		  struct backtrace_state *state,
+		  backtrace_error_callback error_callback, void *data)
+{
+  char *temp_buffer;
+  int file_type;
+  int filename_len;
+  int temp_filename_len;
+  int valid_temp_buffer;
+  int path_len;
+
+  valid_temp_buffer = 0;
+  filename_len = -1;
+  file_type = LINK;
+
+  /* Allocate memory for sizeof(PATH_MAX) + 1 bytes because at this time
+     we don't know how long path could be.  */
+  temp_buffer = backtrace_alloc (state, PATH_MAX + 1, error_callback, data);
+  if (temp_buffer == NULL)
+    return -1;
+
+  valid_temp_buffer = 1;
+
+  memset (temp_buffer, 0, PATH_MAX + 1);
+  memcpy (temp_buffer, filename, strlen (filename));
+
+  while (file_type == LINK)
+    {
+      filename_len = readlink (temp_buffer, buffer, PATH_MAX);
+      if (filename_len < 1)
+	goto exit;
+
+      temp_filename_len = strlen (buffer);
+
+      /* Full path.  */
+      if (buffer[0] == '/')
+	{
+	  memset (temp_buffer, 0, PATH_MAX);
+	  memcpy (temp_buffer, buffer, temp_filename_len);
+	}
+      else
+	{
+	  /* Relative path.  */
+	  path_len = pathlen (temp_buffer);
+	  if (path_len < 1)
+	    goto exit;
+
+	  memcpy (temp_buffer + path_len, buffer, filename_len);
+	  temp_buffer[path_len + filename_len] = '\0';
+	}
+
+      file_type = backtrace_readlink (temp_buffer, error_callback, data);
+      memset (buffer, 0, filename_len);
+    }
+
+  if (file_type != REGULAR)
+    {
+      filename_len = -1;
+      goto exit;
+    }
+
+  filename_len = strlen (temp_buffer);
+  memcpy (buffer, temp_buffer, filename_len);
+
+ exit:
+  if (valid_temp_buffer)
+    backtrace_free (state, temp_buffer, PATH_MAX + 1, error_callback, data);
+  return filename_len;
+}
+
+/* Resolve realname of the filename. This function verifies filename.
+   If filename is name of the file it populates realname buffer.
+   If filename is link, it calls resolve_realname function.  */
+
+static char *
+backtrace_resolve_realname (const char *filename, int *filename_len,
+			    struct backtrace_state *state,
+			    backtrace_error_callback error_callback, void *data)
+{
+  int file_type;
+  char *realname;
+
+  *filename_len = -1;
+
+  realname = backtrace_alloc (state, PATH_MAX + 1, error_callback, data);
+  if (realname == NULL)
+    goto exit;
+
+  file_type = backtrace_readlink (filename, error_callback, data);
+
+  if (file_type == LINK)
+    {
+      /* Read the actual filename.  */
+      *filename_len
+	= resolve_realname (filename, realname, state, error_callback, data);
+      if (*filename_len < 0)
+	goto exit;
+    }
+  else if (file_type == REGULAR)
+    {
+      *filename_len = strlen (filename);
+      if (*filename_len > PATH_MAX)
+	goto exit;
+
+      memcpy (realname, filename, *filename_len);
+    }
+
+ exit:
+  return realname;
+}
+
+/* Search for debug file into specifying directorires.  */
+
+static int
+search_for_debugfile (char *realname, char *debug_filename,
+		      backtrace_error_callback error_callback, void *data,
+		      struct backtrace_state *state)
+{
+  int debug_filename_len;
+  int pass;
+  int debug_path_len;
+  int debug_does_not_exist;
+  int debug_descriptor;
+  int path_len;
+  char *buffer;
+  int buffer_len;
+  int valid_buffer;
+
+  debug_descriptor = -1;
+  valid_buffer = 0;
+
+  path_len = pathlen (realname);
+  debug_filename_len = strlen ((const char *) debug_filename);
+
+  if (debug_filename_len < 1)
+    goto exit;
+
+  buffer_len = path_len + strlen (debug_file_path[USR_LIB_DEBUG])
+	       + debug_filename_len + 1;
+
+  buffer = backtrace_alloc (state, buffer_len, error_callback, data);
+
+  if (buffer == NULL)
+    goto exit;
+  memset (buffer, 0, buffer_len);
+  memcpy (buffer, realname, path_len);
+
+  valid_buffer = 1;
+  for (pass = 0; pass < DEBUG_PATH_MAX; ++pass)
+    {
+      switch (pass)
+	{
+	case CURRENT:
+	  {
+	    memcpy (buffer + path_len, debug_filename, debug_filename_len);
+	    break;
+	  }
+	case CURRENT_DEBUG:
+	  {
+	    debug_path_len = strlen (debug_file_path[CURRENT_DEBUG]);
+	    memcpy (buffer + path_len, debug_file_path[CURRENT_DEBUG],
+		    debug_path_len);
+	    memcpy (buffer + path_len + debug_path_len, debug_filename,
+		    debug_filename_len);
+	    break;
+	  }
+	case USR_LIB_DEBUG:
+	  {
+	    debug_path_len = strlen (debug_file_path[USR_LIB_DEBUG]);
+	    memset (buffer, 0, buffer_len);
+	    memcpy (buffer, debug_file_path[USR_LIB_DEBUG], debug_path_len);
+	    memcpy (buffer + debug_path_len, debug_filename,
+		    debug_filename_len);
+	    break;
+	  }
+	case USR_LIB_DEBUG_PATH_TO_EXE:
+	  {
+	    debug_path_len
+	      = strlen (debug_file_path[USR_LIB_DEBUG_PATH_TO_EXE]);
+	    memset (buffer, 0, buffer_len);
+	    memcpy (buffer, debug_file_path[USR_LIB_DEBUG_PATH_TO_EXE],
+		    debug_path_len);
+	    memcpy (buffer + debug_path_len, realname, path_len);
+	    memcpy (buffer + debug_path_len + path_len, debug_filename,
+		    debug_filename_len);
+	    break;
+	  }
+	default:
+	  goto exit;
+	}
+
+      debug_descriptor
+	= backtrace_open (buffer, error_callback, data, &debug_does_not_exist);
+
+      if (debug_descriptor > 0)
+	break;
+    }
+ exit:
+  if (valid_buffer)
+    backtrace_free (state, buffer, buffer_len, error_callback, data);
+  return debug_descriptor;
+}
+
+/* Open debug file by gnulink.  */
+
+static int
+open_debugfile_by_gnulink (char *realname, unsigned char *section_data,
+			   int section_data_len, struct backtrace_state *state,
+			   backtrace_error_callback error_callback, void *data)
+{
+  int debug_descriptor;
+
+  debug_descriptor = search_for_debugfile (realname, (char *) section_data,
+					   error_callback, data, state);
+  if (debug_descriptor < 0)
+    goto exit;
+
+  /* Check the crc32 checksum if it not the same return -1.  */
+
+  if (!check_sum (debug_descriptor, (char *) section_data,
+		  strlen ((char *) section_data), section_data_len))
+    debug_descriptor = -1;
+
+ exit:
+  return debug_descriptor;
+}
+
+/* Convert char to hex */
+
+static char
+hex (char ch)
+{
+  return ch > 9 ? ('a' + (ch - 10)) : ('0' + ch);
+}
+
+/* Get build-id name.  */
+
+static char *
+get_build_id_name (unsigned char *section_data, int *len,
+		   struct backtrace_state *state,
+		   backtrace_error_callback error_callback, void *data)
+{
+  Elf_External_Note *build_id_section;
+  char *build_id_name;
+  char *temp;
+  const char *debug_postfix;
+  const char *debug_prefix;
+  size_t debug_postfix_len;
+  size_t debug_prefix_len;
+  size_t name_size;
+  int offset;
+  unsigned char *hash_start;
+  unsigned long hash_size;
+  unsigned long identifier;
+
+  debug_postfix_len = 6;
+  debug_prefix_len = 10;
+  debug_postfix = ".debug";
+  debug_prefix = ".build-id/";
+  *len = 0;
+
+  build_id_section = (Elf_External_Note *) section_data;
+  hash_size = getl32 (build_id_section->descsz);
+  identifier = getl32 (build_id_section->type);
+  name_size = getl32 (build_id_section->namesz);
+
+  if (identifier != NT_GNU_BUILD_ID || hash_size == 0 || name_size != 4
+      || strncmp ((char *) build_id_section->name, "GNU", 3) != 0)
+    return NULL;
+
+  offset = 16;
+  hash_start = section_data + offset;
+  *len = hash_size * 2 + debug_postfix_len + debug_prefix_len + 1;
+  build_id_name = backtrace_alloc (state, *len, error_callback, data);
+
+  memset (build_id_name, 0, *len);
+  memcpy (build_id_name, debug_prefix, debug_prefix_len);
+  temp = build_id_name + debug_prefix_len;
+
+  *temp++ = hex ((*hash_start & 0xF0) >> 4);
+  *temp++ = hex (*hash_start & 0x0F);
+  ++hash_start;
+  --hash_size;
+
+  memcpy (temp, "/", 1);
+  ++temp;
+
+  while (hash_size--)
+    {
+      *temp++ = hex ((*hash_start & 0xF0) >> 4);
+      *temp++ = hex (*hash_start & 0x0F);
+      ++hash_start;
+    }
+
+  memcpy (temp, debug_postfix, debug_postfix_len);
+  return build_id_name;
+}
+
+/* Open file by build-id.  */
+
+static int
+open_debugfile_by_build_id (char *realname, unsigned char *section_data,
+			    struct backtrace_state *state,
+			    backtrace_error_callback error_callback, void *data)
+
+{
+  char *build_id_name;
+  int debug_descriptor;
+  int build_id_name_len;
+  int valid_build_id_name;
+
+  debug_descriptor = -1;
+  valid_build_id_name = 0;
+
+  build_id_name = get_build_id_name (section_data, &build_id_name_len, state,
+				     error_callback, data);
+
+  if (build_id_name == NULL || build_id_name_len <= 0)
+    goto exit;
+
+  valid_build_id_name = 1;
+
+  debug_descriptor = search_for_debugfile (realname, build_id_name,
+					   error_callback, data, state);
+
+ exit:
+  if (valid_build_id_name)
+    backtrace_free (state, build_id_name, build_id_name_len, error_callback,
+		    data);
+  return debug_descriptor;
+}
+
+/* Open debug file.  */
+
+int
+backtrace_open_debugfile (int descriptor, const char *filename,
+			  backtrace_error_callback error_callback, void *data,
+			  struct backtrace_state *state)
+{
+  int debug_descriptor;
+  unsigned char *gnulink_section_data;
+  unsigned char *build_id_section_data;
+  size_t valid_descriptor;
+  size_t valid_gnulink_section_data;
+  size_t valid_build_id_section_data;
+  size_t valid_realname;
+  int build_id_section_data_len;
+  int gnu_link_section_data_len;
+  char *realname;
+  int filename_len;
+
+  valid_realname = 0;
+  valid_descriptor = 0;
+  valid_gnulink_section_data = 0;
+  valid_build_id_section_data = 0;
+  build_id_section_data_len = 0;
+  gnu_link_section_data_len = 0;
+  debug_descriptor = -1;
+
+  realname = backtrace_resolve_realname (filename, &filename_len, state,
+					 error_callback, data);
+
+  if (realname == NULL || filename_len < 0)
+    goto exit;
+
+  valid_realname = 1;
+
+  /* Check if build-id section does exist.  */
+  build_id_section_data
+    = elf_get_section_by_name (state, descriptor, error_callback, data,
+			       &build_id_section_data_len,
+			       ".note.gnu.build-id");
+
+  if (build_id_section_data != NULL && build_id_section_data_len > 0)
+    {
+      valid_build_id_section_data = 1;
+      debug_descriptor
+	= open_debugfile_by_build_id (realname, build_id_section_data, state,
+				      error_callback, data);
+    }
+
+  if (debug_descriptor < 0)
+    {
+      gnulink_section_data
+	= elf_get_section_by_name (state, descriptor, error_callback, data,
+				   &gnu_link_section_data_len,
+				   ".gnu_debuglink");
+
+      if (gnulink_section_data != NULL && gnu_link_section_data_len > 0)
+	{
+	  valid_gnulink_section_data = 1;
+	  debug_descriptor
+	    = open_debugfile_by_gnulink (realname, gnulink_section_data,
+					 gnu_link_section_data_len, state,
+					 error_callback, data);
+	}
+    }
+
+  if (debug_descriptor >= 0)
+    valid_descriptor = 1;
+
+ exit:
+  if (valid_descriptor)
+    backtrace_close (descriptor, error_callback, data);
+  if (valid_gnulink_section_data)
+    backtrace_free (state, gnulink_section_data, gnu_link_section_data_len,
+		    error_callback, data);
+  if (valid_build_id_section_data)
+    backtrace_free (state, build_id_section_data, build_id_section_data_len,
+		    error_callback, data);
+  if (valid_realname)
+    backtrace_free (state, realname, PATH_MAX + 1, error_callback, data);
+  return debug_descriptor;
+}
+
 /* A dummy callback function used when we can't find any debug info.  */
 
 static int
@@ -521,7 +1365,6 @@ elf_add (struct backtrace_state *state, int descriptor, uintptr_t base_address,
 	 backtrace_error_callback error_callback, void *data,
 	 fileline *fileline_fn, int *found_sym, int *found_dwarf, int exe)
 {
-  struct backtrace_view ehdr_view;
   b_elf_ehdr ehdr;
   off_t shoff;
   unsigned int shnum;
@@ -547,6 +1390,7 @@ elf_add (struct backtrace_state *state, int descriptor, uintptr_t base_address,
   off_t max_offset;
   struct backtrace_view debug_view;
   int debug_view_valid;
+  enum type_of_elf elf_type;
 
   *found_sym = 0;
   *found_dwarf = 0;
@@ -557,92 +1401,18 @@ elf_add (struct backtrace_state *state, int descriptor, uintptr_t base_address,
   strtab_view_valid = 0;
   debug_view_valid = 0;
 
-  if (!backtrace_get_view (state, descriptor, 0, sizeof ehdr, error_callback,
-			   data, &ehdr_view))
-    goto fail;
-
-  memcpy (&ehdr, ehdr_view.data, sizeof ehdr);
-
-  backtrace_release_view (state, &ehdr_view, error_callback, data);
-
-  if (ehdr.e_ident[EI_MAG0] != ELFMAG0
-      || ehdr.e_ident[EI_MAG1] != ELFMAG1
-      || ehdr.e_ident[EI_MAG2] != ELFMAG2
-      || ehdr.e_ident[EI_MAG3] != ELFMAG3)
+  elf_type = process_elf_header (state, descriptor, error_callback, data, exe,
+				 &shoff, &shnum, &shstrndx, &ehdr);
+  switch (elf_type)
     {
-      error_callback (data, "executable file is not ELF", 0);
+    /* Binary compiled with PIE option.  */
+    case DYN:
+      return -1;
+    case EXEC:
+      break;
+    /* Header is invalid.  */
+    case INVALID:
       goto fail;
-    }
-  if (ehdr.e_ident[EI_VERSION] != EV_CURRENT)
-    {
-      error_callback (data, "executable file is unrecognized ELF version", 0);
-      goto fail;
-    }
-
-#if BACKTRACE_ELF_SIZE == 32
-#define BACKTRACE_ELFCLASS ELFCLASS32
-#else
-#define BACKTRACE_ELFCLASS ELFCLASS64
-#endif
-
-  if (ehdr.e_ident[EI_CLASS] != BACKTRACE_ELFCLASS)
-    {
-      error_callback (data, "executable file is unexpected ELF class", 0);
-      goto fail;
-    }
-
-  if (ehdr.e_ident[EI_DATA] != ELFDATA2LSB
-      && ehdr.e_ident[EI_DATA] != ELFDATA2MSB)
-    {
-      error_callback (data, "executable file has unknown endianness", 0);
-      goto fail;
-    }
-
-  /* If the executable is ET_DYN, it is either a PIE, or we are running
-     directly a shared library with .interp.  We need to wait for
-     dl_iterate_phdr in that case to determine the actual base_address.  */
-  if (exe && ehdr.e_type == ET_DYN)
-    return -1;
-
-  shoff = ehdr.e_shoff;
-  shnum = ehdr.e_shnum;
-  shstrndx = ehdr.e_shstrndx;
-
-  if ((shnum == 0 || shstrndx == SHN_XINDEX)
-      && shoff != 0)
-    {
-      struct backtrace_view shdr_view;
-      const b_elf_shdr *shdr;
-
-      if (!backtrace_get_view (state, descriptor, shoff, sizeof shdr,
-			       error_callback, data, &shdr_view))
-	goto fail;
-
-      shdr = (const b_elf_shdr *) shdr_view.data;
-
-      if (shnum == 0)
-	shnum = shdr->sh_size;
-
-      if (shstrndx == SHN_XINDEX)
-	{
-	  shstrndx = shdr->sh_link;
-
-	  /* Versions of the GNU binutils between 2.12 and 2.18 did
-	     not handle objects with more than SHN_LORESERVE sections
-	     correctly.  All large section indexes were offset by
-	     0x100.  There is more information at
-	     http://sourceware.org/bugzilla/show_bug.cgi?id-5900 .
-	     Fortunately these object files are easy to detect, as the
-	     GNU binutils always put the section header string table
-	     near the end of the list of sections.  Thus if the
-	     section header string table index is larger than the
-	     number of sections, then we know we have to subtract
-	     0x100 to get the real section index.  */
-	  if (shstrndx >= shnum && shstrndx >= SHN_LORESERVE + 0x100)
-	    shstrndx -= 0x100;
-	}
-
-      backtrace_release_view (state, &shdr_view, error_callback, data);
     }
 
   /* To translate PC to file/line when using DWARF, we need to find
@@ -874,6 +1644,7 @@ phdr_callback (struct dl_phdr_info *info, size_t size ATTRIBUTE_UNUSED,
   int does_not_exist;
   fileline elf_fileline_fn;
   int found_dwarf;
+  int debug_descriptor;
 
   /* There is not much we can do if we don't have the module name,
      unless executable is ET_DYN, where we expect the very first
@@ -892,11 +1663,19 @@ phdr_callback (struct dl_phdr_info *info, size_t size ATTRIBUTE_UNUSED,
 	  backtrace_close (pd->exe_descriptor, pd->error_callback, pd->data);
 	  pd->exe_descriptor = -1;
 	}
+      debug_descriptor = -1;
 
       descriptor = backtrace_open (info->dlpi_name, pd->error_callback,
 				   pd->data, &does_not_exist);
+
       if (descriptor < 0)
 	return 0;
+
+      debug_descriptor
+	= backtrace_open_debugfile (descriptor, info->dlpi_name,
+				    pd->error_callback, pd->data, pd->state);
+      if (debug_descriptor >= 0)
+	descriptor = debug_descriptor;
     }
 
   if (elf_add (pd->state, descriptor, info->dlpi_addr, pd->error_callback,
