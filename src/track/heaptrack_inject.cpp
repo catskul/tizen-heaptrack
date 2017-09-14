@@ -181,6 +181,68 @@ struct posix_memalign
     }
 };
 
+struct mmap
+{
+    static constexpr auto name = "mmap";
+    static constexpr auto original = &::mmap;
+
+    static void *hook(void *addr,
+                      size_t length,
+                      int prot,
+                      int flags,
+                      int fd,
+                      off_t offset)
+    {
+        void *ret = original(addr, length, prot, flags, fd, offset);
+
+        if (ret != MAP_FAILED) {
+            heaptrack_mmap(ret, length, prot, flags, fd, offset);
+        }
+
+        return ret;
+    }
+};
+
+struct mmap64
+{
+    static constexpr auto name = "mmap64";
+    static constexpr auto original = &::mmap64;
+
+    static void *hook(void *addr,
+                      size_t length,
+                      int prot,
+                      int flags,
+                      int fd,
+                      off64_t offset)
+    {
+        void *ret = original(addr, length, prot, flags, fd, offset);
+
+        if (ret != MAP_FAILED) {
+            heaptrack_mmap(ret, length, prot, flags, fd, offset);
+        }
+
+        return ret;
+    }
+};
+
+struct munmap
+{
+    static constexpr auto name = "munmap";
+    static constexpr auto original = &::munmap;
+
+    static int hook(void *addr,
+                    size_t length)
+    {
+        int ret = original(addr, length);
+
+        if (ret != -1) {
+            heaptrack_munmap(addr, length);
+        }
+
+        return ret;
+    }
+};
+
 template <typename Hook>
 bool hook(const char* symname, Elf::Addr addr, bool restore)
 {
@@ -218,7 +280,10 @@ void apply(const char* symname, Elf::Addr addr, bool restore)
         || hook<cfree>(symname, addr, restore)
 #endif
         || hook<posix_memalign>(symname, addr, restore) || hook<dlopen>(symname, addr, restore)
-        || hook<dlclose>(symname, addr, restore);
+        || hook<dlclose>(symname, addr, restore)
+        || hook<mmap>(symname, addr, restore)
+        || hook<mmap64>(symname, addr, restore)
+        || hook<munmap>(symname, addr, restore);
 }
 }
 

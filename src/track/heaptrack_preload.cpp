@@ -23,6 +23,8 @@
 #include <cstring>
 #include <dlfcn.h>
 
+#include <sys/mman.h>
+
 #include <atomic>
 #include <type_traits>
 
@@ -97,6 +99,9 @@ HOOK(aligned_alloc);
 #endif
 HOOK(dlopen);
 HOOK(dlclose);
+HOOK(mmap);
+HOOK(mmap64);
+HOOK(munmap);
 
 /**
  * Dummy implementation, since the call to dlsym from findReal triggers a call
@@ -156,6 +161,9 @@ void init()
 #if HAVE_ALIGNED_ALLOC
                        hooks::aligned_alloc.init();
 #endif
+                       hooks::mmap.init();
+                       hooks::mmap64.init();
+                       hooks::munmap.init();
 
                        // cleanup environment to prevent tracing of child apps
                        unsetenv("LD_PRELOAD");
@@ -253,6 +261,62 @@ int posix_memalign(void** memptr, size_t alignment, size_t size) noexcept
 
     if (!ret) {
         heaptrack_malloc(*memptr, size);
+    }
+
+    return ret;
+}
+
+void *mmap(void *addr,
+           size_t length,
+           int prot,
+           int flags,
+           int fd,
+           off_t offset)
+{
+    if (!hooks::mmap) {
+        hooks::init();
+    }
+
+    void *ret = hooks::mmap(addr, length, prot, flags, fd, offset);
+
+    if (ret != MAP_FAILED) {
+        heaptrack_mmap(ret, length, prot, flags, fd, offset);
+    }
+
+    return ret;
+}
+
+void *mmap64(void *addr,
+             size_t length,
+             int prot,
+             int flags,
+             int fd,
+             off64_t offset)
+{
+    if (!hooks::mmap64) {
+        hooks::init();
+    }
+
+    void *ret = hooks::mmap64(addr, length, prot, flags, fd, offset);
+
+    if (ret != MAP_FAILED) {
+        heaptrack_mmap(ret, length, prot, flags, fd, offset);
+    }
+
+    return ret;
+}
+
+int munmap(void *addr,
+           size_t length)
+{
+    if (!hooks::munmap) {
+        hooks::init();
+    }
+
+    int ret = hooks::munmap(addr, length);
+
+    if (ret != -1) {
+        heaptrack_munmap(addr, length);
     }
 
     return ret;

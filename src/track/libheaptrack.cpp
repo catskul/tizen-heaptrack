@@ -714,6 +714,22 @@ void heaptrack_realloc(void* ptr_in, size_t size, void* ptr_out)
     }
 }
 
+void heaptrack_mmap(void* ptr, size_t length, int prot, int flags, int fd, off64_t offset)
+{
+    debugLog<VeryVerboseOutput>("heaptrack_mmap(%p, %zu, %d, %d, %d, %llu)",
+                                ptr, length, prot, flags, fd, offset);
+
+    // TODO
+}
+
+void heaptrack_munmap(void* ptr, size_t length)
+{
+    debugLog<VeryVerboseOutput>("heaptrack_munmap(%p, %zu)",
+                                ptr, length);
+
+    // TODO
+}
+
 void heaptrack_invalidate_module_cache()
 {
     RecursionGuard guard;
