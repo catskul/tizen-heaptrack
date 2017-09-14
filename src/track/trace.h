@@ -71,6 +71,13 @@ struct Trace
         return m_size > 0;
     }
 
+    void fill(void *addr)
+    {
+        m_size = 2;
+        m_skip = 0;
+        m_data[0] = addr;
+        m_data[1] = addr;
+    }
 private:
     int m_size = 0;
     int m_skip = 0;

@@ -22,10 +22,12 @@
 #include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
+#include <link.h>
 
 #include <sys/mman.h>
 
 #include <atomic>
+#include <map>
 #include <type_traits>
 
 using namespace std;
@@ -46,6 +48,51 @@ __attribute__((weak)) void __libc_freeres();
 }
 namespace __gnu_cxx {
 __attribute__((weak)) extern void __freeres();
+}
+
+static bool isExiting = false;
+
+static int dl_iterate_phdr_get_maps(struct dl_phdr_info* info, size_t /*size*/, void* data)
+{
+    auto maps = (map<void *, pair<size_t, int>> *) data;
+
+    const char* fileName = info->dlpi_name;
+    if (!fileName || !fileName[0]) {
+        fileName = "x";
+    }
+
+    debugLog<VerboseOutput>("dl_iterate_phdr_get_maps: %s %zx", fileName, info->dlpi_addr);
+
+    for (int i = 0; i < info->dlpi_phnum; i++) {
+        const auto& phdr = info->dlpi_phdr[i];
+
+        if (phdr.p_type == PT_LOAD) {
+            constexpr uintptr_t pageMask = (uintptr_t) 0xfff;
+
+            uintptr_t start = (info->dlpi_addr + phdr.p_vaddr) & ~pageMask;
+            uintptr_t end = (info->dlpi_addr + phdr.p_vaddr + phdr.p_memsz + pageMask) & ~pageMask;
+
+            void *addr = (void *) start;
+            size_t size = (size_t) (end - start);
+
+            int prot = 0;
+
+            if (phdr.p_flags & PF_R)
+                prot |= PROT_READ;
+            if (phdr.p_flags & PF_W)
+                prot |= PROT_WRITE;
+            if (phdr.p_flags & PF_X)
+                prot |= PROT_EXEC;
+
+            if (maps->find(addr) == maps->end()) {
+                maps->insert(make_pair(addr, make_pair(size, prot)));
+            } else {
+                debugLog<VerboseOutput>("dl_iterate_phdr_get_maps: repeated section address %s %zx", fileName, info->dlpi_addr);
+            }
+        }
+    }
+
+    return 0;
 }
 
 namespace {
@@ -142,6 +189,8 @@ void init()
         if (&__libc_freeres) {
             __libc_freeres();
         }
+
+        isExiting = true;
     });
     heaptrack_init(getenv("DUMP_HEAPTRACK_OUTPUT"),
                    [] {
@@ -170,6 +219,20 @@ void init()
                        unsetenv("DUMP_HEAPTRACK_OUTPUT");
                    },
                    nullptr, nullptr);
+
+    {
+        map<void *, pair<size_t, int>> map;
+
+        dl_iterate_phdr(&dl_iterate_phdr_get_maps, &map);
+
+        vector<pair<void *, pair<size_t, int>>> newMmaps;
+
+        for (const auto & section : map) {
+            newMmaps.push_back(section);
+        }
+
+        heaptrack_dlopen(newMmaps, true, reinterpret_cast<void *>(hooks::dlopen.original));
+    }
 }
 }
 }
@@ -362,10 +425,46 @@ void* dlopen(const char* filename, int flag) noexcept
         hooks::init();
     }
 
+    map<void *, pair<size_t, int>> map_before, map_after;
+
+    if (!RecursionGuard::isActive) {
+        RecursionGuard guard;
+        dl_iterate_phdr(&dl_iterate_phdr_get_maps, &map_before);
+    }
+
     void* ret = hooks::dlopen(filename, flag);
 
     if (ret) {
         heaptrack_invalidate_module_cache();
+
+        if (!RecursionGuard::isActive) {
+            RecursionGuard guard;
+            dl_iterate_phdr(&dl_iterate_phdr_get_maps, &map_after);
+        }
+
+        if(map_after.size() < map_before.size()) {
+            debugLog<VerboseOutput>("dlopen: count of sections after dlopen is less than before: %p %s %x", ret, filename, flag);
+        } else if (map_after.size() != map_before.size()) {
+            vector<pair<void *, pair<size_t, int>>> newMmaps;
+
+            if (!RecursionGuard::isActive) {
+                RecursionGuard guard;
+
+                for (const auto & section_after : map_after) {
+                    if (map_before.find(section_after.first) == map_before.end()) {
+                        newMmaps.push_back(section_after);
+                    }
+                }
+            }
+
+            heaptrack_dlopen(newMmaps, false, reinterpret_cast<void *>(hooks::dlopen.original));
+
+            if (!RecursionGuard::isActive) {
+                RecursionGuard guard;
+
+                newMmaps.clear();
+            }
+        }
     }
 
     return ret;
@@ -377,12 +476,53 @@ int dlclose(void* handle) noexcept
         hooks::init();
     }
 
+    map<void *, pair<size_t, int>> map_before, map_after;
+
+    if (!isExiting) {
+        if (!RecursionGuard::isActive) {
+            RecursionGuard guard;
+            dl_iterate_phdr(&dl_iterate_phdr_get_maps, &map_before);
+        }
+    }
+
     int ret = hooks::dlclose(handle);
 
     if (!ret) {
         heaptrack_invalidate_module_cache();
+
+        if (!isExiting) {
+            if (!RecursionGuard::isActive) {
+                RecursionGuard guard;
+                dl_iterate_phdr(&dl_iterate_phdr_get_maps, &map_after);
+            }
+
+            if(map_after.size() > map_before.size()) {
+                debugLog<VerboseOutput>("dlopen: count of sections after dlclose is greater than before: %p", handle);
+            } else if (map_after.size() != map_before.size()) {
+                vector<pair<void *, size_t>> munmaps;
+
+                if (!RecursionGuard::isActive) {
+                    RecursionGuard guard;
+
+                    for (const auto & section_before : map_before) {
+                        if (map_after.find(section_before.first) == map_after.end()) {
+                            munmaps.push_back(make_pair(section_before.first, section_before.second.first));
+                        }
+                    }
+                }
+
+                heaptrack_dlclose(munmaps);
+
+                if (!RecursionGuard::isActive) {
+                    RecursionGuard guard;
+
+                    munmaps.clear();
+                }
+            }
+        }
     }
 
     return ret;
 }
+
 }

@@ -18,7 +18,58 @@
 
 #include <stdio.h>
 
+#include <algorithm>
+#include <vector>
+
 #ifdef __cplusplus
+enum DebugVerbosity
+{
+    NoDebugOutput,
+    MinimalOutput,
+    VerboseOutput,
+    VeryVerboseOutput,
+};
+
+// change this to add more debug output to stderr
+constexpr const DebugVerbosity s_debugVerbosity = NoDebugOutput;
+
+/**
+ * Call this to optionally show debug information but give the compiler
+ * a hand in removing it all if debug output is disabled.
+ */
+template <DebugVerbosity debugLevel, typename... Args>
+inline void debugLog(const char fmt[], Args... args)
+{
+    if (debugLevel <= s_debugVerbosity) {
+        flockfile(stderr);
+        fprintf(stderr, "heaptrack debug [%d]: ", static_cast<int>(debugLevel));
+        fprintf(stderr, fmt, args...);
+        fputc('\n', stderr);
+        funlockfile(stderr);
+    }
+}
+
+/**
+ * A per-thread handle guard to prevent infinite recursion, which should be
+ * acquired before doing any special symbol handling.
+ */
+struct RecursionGuard
+{
+    RecursionGuard()
+        : wasLocked(isActive)
+    {
+        isActive = true;
+    }
+
+    ~RecursionGuard()
+    {
+        isActive = wasLocked;
+    }
+
+    const bool wasLocked;
+    static thread_local bool isActive;
+};
+
 extern "C" {
 #endif
 
@@ -29,6 +80,9 @@ void heaptrack_init(const char* outputFileName, heaptrack_callback_t initCallbac
                     heaptrack_callback_initialized_t initCallbackAfter, heaptrack_callback_t stopCallback);
 
 void heaptrack_stop();
+
+void heaptrack_dlopen(const std::vector<std::pair<void *, std::pair<size_t, int>>> &newMmaps, bool isPreloaded, void *dlopenOriginal);
+void heaptrack_dlclose(const std::vector<std::pair<void *, size_t>> &unmaps);
 
 void heaptrack_malloc(void* ptr, size_t size);
 
