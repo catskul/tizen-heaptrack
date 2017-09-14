@@ -36,6 +36,9 @@ void heaptrack_free(void* ptr);
 
 void heaptrack_realloc(void* ptr_in, size_t size, void* ptr_out);
 
+void heaptrack_mmap(void* ptr, size_t length, int prot, int flags, int fd, off64_t offset);
+void heaptrack_munmap(void* ptr, size_t length);
+
 void heaptrack_invalidate_module_cache();
 
 #ifdef __cplusplus

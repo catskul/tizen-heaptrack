@@ -30,7 +30,7 @@
 
 struct RowData
 {
-    AllocationData cost;
+    AllocationData::Stats cost;
     LocationData::Ptr location;
     const RowData* parent;
     QVector<RowData> children;

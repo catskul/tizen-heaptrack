@@ -259,6 +259,8 @@ MainWindow::MainWindow(QWidget* parent)
                            format.formatByteSize(data.totalSystemMemory, 1, KFormat::MetricBinaryDialect))
                    << "</dl></qt>";
         }
+
+        if(AllocationData::display == AllocationData::DisplayId::malloc)
         {
             QTextStream stream(&textCenter);
             stream << "<qt><dl>" << i18n("<dt><b>calls to allocation functions</b>:</dt><dd>%1 "
@@ -316,24 +318,28 @@ MainWindow::MainWindow(QWidget* parent)
 #if KChart_FOUND
     addChartTab(m_ui->tabWidget, i18n("Consumed"), ChartModel::Consumed, m_parser, &Parser::consumedChartDataAvailable,
                 this);
-    addChartTab(m_ui->tabWidget, i18n("Allocations"), ChartModel::Allocations, m_parser,
-                &Parser::allocationsChartDataAvailable, this);
-    addChartTab(m_ui->tabWidget, i18n("Temporary Allocations"), ChartModel::Temporary, m_parser,
-                &Parser::temporaryChartDataAvailable, this);
-    addChartTab(m_ui->tabWidget, i18n("Allocated"), ChartModel::Allocated, m_parser, &Parser::allocatedChartDataAvailable,
-                this);
 
-    auto sizesTab = new HistogramWidget(this);
-    m_ui->tabWidget->addTab(sizesTab, i18n("Sizes"));
-    m_ui->tabWidget->setTabEnabled(m_ui->tabWidget->indexOf(sizesTab), false);
-    auto sizeHistogramModel = new HistogramModel(this);
-    sizesTab->setModel(sizeHistogramModel);
-    connect(this, &MainWindow::clearData, sizeHistogramModel, &HistogramModel::clearData);
+    if(AllocationData::display == AllocationData::DisplayId::malloc)
+    {
+        addChartTab(m_ui->tabWidget, i18n("Allocations"), ChartModel::Allocations, m_parser,
+                    &Parser::allocationsChartDataAvailable, this);
+        addChartTab(m_ui->tabWidget, i18n("Temporary Allocations"), ChartModel::Temporary, m_parser,
+                    &Parser::temporaryChartDataAvailable, this);
+        addChartTab(m_ui->tabWidget, i18n("Allocated"), ChartModel::Allocated, m_parser, &Parser::allocatedChartDataAvailable,
+                    this);
 
-    connect(m_parser, &Parser::sizeHistogramDataAvailable, this, [=](const HistogramData& data) {
-        sizeHistogramModel->resetData(data);
-        m_ui->tabWidget->setTabEnabled(m_ui->tabWidget->indexOf(sizesTab), true);
-    });
+        auto sizesTab = new HistogramWidget(this);
+        m_ui->tabWidget->addTab(sizesTab, i18n("Sizes"));
+        m_ui->tabWidget->setTabEnabled(m_ui->tabWidget->indexOf(sizesTab), false);
+        auto sizeHistogramModel = new HistogramModel(this);
+        sizesTab->setModel(sizeHistogramModel);
+        connect(this, &MainWindow::clearData, sizeHistogramModel, &HistogramModel::clearData);
+
+        connect(m_parser, &Parser::sizeHistogramDataAvailable, this, [=](const HistogramData& data) {
+                sizeHistogramModel->resetData(data);
+                m_ui->tabWidget->setTabEnabled(m_ui->tabWidget->indexOf(sizesTab), true);
+                });
+    }
 #endif
 
     auto costDelegate = new CostDelegate(this);
@@ -386,12 +392,22 @@ MainWindow::MainWindow(QWidget* parent)
     m_ui->topPeak->setItemDelegate(costDelegate);
     setupTopView(bottomUpModel, m_ui->topLeaked, TopProxy::Leaked);
     m_ui->topLeaked->setItemDelegate(costDelegate);
-    setupTopView(bottomUpModel, m_ui->topAllocations, TopProxy::Allocations);
-    m_ui->topAllocations->setItemDelegate(costDelegate);
-    setupTopView(bottomUpModel, m_ui->topTemporary, TopProxy::Temporary);
-    m_ui->topTemporary->setItemDelegate(costDelegate);
-    setupTopView(bottomUpModel, m_ui->topAllocated, TopProxy::Allocated);
-    m_ui->topAllocated->setItemDelegate(costDelegate);
+
+    if(AllocationData::display == AllocationData::DisplayId::malloc)
+    {
+        setupTopView(bottomUpModel, m_ui->topAllocations, TopProxy::Allocations);
+        m_ui->topAllocations->setItemDelegate(costDelegate);
+        setupTopView(bottomUpModel, m_ui->topTemporary, TopProxy::Temporary);
+        m_ui->topTemporary->setItemDelegate(costDelegate);
+        setupTopView(bottomUpModel, m_ui->topAllocated, TopProxy::Allocated);
+        m_ui->topAllocated->setItemDelegate(costDelegate);
+    }
+    else
+    {
+        m_ui->widget_7->hide();
+        m_ui->widget_8->hide();
+        m_ui->widget_9->hide();
+    }
 
     setWindowTitle(i18n("Heaptrack"));
     // closing the current file shows the stack page to open a new one

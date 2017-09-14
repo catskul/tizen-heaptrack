@@ -32,6 +32,9 @@
 #include <stdio_ext.h>
 #include <pthread.h>
 #include <signal.h>
+#include <unistd.h>
+
+#include <sys/mman.h>
 
 #include <atomic>
 #include <cinttypes>
@@ -273,6 +276,8 @@ public:
         writeCommandLine(out);
         writeSystemInfo(out);
 
+        k_pageSize = sysconf(_SC_PAGESIZE);
+
         s_data = new LockedData(out, stopCallback);
 
         if (initAfterCallback) {
@@ -292,8 +297,8 @@ public:
 
         debugLog<MinimalOutput>("%s", "shutdown()");
 
+        writeSMAPS();
         writeTimestamp();
-        writeRSS();
 
         // NOTE: we leak heaptrack data on exit, intentionally
         // This way, we can be sure to get all static deallocations.
@@ -329,26 +334,96 @@ public:
         }
     }
 
-    void writeRSS()
+    void writeSMAPS()
     {
-        if (!s_data || !s_data->out || !s_data->procStatm) {
+        if (!s_data || !s_data->out || !s_data->procSmaps) {
             return;
         }
 
-        // read RSS in pages from statm, then rewind for next read
-        size_t rss = 0;
-        if (fscanf(s_data->procStatm, "%*x %zx", &rss) != 1) {
-            fprintf(stderr, "WARNING: Failed to read RSS value from /proc/self/statm.\n");
-            fclose(s_data->procStatm);
-            s_data->procStatm = nullptr;
+        if (fprintf(s_data->out, "K 1\n") < 0) {
+            writeError();
             return;
         }
-        rewind(s_data->procStatm);
-        // TODO: compare to rusage.ru_maxrss (getrusage) to find "real" peak?
-        // TODO: use custom allocators with known page sizes to prevent tainting
-        //       the RSS numbers with heaptrack-internal data
 
-        if (fprintf(s_data->out, "R %zx\n", rss) < 0) {
+        fseek(s_data->procSmaps, 0, SEEK_SET);
+
+        static char smapsLine[2 * PATH_MAX];
+
+        size_t begin = 0, end = 0;
+        size_t size, rss, privateDirty, privateClean, sharedDirty, sharedClean;
+        size_t totalRSS = 0;
+        char protR, protW, protX;
+        unsigned int counter = 0;
+
+        while (fgets(smapsLine, sizeof (smapsLine), s_data->procSmaps))
+        {
+            if (sscanf (smapsLine, "%zx-%zx %c%c%c%*c", &begin, &end, &protR, &protW, &protX) == 5)
+            {
+                counter++;
+            }
+            else
+            {
+                if (sscanf (smapsLine, "Size: %zu kB", &size) == 1)
+                {
+                    counter++;
+                }
+                else if (sscanf (smapsLine, "Private_Dirty: %zu kB", &privateDirty) == 1)
+                {
+                    counter++;
+                }
+                else if (sscanf (smapsLine, "Private_Clean: %zu kB", &privateClean) == 1)
+                {
+                    counter++;
+                }
+                else if (sscanf (smapsLine, "Shared_Dirty: %zu kB", &sharedDirty) == 1)
+                {
+                    counter++;
+                }
+                else if (sscanf (smapsLine, "Shared_Clean: %zu kB", &sharedClean) == 1)
+                {
+                    counter++;
+                }
+                else if (sscanf (smapsLine, "Rss: %zu kB", &rss) == 1)
+                {
+                    totalRSS += rss;
+                }
+                else
+                {
+                    continue;
+                }
+            }
+
+            if (counter == 6)
+            {
+                // all data for current range was read, send to trace
+
+                counter = 0;
+
+                int prot = 0;
+
+                if (protR == 'r')
+                    prot |= PROT_READ;
+
+                if (protW == 'w')
+                    prot |= PROT_WRITE;
+
+                if (protX == 'x')
+                    prot |= PROT_EXEC;
+
+                if (fprintf(s_data->out, "k %zx %zx %zx %zx %zx %zx %zx %x\n",
+                            begin, end - begin, size, privateDirty, privateClean, sharedDirty, sharedClean, prot) < 0) {
+                    writeError();
+                    return;
+                }
+            }
+        }
+
+        if (fprintf(s_data->out, "K 0\n") < 0) {
+            writeError();
+            return;
+        }
+
+        if (fprintf(s_data->out, "R %zx\n", totalRSS) < 0) {
             writeError();
             return;
         }
@@ -387,6 +462,42 @@ public:
 #endif
 
         if (fprintf(s_data->out, "- %" PRIxPTR "\n", reinterpret_cast<uintptr_t>(ptr)) < 0) {
+            writeError();
+            return;
+        }
+    }
+
+    void handleMmap(void* ptr,
+                    size_t length,
+                    int prot,
+                    int fd,
+                    const Trace& trace)
+    {
+        if (!s_data || !s_data->out) {
+            return;
+        }
+        updateModuleCache();
+        const auto index = s_data->traceTree.index(trace, s_data->out);
+
+        size_t alignedLength = ((length + k_pageSize - 1) / k_pageSize) * k_pageSize;
+
+        if (fprintf(s_data->out, "* %zx %x %x %x %" PRIxPTR "\n",
+                    alignedLength, prot, fd, index, reinterpret_cast<uintptr_t>(ptr)) < 0) {
+            writeError();
+            return;
+        }
+    }
+
+    void handleMunmap(void* ptr,
+                      size_t length)
+    {
+        if (!s_data || !s_data->out) {
+            return;
+        }
+
+        size_t alignedLength = ((length + k_pageSize - 1) / k_pageSize) * k_pageSize;
+
+        if (fprintf(s_data->out, "/ %zx %" PRIxPTR "\n", alignedLength, reinterpret_cast<uintptr_t>(ptr)) < 0) {
             writeError();
             return;
         }
@@ -535,9 +646,10 @@ private:
             , stopCallback(stopCallback)
         {
             debugLog<MinimalOutput>("%s", "constructing LockedData");
-            procStatm = fopen("/proc/self/statm", "r");
-            if (!procStatm) {
-                fprintf(stderr, "WARNING: Failed to open /proc/self/statm for reading.\n");
+
+            procSmaps = fopen("/proc/self/smaps", "r");
+            if (!procSmaps) {
+                fprintf(stderr, "WARNING: Failed to open /proc/self/smaps for reading.\n");
             }
 
             // ensure this utility thread is not handling any signals
@@ -558,6 +670,8 @@ private:
                 RecursionGuard::isActive = true;
                 debugLog<MinimalOutput>("%s", "timer thread started");
 
+                int counter = 0;
+
                 // now loop and repeatedly print the timestamp and RSS usage to the data stream
                 while (!stopTimerThread) {
                     // TODO: make interval customizable
@@ -565,8 +679,13 @@ private:
 
                     HeapTrack heaptrack([&] { return !stopTimerThread.load(); });
                     if (!stopTimerThread) {
+
+                        if (++counter == 32) {
+                            heaptrack.writeSMAPS();
+
+                            counter = 0;
+                        }
                         heaptrack.writeTimestamp();
-                        heaptrack.writeRSS();
                     }
                 }
             });
@@ -592,8 +711,8 @@ private:
                 fclose(out);
             }
 
-            if (procStatm) {
-                fclose(procStatm);
+            if (procSmaps) {
+                fclose(procSmaps);
             }
 
             if (stopCallback && (!s_atexit || s_forceCleanup)) {
@@ -609,8 +728,8 @@ private:
          */
         FILE* out = nullptr;
 
-        /// /proc/self/statm file stream to read RSS value from
-        FILE* procStatm = nullptr;
+        /// /proc/self/smaps file stream to read address range data from
+        FILE* procSmaps = nullptr;
 
         /**
          * Calls to dlopen/dlclose mark the cache as dirty.
@@ -636,10 +755,13 @@ private:
 
     static atomic<bool> s_locked;
     static LockedData* s_data;
+
+    static size_t k_pageSize;
 };
 
 atomic<bool> HeapTrack::s_locked{false};
 HeapTrack::LockedData* HeapTrack::s_data{nullptr};
+size_t HeapTrack::k_pageSize{0u};
 }
 extern "C" {
 
@@ -652,6 +774,8 @@ void heaptrack_init(const char* outputFileName, heaptrack_callback_t initBeforeC
 
     HeapTrack heaptrack(guard);
     heaptrack.initialize(outputFileName, initBeforeCallback, initAfterCallback, stopCallback);
+
+    heaptrack.writeSMAPS();
 }
 
 void heaptrack_stop()
@@ -711,6 +835,35 @@ void heaptrack_realloc(void* ptr_in, size_t size, void* ptr_out)
             heaptrack.handleFree(ptr_in);
         }
         heaptrack.handleMalloc(ptr_out, size, trace);
+    }
+}
+
+void heaptrack_mmap(void* ptr, size_t length, int prot, int flags, int fd, off64_t offset)
+{
+    if (ptr && !RecursionGuard::isActive) {
+        RecursionGuard guard;
+
+        debugLog<VeryVerboseOutput>("heaptrack_mmap(%p, %zu, %d, %d, %d, %llu)",
+                                    ptr, length, prot, flags, fd, offset);
+
+        Trace trace;
+        trace.fill(2 + HEAPTRACK_DEBUG_BUILD);
+
+        HeapTrack heaptrack(guard);
+        heaptrack.handleMmap(ptr, length, prot, fd, trace);
+    }
+}
+
+void heaptrack_munmap(void* ptr, size_t length)
+{
+    if (ptr && !RecursionGuard::isActive) {
+        RecursionGuard guard;
+
+        debugLog<VeryVerboseOutput>("heaptrack_munmap(%p, %zu)",
+                                    ptr, length);
+
+        HeapTrack heaptrack(guard);
+        heaptrack.handleMunmap(ptr, length);
     }
 }
 

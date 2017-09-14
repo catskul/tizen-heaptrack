@@ -310,7 +310,7 @@ FrameGraphicsItem* findItemByFunction(const QList<QGraphicsItem*>& items, const 
 /**
  * Convert the top-down graph into a tree of FrameGraphicsItem.
  */
-void toGraphicsItems(const QVector<RowData>& data, FrameGraphicsItem* parent, int64_t AllocationData::*member,
+void toGraphicsItems(const QVector<RowData>& data, FrameGraphicsItem* parent, int64_t AllocationData::Stats::*member,
                      const double costThreshold, bool collapseRecursion)
 {
     foreach (const auto& row, data) {
@@ -333,19 +333,19 @@ void toGraphicsItems(const QVector<RowData>& data, FrameGraphicsItem* parent, in
     }
 }
 
-int64_t AllocationData::*memberForType(CostType type)
+int64_t AllocationData::Stats::*memberForType(CostType type)
 {
     switch (type) {
     case Allocations:
-        return &AllocationData::allocations;
+        return &AllocationData::Stats::allocations;
     case Temporary:
-        return &AllocationData::temporary;
+        return &AllocationData::Stats::temporary;
     case Peak:
-        return &AllocationData::peak;
+        return &AllocationData::Stats::peak;
     case Leaked:
-        return &AllocationData::leaked;
+        return &AllocationData::Stats::leaked;
     case Allocated:
-        return &AllocationData::allocated;
+        return &AllocationData::Stats::allocated;
     }
     Q_UNREACHABLE();
 }
@@ -385,7 +385,7 @@ FrameGraphicsItem* parseData(const QVector<RowData>& topDownData, CostType type,
     auto rootItem = new FrameGraphicsItem(totalCost, type, label);
     rootItem->setBrush(scheme.background());
     rootItem->setPen(pen);
-    toGraphicsItems(topDownData, rootItem, member, totalCost * costThreshold / 100., collapseRecursion);
+    toGraphicsItems(topDownData, rootItem, member, totalCost * costThreshold / 100, collapseRecursion);
     return rootItem;
 }
 
@@ -433,29 +433,32 @@ FlameGraph::FlameGraph(QWidget* parent, Qt::WindowFlags flags)
 {
     qRegisterMetaType<FrameGraphicsItem*>();
 
-    m_costSource->addItem(i18n("Allocations"), QVariant::fromValue(Allocations));
-    m_costSource->setItemData(0, i18n("Show a flame graph over the number of allocations triggered by "
-                                      "functions in your code."),
-                              Qt::ToolTipRole);
-    m_costSource->addItem(i18n("Temporary Allocations"), QVariant::fromValue(Temporary));
-    m_costSource->setItemData(1, i18n("Show a flame graph over the number of temporary allocations "
-                                      "triggered by functions in your code. "
-                                      "Allocations are marked as temporary when they are immediately "
-                                      "followed by their deallocation."),
-                              Qt::ToolTipRole);
     m_costSource->addItem(i18n("Memory Peak"), QVariant::fromValue(Peak));
-    m_costSource->setItemData(2, i18n("Show a flame graph over the contributions to the peak heap "
+    m_costSource->setItemData(0, i18n("Show a flame graph over the contributions to the peak heap "
                                       "memory consumption of your application."),
                               Qt::ToolTipRole);
     m_costSource->addItem(i18n("Leaked"), QVariant::fromValue(Leaked));
-    m_costSource->setItemData(3, i18n("Show a flame graph over the leaked heap memory of your application. "
+    m_costSource->setItemData(1, i18n("Show a flame graph over the leaked heap memory of your application. "
                                       "Memory is considered to be leaked when it never got deallocated. "),
                               Qt::ToolTipRole);
-    m_costSource->addItem(i18n("Allocated"), QVariant::fromValue(Allocated));
-    m_costSource->setItemData(4, i18n("Show a flame graph over the total memory allocated by functions in "
-                                      "your code. "
-                                      "This aggregates all memory allocations and ignores deallocations."),
-                              Qt::ToolTipRole);
+    if(AllocationData::display == AllocationData::DisplayId::malloc)
+    {
+        m_costSource->addItem(i18n("Allocations"), QVariant::fromValue(Allocations));
+        m_costSource->setItemData(2, i18n("Show a flame graph over the number of allocations triggered by "
+                                          "functions in your code."),
+                                  Qt::ToolTipRole);
+        m_costSource->addItem(i18n("Temporary Allocations"), QVariant::fromValue(Temporary));
+        m_costSource->setItemData(3, i18n("Show a flame graph over the number of temporary allocations "
+                                          "triggered by functions in your code. "
+                                          "Allocations are marked as temporary when they are immediately "
+                                          "followed by their deallocation."),
+                                  Qt::ToolTipRole);
+        m_costSource->addItem(i18n("Allocated"), QVariant::fromValue(Allocated));
+        m_costSource->setItemData(4, i18n("Show a flame graph over the total memory allocated by functions in "
+                                          "your code. "
+                                          "This aggregates all memory allocations and ignores deallocations."),
+                                  Qt::ToolTipRole);
+    }
     connect(m_costSource, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this,
             &FlameGraph::showData);
     m_costSource->setToolTip(i18n("Select the data source that should be visualized in the flame graph."));

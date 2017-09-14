@@ -22,6 +22,7 @@
 #include <KAboutData>
 #include <KLocalizedString>
 
+#include "../allocationdata.h"
 #include "mainwindow.h"
 
 int main(int argc, char** argv)
@@ -54,8 +55,44 @@ int main(int argc, char** argv)
     parser.addOption(diffOption);
     parser.addPositionalArgument(QStringLiteral("files"), i18n("Files to load"), i18n("[FILE...]"));
 
+    QCommandLineOption showMallocOption(QStringLiteral("malloc"), QStringLiteral("Show malloc-allocated memory consumption"));
+    QCommandLineOption showPrivateDirtyOption(QStringLiteral("private_dirty"), QStringLiteral("Show Private_Dirty part of memory consumption"));
+    QCommandLineOption showPrivateCleanOption(QStringLiteral("private_clean"), QStringLiteral("Show Private_Clean part of memory consumption"));
+    QCommandLineOption showSharedOption(QStringLiteral("shared"), QStringLiteral("Show Shared_Clean + Shared_Dirty part of memory consumption"));
+
+    parser.addOption(showMallocOption);
+    parser.addOption(showPrivateDirtyOption);
+    parser.addOption(showPrivateCleanOption);
+    parser.addOption(showSharedOption);
+
     parser.process(app);
     aboutData.processCommandLine(&parser);
+
+    bool isShowMalloc = parser.isSet(showMallocOption);
+    bool isShowPrivateDirty = parser.isSet(showPrivateDirtyOption);
+    bool isShowPrivateClean = parser.isSet(showPrivateCleanOption);
+    bool isShowShared = parser.isSet(showSharedOption);
+
+    if ((isShowMalloc ? 1 : 0)
+        + (isShowPrivateDirty ? 1 : 0)
+        + (isShowPrivateClean ? 1 : 0)
+        + (isShowShared ? 1 : 0) != 1) {
+
+        qFatal("One of --malloc, --private_dirty, --private_clean or --shared options is necessary. Please, use exactly only one of the options for each start of GUI.");
+
+        return 1;
+    } else if (isShowMalloc)
+    {
+        AllocationData::display = AllocationData::DisplayId::malloc;
+    } else if (isShowPrivateDirty) {
+        AllocationData::display = AllocationData::DisplayId::privateDirty;
+    } else if (isShowPrivateClean) {
+        AllocationData::display = AllocationData::DisplayId::privateClean;
+    } else {
+        assert (isShowShared);
+
+        AllocationData::display = AllocationData::DisplayId::shared;
+    }
 
     auto createWindow = []() -> MainWindow* {
         auto window = new MainWindow;

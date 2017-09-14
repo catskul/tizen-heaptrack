@@ -170,10 +170,10 @@ struct ParserData final : public AccumulatedTraceData
             if (it == merged.end() || it->ip != ip) {
                 it = merged.insert(it, {ip, 0, 0, 0, 0});
             }
-            it->consumed += alloc.peak; // we want to track the top peaks in the chart
-            it->allocated += alloc.allocated;
-            it->allocations += alloc.allocations;
-            it->temporary += alloc.temporary;
+            it->consumed += alloc.getDisplay()->peak; // we want to track the top peaks in the chart
+            it->allocated += alloc.getDisplay()->allocated;
+            it->allocations += alloc.getDisplay()->allocations;
+            it->temporary += alloc.getDisplay()->temporary;
         }
         // find the top hot spots for the individual data members and remember their
         // IP and store the label
@@ -202,7 +202,7 @@ struct ParserData final : public AccumulatedTraceData
         if (!buildCharts || stringCache.diffMode) {
             return;
         }
-        maxConsumedSinceLastTimeStamp = max(maxConsumedSinceLastTimeStamp, totalCost.leaked);
+        maxConsumedSinceLastTimeStamp = max(maxConsumedSinceLastTimeStamp, totalCost.getDisplay()->leaked);
         const int64_t diffBetweenTimeStamps = totalTime / MAX_CHART_DATAPOINTS;
         if (newStamp != totalTime && newStamp - lastTimeStamp < diffBetweenTimeStamps) {
             return;
@@ -219,9 +219,9 @@ struct ParserData final : public AccumulatedTraceData
             return row;
         };
         auto consumed = createRow(newStamp, nowConsumed);
-        auto allocated = createRow(newStamp, totalCost.allocated);
-        auto allocs = createRow(newStamp, totalCost.allocations);
-        auto temporary = createRow(newStamp, totalCost.temporary);
+        auto allocated = createRow(newStamp, totalCost.getDisplay()->allocated);
+        auto allocs = createRow(newStamp, totalCost.getDisplay()->allocations);
+        auto temporary = createRow(newStamp, totalCost.getDisplay()->temporary);
 
         // if the cost is non-zero and the ip corresponds to a hotspot function
         // selected in the labels,
@@ -239,10 +239,10 @@ struct ParserData final : public AccumulatedTraceData
                 continue;
             }
             const auto& labelIds = *it;
-            addDataToRow(alloc.leaked, labelIds.consumed, &consumed);
-            addDataToRow(alloc.allocated, labelIds.allocated, &allocated);
-            addDataToRow(alloc.allocations, labelIds.allocations, &allocs);
-            addDataToRow(alloc.temporary, labelIds.temporary, &temporary);
+            addDataToRow(alloc.getDisplay()->leaked, labelIds.consumed, &consumed);
+            addDataToRow(alloc.getDisplay()->allocated, labelIds.allocated, &allocated);
+            addDataToRow(alloc.getDisplay()->allocations, labelIds.allocations, &allocs);
+            addDataToRow(alloc.getDisplay()->temporary, labelIds.temporary, &temporary);
         }
         // add the rows for this time stamp
         consumedChartData.rows << consumed;
@@ -251,10 +251,13 @@ struct ParserData final : public AccumulatedTraceData
         temporaryChartData.rows << temporary;
     }
 
+    void handleTotalCostUpdate()
+    {
+        maxConsumedSinceLastTimeStamp = max(maxConsumedSinceLastTimeStamp, totalCost.getDisplay()->leaked);
+    }
+
     void handleAllocation(const AllocationInfo& info, const AllocationIndex index)
     {
-        maxConsumedSinceLastTimeStamp = max(maxConsumedSinceLastTimeStamp, totalCost.leaked);
-
         if (index.index == allocationInfoCounter.size()) {
             allocationInfoCounter.push_back({info, 1});
         } else {
@@ -315,7 +318,7 @@ void setParents(QVector<RowData>& children, const RowData* parent)
 TreeData mergeAllocations(const ParserData& data)
 {
     TreeData topRows;
-    auto addRow = [](TreeData* rows, const LocationData::Ptr& location, const Allocation& cost) -> TreeData* {
+    auto addRow = [](TreeData* rows, const LocationData::Ptr& location, const Allocation::Stats& cost) -> TreeData* {
         auto it = lower_bound(rows->begin(), rows->end(), location);
         if (it != rows->end() && it->location == location) {
             it->cost += cost;
@@ -332,10 +335,10 @@ TreeData mergeAllocations(const ParserData& data)
             const auto& trace = data.findTrace(traceIndex);
             const auto& ip = data.findIp(trace.ipIndex);
             auto location = data.stringCache.location(trace.ipIndex, ip);
-            rows = addRow(rows, location, allocation);
+            rows = addRow(rows, location, *allocation.getDisplay());
             for (const auto& inlined : ip.inlined) {
                 auto inlinedLocation = data.stringCache.frameLocation(inlined, ip.moduleIndex);
-                rows = addRow(rows, inlinedLocation, allocation);
+                rows = addRow(rows, inlinedLocation, *allocation.getDisplay());
             }
             if (data.isStopIndex(ip.frame.functionIndex)) {
                 break;
@@ -359,9 +362,9 @@ RowData* findByLocation(const RowData& row, QVector<RowData>* data)
     return nullptr;
 }
 
-AllocationData buildTopDown(const TreeData& bottomUpData, TreeData* topDownData)
+AllocationData::Stats buildTopDown(const TreeData& bottomUpData, TreeData* topDownData)
 {
-    AllocationData totalCost;
+    AllocationData::Stats totalCost;
     for (const auto& row : bottomUpData) {
         // recurse and find the cost attributed to children
         const auto childCost = buildTopDown(row.children, topDownData);
@@ -400,9 +403,9 @@ QVector<RowData> toTopDownData(const QVector<RowData>& bottomUpData)
     return topRows;
 }
 
-AllocationData buildCallerCallee(const TreeData& bottomUpData, CallerCalleeRows* callerCalleeData)
+AllocationData::Stats buildCallerCallee(const TreeData& bottomUpData, CallerCalleeRows* callerCalleeData)
 {
-    AllocationData totalCost;
+    AllocationData::Stats totalCost;
     for (const auto& row : bottomUpData) {
         // recurse to find a leaf
         const auto childCost = buildCallerCallee(row.children, callerCalleeData);
@@ -448,8 +451,8 @@ CallerCalleeRows toCallerCalleeData(const QVector<RowData>& bottomUpData, bool d
         // remove rows without cost
         callerCalleeRows.erase(remove_if(callerCalleeRows.begin(), callerCalleeRows.end(),
                                          [](const CallerCalleeData& data) -> bool {
-                                             return data.inclusiveCost == AllocationData()
-                                                 && data.selfCost == AllocationData();
+                                             return data.inclusiveCost == AllocationData::Stats()
+                                                 && data.selfCost == AllocationData::Stats();
                                          }),
                                callerCalleeRows.end());
     }
@@ -566,8 +569,8 @@ void Parser::parse(const QString& path, const QString& diffBase)
 
         data->updateStringCache();
 
-        emit summaryAvailable({QString::fromStdString(data->debuggee), data->totalCost, data->totalTime, data->peakTime,
-                               data->peakRSS * data->systemInfo.pageSize,
+        emit summaryAvailable({QString::fromStdString(data->debuggee), *data->totalCost.getDisplay(), data->totalTime, data->getPeakTime(),
+                               data->peakRSS * 1024,
                                data->systemInfo.pages * data->systemInfo.pageSize, data->fromAttached});
 
         emit progressMessageAvailable(i18n("merging allocations..."));

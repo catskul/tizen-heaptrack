@@ -39,6 +39,8 @@
 
 using namespace std;
 
+AllocationData::DisplayId AllocationData::display = AllocationData::DisplayId::malloc;
+
 namespace {
 
 template <typename Base>
@@ -161,16 +163,30 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
 
     vector<string> stopStrings = {"main", "__libc_start_main", "__static_initialization_and_destruction_0"};
 
-    const auto lastPeakCost = pass != FirstPass ? totalCost.peak : 0;
-    const auto lastPeakTime = pass != FirstPass ? peakTime : 0;
+    const auto lastMallocPeakCost = pass != FirstPass ? totalCost.malloc.peak : 0;
+    const auto lastMallocPeakTime = pass != FirstPass ? mallocPeakTime : 0;
+
+    const auto lastPrivateCleanPeakCost = pass != FirstPass ? totalCost.privateClean.peak : 0;
+    const auto lastPrivateCleanPeakTime = pass != FirstPass ? privateCleanPeakTime : 0;
+
+    const auto lastPrivateDirtyPeakCost = pass != FirstPass ? totalCost.privateDirty.peak : 0;
+    const auto lastPrivateDirtyPeakTime = pass != FirstPass ? privateDirtyPeakTime : 0;
+
+    const auto lastSharedPeakCost = pass != FirstPass ? totalCost.shared.peak : 0;
+    const auto lastSharedPeakTime = pass != FirstPass ? sharedPeakTime : 0;
 
     m_maxAllocationTraceIndex.index = 0;
     totalCost = {};
-    peakTime = 0;
+    mallocPeakTime = 0;
+    privateCleanPeakTime = 0;
+    privateDirtyPeakTime = 0;
+    sharedPeakTime = 0;
     systemInfo = {};
     peakRSS = 0;
     allocations.clear();
+    addressRangeInfos.clear();
     uint fileVersion = 0;
+    bool isSmapsChunkInProcess = false;
 
     // required for backwards compatibility
     // newer versions handle this in heaptrack_interpret already
@@ -238,6 +254,212 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
                 index.index = instructionPointers.size();
                 opNewIpIndices.push_back(index);
             }
+        } else if (reader.mode() == '*') {
+            uint64_t length, ptr;
+            int prot, fd;
+            TraceIndex traceIndex;
+
+            if (!(reader >> length)
+                || !(reader >> prot)
+                || !(reader >> fd)
+                || !(reader >> traceIndex.index)
+                || !(reader >> ptr)) {
+                cerr << "failed to parse line: " << reader.line() << endl;
+                continue;
+            }
+
+            mapRemoveRanges(ptr, length);
+
+            AddressRangesMapIteratorPair ranges = mapUpdateRange(ptr, length);
+
+            assert (std::next(ranges.first) == ranges.second);
+
+            AddressRangeInfo &rangeInfo = ranges.first->second;
+
+            rangeInfo.setProt(prot);
+            rangeInfo.setFd(fd);
+            rangeInfo.setTraceIndex(traceIndex.index);
+
+            combineContiguousSimilarRanges();
+
+            if (pass != FirstPass) {
+                auto& allocation = findAllocation(traceIndex);
+
+                assert(allocation.traceIndex == traceIndex);
+
+                handleTotalCostUpdate();
+            }
+        } else if (reader.mode() == '/') {
+            uint64_t length, ptr;
+
+            if (!(reader >> length)
+                || !(reader >> ptr)) {
+                cerr << "failed to parse line: " << reader.line() << endl;
+                continue;
+            }
+
+            mapRemoveRanges(ptr, length);
+        } else if (reader.mode() == 'K') {
+            int isStart;
+
+            if (!(reader >> isStart) || !(isStart == 1 || isStart == 0)) {
+                cerr << "failed to parse line: " << reader.line() << endl;
+                continue;
+            }
+
+            if (isStart)
+            {
+                // smaps chunk start
+                if (isSmapsChunkInProcess) {
+                    cerr << "wrong trace format (nested smaps chunks)" << endl;
+                    continue;
+                }
+
+                isSmapsChunkInProcess = true;
+            }
+            else
+            {
+                assert (!isStart);
+
+                // smaps chunk end
+                if (!isSmapsChunkInProcess) {
+                    cerr << "wrong trace format (nested smaps chunks?)" << endl;
+                    continue;
+                }
+
+                combineContiguousSimilarRanges();
+
+                isSmapsChunkInProcess = false;
+
+                totalCost.privateClean.leaked = 0;
+                totalCost.privateClean.allocated = 0;
+
+                totalCost.privateDirty.leaked = 0;
+                totalCost.privateDirty.allocated = 0;
+
+                totalCost.shared.leaked = 0;
+                totalCost.shared.allocated = 0;
+
+                if (pass != FirstPass) {
+                    for (auto& allocation : allocations)
+                    {
+                        allocation.privateClean.leaked = 0;
+                        allocation.privateClean.allocated = 0;
+
+                        allocation.privateDirty.leaked = 0;
+                        allocation.privateDirty.allocated = 0;
+
+                        allocation.shared.leaked = 0;
+                        allocation.shared.allocated = 0;
+                    }
+                }
+
+                for (auto i = addressRangeInfos.begin (); i != addressRangeInfos.end(); ++i)
+                {
+                    const AddressRangeInfo& addressRangeInfo = i->second;
+
+                    if(!addressRangeInfo.isPhysicalMemoryConsumptionSet) {
+                        cerr << "Unknown range: 0x" << std::hex << addressRangeInfo.start << " (0x" << addressRangeInfo.size << " bytes)" << std::dec << endl;
+                    }
+
+                    totalCost.privateClean.allocated += addressRangeInfo.getPrivateClean();
+                    totalCost.privateClean.leaked += addressRangeInfo.getPrivateClean();
+
+                    if (totalCost.privateClean.leaked > totalCost.privateClean.peak) {
+                        totalCost.privateClean.peak = totalCost.privateClean.leaked;
+                        privateCleanPeakTime = timeStamp;
+
+                        if (pass == SecondPass && totalCost.privateClean.peak == lastPrivateCleanPeakCost && privateCleanPeakTime == lastPrivateCleanPeakTime) {
+                            for (auto& allocation : allocations) {
+                                allocation.privateClean.peak = allocation.privateClean.leaked;
+                            }
+                        }
+                    }
+
+                    totalCost.privateDirty.allocated += addressRangeInfo.getPrivateDirty();
+                    totalCost.privateDirty.leaked += addressRangeInfo.getPrivateDirty();
+
+                    if (totalCost.privateDirty.leaked > totalCost.privateDirty.peak) {
+                        totalCost.privateDirty.peak = totalCost.privateDirty.leaked;
+                        privateDirtyPeakTime = timeStamp;
+
+                        if (pass == SecondPass && totalCost.privateDirty.peak == lastPrivateDirtyPeakCost && privateDirtyPeakTime == lastPrivateDirtyPeakTime) {
+                            for (auto& allocation : allocations) {
+                                allocation.privateDirty.peak = allocation.privateDirty.leaked;
+                            }
+                        }
+                    }
+
+                    totalCost.shared.allocated += addressRangeInfo.getShared();
+                    totalCost.shared.leaked += addressRangeInfo.getShared();
+
+                    if (totalCost.shared.leaked > totalCost.shared.peak) {
+                        totalCost.shared.peak = totalCost.shared.leaked;
+                        sharedPeakTime = timeStamp;
+
+                        if (pass == SecondPass && totalCost.shared.peak == lastSharedPeakCost && sharedPeakTime == lastSharedPeakTime) {
+                            for (auto& allocation : allocations) {
+                                allocation.shared.peak = allocation.shared.leaked;
+                            }
+                        }
+                    }
+
+                    if (pass != FirstPass) {
+                        auto& allocation = findAllocation(addressRangeInfo.traceIndex);
+
+                        allocation.privateClean.leaked += addressRangeInfo.getPrivateClean();
+                        allocation.privateClean.allocated += addressRangeInfo.getPrivateClean();
+
+                        allocation.privateDirty.leaked += addressRangeInfo.getPrivateDirty();
+                        allocation.privateDirty.allocated += addressRangeInfo.getPrivateDirty();
+
+                        allocation.shared.leaked += addressRangeInfo.getShared();
+                        allocation.shared.allocated += addressRangeInfo.getShared();
+                    }
+                }
+            }
+
+            handleTotalCostUpdate();
+        } else if (reader.mode() == 'k') {
+            if (!isSmapsChunkInProcess) {
+                cerr << "wrong trace format (smaps data outside of smaps chunk)" << endl;
+                continue;
+            }
+
+            uint64_t addr, diff, size, privateDirty, privateClean, sharedDirty, sharedClean;
+            int prot;
+
+            constexpr uint64_t kilobyteSize = 1024;
+
+            if (!(reader >> addr)
+                || !(reader >> diff)
+                || !(reader >> size)
+                || !(reader >> privateDirty)
+                || !(reader >> privateClean)
+                || !(reader >> sharedDirty)
+                || !(reader >> sharedClean)
+                || !(reader >> prot)
+                /* the value can be different on Tizen for [stack] area */
+                /* || !(diff == size * kilobyteSize) */
+                ) {
+                    cerr << "failed to parse line: " << reader.line() << endl;
+                    continue;
+            }
+
+            AddressRangesMapIteratorPair ranges = mapUpdateRange(addr, diff);
+
+            for (auto i = ranges.first; i != ranges.second; i++)
+            {
+                AddressRangeInfo &rangeInfo = i->second;
+
+                rangeInfo.setProt(prot);
+
+                rangeInfo.setPhysicalMemoryConsumption(diff,
+                                                       privateDirty * kilobyteSize,
+                                                       privateClean * kilobyteSize,
+                                                       sharedDirty  * kilobyteSize,
+                                                       sharedClean  * kilobyteSize);
+            }
         } else if (reader.mode() == '+') {
             AllocationInfo info;
             AllocationIndex allocationIndex;
@@ -267,23 +489,24 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
 
             if (pass != FirstPass) {
                 auto& allocation = findAllocation(info.traceIndex);
-                allocation.leaked += info.size;
-                allocation.allocated += info.size;
-                ++allocation.allocations;
+                allocation.malloc.leaked += info.size;
+                allocation.malloc.allocated += info.size;
+                ++allocation.malloc.allocations;
 
+                handleTotalCostUpdate();
                 handleAllocation(info, allocationIndex);
             }
 
-            ++totalCost.allocations;
-            totalCost.allocated += info.size;
-            totalCost.leaked += info.size;
-            if (totalCost.leaked > totalCost.peak) {
-                totalCost.peak = totalCost.leaked;
-                peakTime = timeStamp;
+            ++totalCost.malloc.allocations;
+            totalCost.malloc.allocated += info.size;
+            totalCost.malloc.leaked += info.size;
+            if (totalCost.malloc.leaked > totalCost.malloc.peak) {
+                totalCost.malloc.peak = totalCost.malloc.leaked;
+                mallocPeakTime = timeStamp;
 
-                if (pass == SecondPass && totalCost.peak == lastPeakCost && peakTime == lastPeakTime) {
+                if (pass == SecondPass && totalCost.malloc.peak == lastMallocPeakCost && mallocPeakTime == lastMallocPeakTime) {
                     for (auto& allocation : allocations) {
-                        allocation.peak = allocation.leaked;
+                        allocation.malloc.peak = allocation.malloc.leaked;
                     }
                 }
             }
@@ -313,16 +536,16 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             lastAllocationPtr = 0;
 
             const auto& info = allocationInfos[allocationInfoIndex.index];
-            totalCost.leaked -= info.size;
+            totalCost.malloc.leaked -= info.size;
             if (temporary) {
-                ++totalCost.temporary;
+                ++totalCost.malloc.temporary;
             }
 
             if (pass != FirstPass) {
                 auto& allocation = findAllocation(info.traceIndex);
-                allocation.leaked -= info.size;
+                allocation.malloc.leaked -= info.size;
                 if (temporary) {
-                    ++allocation.temporary;
+                    ++allocation.malloc.temporary;
                 }
             }
         } else if (reader.mode() == 'a') {
@@ -692,4 +915,153 @@ TraceNode AccumulatedTraceData::findTrace(const TraceIndex traceIndex) const
 bool AccumulatedTraceData::isStopIndex(const StringIndex index) const
 {
     return find(stopIndices.begin(), stopIndices.end(), index) != stopIndices.end();
+}
+
+AddressRangesMapIteratorPair AccumulatedTraceData::mapUpdateRange(const uint64_t start,
+                                                                  const uint64_t size)
+{
+    uint64_t ptr = start;
+    uint64_t endPtr = start + size;
+
+    auto rangesIter = addressRangeInfos.lower_bound(ptr);
+    auto rangesEnd = addressRangeInfos.lower_bound(endPtr);
+
+    if (rangesIter != addressRangeInfos.begin())
+    {
+        auto prev = std::prev(rangesIter);
+
+        if (prev->first + prev->second.size > start)
+        {
+            AddressRangeInfo newRange = prev->second.split(start - prev->first);
+
+            addressRangeInfos.insert(std::make_pair(start, newRange));
+
+            rangesIter = std::next(prev);
+
+            assert (rangesIter->first == ptr);
+        }
+    }
+
+    while (ptr != endPtr)
+    {
+        if (rangesIter == rangesEnd)
+        {
+            addressRangeInfos.insert(std::make_pair(ptr,
+                                                    AddressRangeInfo(ptr,
+                                                                     endPtr - ptr)));
+
+            ptr = endPtr;
+        }
+        else
+        {
+            if (ptr != rangesIter->first)
+            {
+                assert(ptr < rangesIter->first);
+
+                uint64_t newSubrangeStart = ptr;
+                uint64_t newSubrangeEnd = std::min(endPtr, rangesIter->first);
+                uint64_t newSubrangeSize = newSubrangeEnd - newSubrangeStart;
+
+                addressRangeInfos.insert(std::make_pair(ptr,
+                                                        AddressRangeInfo(newSubrangeStart,
+                                                                         newSubrangeSize)));
+
+                ptr = newSubrangeEnd;
+            }
+            else
+            {
+                uint64_t subrangeStart = rangesIter->first;
+                uint64_t subrangeEnd = subrangeStart + rangesIter->second.size;
+
+                if (subrangeEnd <= endPtr)
+                {
+                    ptr = subrangeEnd;
+
+                    ++rangesIter;
+                }
+                else
+                {
+                    assert (std::next(rangesIter) == rangesEnd);
+
+                    AddressRangeInfo newRange = rangesIter->second.split(endPtr - ptr);
+
+                    addressRangeInfos.insert(std::make_pair(endPtr, newRange));
+                }
+            }
+        }
+    }
+
+    return std::make_pair(addressRangeInfos.lower_bound(start),
+                          addressRangeInfos.lower_bound(endPtr));
+}
+
+void AccumulatedTraceData::mapRemoveRanges(const uint64_t start,
+                                           const uint64_t size)
+{
+    auto i = addressRangeInfos.lower_bound(start);
+    auto e = addressRangeInfos.lower_bound(start + size);
+
+    if (i != addressRangeInfos.begin())
+    {
+        auto prev = std::prev(i);
+
+        if (prev->first + prev->second.size > start)
+        {
+            AddressRangeInfo newRange = prev->second.split(start - prev->first);
+
+            addressRangeInfos.insert(std::make_pair(start, newRange));
+
+            i = std::next(prev);
+
+            assert(i->first == start);
+        }
+    }
+
+    if (i != e)
+    {
+        auto last = std::prev(e);
+
+        assert (last->first < start + size);
+
+        if (last->first + last->second.size > start + size)
+        {
+            AddressRangeInfo newRange = last->second.split(start + size - last->first);
+
+            addressRangeInfos.insert(std::make_pair(start + size, newRange));
+
+            e = std::next(last);
+
+            assert(last->first + last->second.size == start + size);
+        }
+    }
+
+    addressRangeInfos.erase(i, e);
+}
+
+void AccumulatedTraceData::combineContiguousSimilarRanges()
+{
+    for (auto i = addressRangeInfos.begin (); i != addressRangeInfos.end(); ++i)
+    {
+        assert(i->first == i->second.start);
+
+        auto j = std::next (i);
+
+        assert (j == addressRangeInfos.end()
+                || i->second.start + i->second.size <= j->first);
+
+        while (j != addressRangeInfos.end()
+               && i->first + i->second.size == j->first)
+        {
+            if (i->second.combineIfSimilar(j->second))
+            {
+                addressRangeInfos.erase(j);
+
+                j = std::next (i);
+            }
+            else
+            {
+                break;
+            }
+        }
+    }
 }
