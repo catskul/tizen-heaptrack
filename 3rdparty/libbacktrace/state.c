@@ -59,7 +59,7 @@ backtrace_create_state (const char *filename, int threaded,
 #endif
 
   memset (&init_state, 0, sizeof init_state);
-  init_state.filename = filename;
+  init_state.filename = strdup(filename);
   init_state.threaded = threaded;
 
   state = ((struct backtrace_state *)
