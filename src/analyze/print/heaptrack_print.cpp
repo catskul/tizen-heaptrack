@@ -132,11 +132,7 @@ struct Printer final : public AccumulatedTraceData
         }
         for (MergedAllocation& merged : ret) {
             for (const Allocation& allocation : merged.traces) {
-                merged.allocated += allocation.allocated;
-                merged.allocations += allocation.allocations;
-                merged.leaked += allocation.leaked;
-                merged.peak += allocation.peak;
-                merged.temporary += allocation.temporary;
+                merged += allocation;
             }
         }
         return ret;
@@ -284,7 +280,7 @@ struct Printer final : public AccumulatedTraceData
     }
 
     template <typename T, typename LabelPrinter, typename SubLabelPrinter>
-    void printAllocations(T AllocationData::*member, LabelPrinter label, SubLabelPrinter sublabel)
+    void printAllocations(T AllocationData::Stats::*member, LabelPrinter label, SubLabelPrinter sublabel)
     {
         if (mergeBacktraces) {
             printMerged(member, label, sublabel);
@@ -294,15 +290,15 @@ struct Printer final : public AccumulatedTraceData
     }
 
     template <typename T, typename LabelPrinter, typename SubLabelPrinter>
-    void printMerged(T AllocationData::*member, LabelPrinter label, SubLabelPrinter sublabel)
+    void printMerged(T AllocationData::Stats::*member, LabelPrinter label, SubLabelPrinter sublabel)
     {
         auto sortOrder = [member](const AllocationData& l, const AllocationData& r) {
-            return std::abs(l.*member) > std::abs(r.*member);
+            return std::abs(l.getDisplay()->*member) > std::abs(r.getDisplay()->*member);
         };
         sort(mergedAllocations.begin(), mergedAllocations.end(), sortOrder);
         for (size_t i = 0; i < min(peakLimit, mergedAllocations.size()); ++i) {
             auto& allocation = mergedAllocations[i];
-            if (!(allocation.*member)) {
+            if (!(allocation.getDisplay()->*member)) {
                 break;
             }
             label(allocation);
@@ -312,19 +308,19 @@ struct Printer final : public AccumulatedTraceData
             int64_t handled = 0;
             for (size_t j = 0; j < min(subPeakLimit, allocation.traces.size()); ++j) {
                 const auto& trace = allocation.traces[j];
-                if (!(trace.*member)) {
+                if (!(trace.getDisplay()->*member)) {
                     break;
                 }
                 sublabel(trace);
-                handled += trace.*member;
+                handled += trace.getDisplay()->*member;
                 printBacktrace(trace.traceIndex, cout, 2, true);
             }
             if (allocation.traces.size() > subPeakLimit) {
                 cout << "  and ";
-                if (member == &AllocationData::allocations) {
-                    cout << (allocation.*member - handled);
+                if (member == &AllocationData::Stats::allocations) {
+                    cout << (allocation.getDisplay()->*member - handled);
                 } else {
-                    cout << formatBytes(allocation.*member - handled);
+                    cout << formatBytes(allocation.getDisplay()->*member - handled);
                 }
                 cout << " from " << (allocation.traces.size() - subPeakLimit) << " other places\n";
             }
@@ -333,13 +329,13 @@ struct Printer final : public AccumulatedTraceData
     }
 
     template <typename T, typename LabelPrinter>
-    void printUnmerged(T AllocationData::*member, LabelPrinter label)
+    void printUnmerged(T AllocationData::Stats::*member, LabelPrinter label)
     {
         sort(allocations.begin(), allocations.end(),
-             [member](const Allocation& l, const Allocation& r) { return std::abs(l.*member) > std::abs(r.*member); });
+             [member](const Allocation& l, const Allocation& r) { return std::abs(l.getDisplay()->*member) > std::abs(r.getDisplay()->*member); });
         for (size_t i = 0; i < min(peakLimit, allocations.size()); ++i) {
             const auto& allocation = allocations[i];
-            if (!(allocation.*member)) {
+            if (!(allocation.getDisplay()->*member)) {
                 break;
             }
             label(allocation);
@@ -360,7 +356,7 @@ struct Printer final : public AccumulatedTraceData
     void writeMassifSnapshot(size_t timeStamp, bool isLast)
     {
         if (!lastMassifPeak) {
-            lastMassifPeak = totalCost.leaked;
+            lastMassifPeak = totalCost.getDisplay()->leaked;
             massifAllocations = allocations;
         }
         massifOut << "#-----------\n"
@@ -391,7 +387,7 @@ struct Printer final : public AccumulatedTraceData
         size_t skipped = 0;
         auto mergedAllocations = mergeAllocations(allocations);
         sort(mergedAllocations.begin(), mergedAllocations.end(),
-             [](const MergedAllocation& l, const MergedAllocation& r) { return l.leaked > r.leaked; });
+             [](const MergedAllocation& l, const MergedAllocation& r) { return l.getDisplay()->leaked > r.getDisplay()->leaked; });
 
         const auto ip = findIp(location);
 
@@ -399,14 +395,14 @@ struct Printer final : public AccumulatedTraceData
         const bool shouldStop = isStopIndex(ip.frame.functionIndex);
         if (!shouldStop) {
             for (auto& merged : mergedAllocations) {
-                if (merged.leaked < 0) {
+                if (merged.getDisplay()->leaked < 0) {
                     // list is sorted, so we can bail out now - these entries are
                     // uninteresting for massif
                     break;
                 }
 
                 // skip items below threshold
-                if (static_cast<size_t>(merged.leaked) >= threshold) {
+                if (static_cast<size_t>(merged.getDisplay()->leaked) >= threshold) {
                     ++numAllocs;
                     // skip the first level of the backtrace, otherwise we'd endlessly
                     // recurse
@@ -415,7 +411,7 @@ struct Printer final : public AccumulatedTraceData
                     }
                 } else {
                     ++skipped;
-                    skippedLeaked += merged.leaked;
+                    skippedLeaked += merged.getDisplay()->leaked;
                 }
             }
         }
@@ -456,12 +452,12 @@ struct Printer final : public AccumulatedTraceData
 
         if (!shouldStop) {
             for (const auto& merged : mergedAllocations) {
-                if (merged.leaked > 0 && static_cast<size_t>(merged.leaked) >= threshold) {
-                    if (skippedLeaked > merged.leaked) {
+                if (merged.getDisplay()->leaked > 0 && static_cast<size_t>(merged.getDisplay()->leaked) >= threshold) {
+                    if (skippedLeaked > merged.getDisplay()->leaked) {
                         // manually inject this entry to keep the output sorted
                         writeSkipped();
                     }
-                    writeMassifBacktrace(merged.traces, merged.leaked, threshold, merged.ipIndex, depth + 1);
+                    writeMassifBacktrace(merged.traces, merged.getDisplay()->leaked, threshold, merged.ipIndex, depth + 1);
                 }
             }
             writeSkipped();
@@ -474,9 +470,9 @@ struct Printer final : public AccumulatedTraceData
             ++sizeHistogram[info.size];
         }
 
-        if (totalCost.leaked > 0 && static_cast<size_t>(totalCost.leaked) > lastMassifPeak && massifOut.is_open()) {
+        if (totalCost.getDisplay()->leaked > 0 && static_cast<size_t>(totalCost.getDisplay()->leaked) > lastMassifPeak && massifOut.is_open()) {
             massifAllocations = allocations;
-            lastMassifPeak = totalCost.leaked;
+            lastMassifPeak = totalCost.getDisplay()->leaked;
         }
     }
 
@@ -649,13 +645,13 @@ int main(int argc, char** argv)
     if (printAllocs) {
         // sort by amount of allocations
         cout << "MOST CALLS TO ALLOCATION FUNCTIONS\n";
-        data.printAllocations(&AllocationData::allocations,
+        data.printAllocations(&AllocationData::Stats::allocations,
                               [](const AllocationData& data) {
-                                  cout << data.allocations << " calls to allocation functions with "
-                                       << formatBytes(data.peak) << " peak consumption from\n";
+                                  cout << data.getDisplay()->allocations << " calls to allocation functions with "
+                                       << formatBytes(data.getDisplay()->peak) << " peak consumption from\n";
                               },
                               [](const AllocationData& data) {
-                                  cout << data.allocations << " calls with " << formatBytes(data.peak)
+                                  cout << data.getDisplay()->allocations << " calls with " << formatBytes(data.getDisplay()->peak)
                                        << " peak consumption from:\n";
                               });
         cout << endl;
@@ -663,13 +659,13 @@ int main(int argc, char** argv)
 
     if (printOverallAlloc) {
         cout << "MOST BYTES ALLOCATED OVER TIME (ignoring deallocations)\n";
-        data.printAllocations(&AllocationData::allocated,
+        data.printAllocations(&AllocationData::Stats::allocated,
                               [](const AllocationData& data) {
-                                  cout << formatBytes(data.allocated) << " allocated over " << data.allocations
+                                  cout << formatBytes(data.getDisplay()->allocated) << " allocated over " << data.getDisplay()->allocations
                                        << " calls from\n";
                               },
                               [](const AllocationData& data) {
-                                  cout << formatBytes(data.allocated) << " allocated over " << data.allocations
+                                  cout << formatBytes(data.getDisplay()->allocated) << " allocated over " << data.getDisplay()->allocations
                                        << " calls from:\n";
                               });
         cout << endl;
@@ -677,13 +673,13 @@ int main(int argc, char** argv)
 
     if (printPeaks) {
         cout << "PEAK MEMORY CONSUMERS\n";
-        data.printAllocations(&AllocationData::peak,
+        data.printAllocations(&AllocationData::Stats::peak,
                               [](const AllocationData& data) {
-                                  cout << formatBytes(data.peak) << " peak memory consumed over " << data.allocations
+                                  cout << formatBytes(data.getDisplay()->peak) << " peak memory consumed over " << data.getDisplay()->allocations
                                        << " calls from\n";
                               },
                               [](const AllocationData& data) {
-                                  cout << formatBytes(data.peak) << " consumed over " << data.allocations
+                                  cout << formatBytes(data.getDisplay()->peak) << " consumed over " << data.getDisplay()->allocations
                                        << " calls from:\n";
                               });
         cout << endl;
@@ -692,13 +688,13 @@ int main(int argc, char** argv)
     if (printLeaks) {
         // sort by amount of leaks
         cout << "MEMORY LEAKS\n";
-        data.printAllocations(&AllocationData::leaked,
+        data.printAllocations(&AllocationData::Stats::leaked,
                               [](const AllocationData& data) {
-                                  cout << formatBytes(data.leaked) << " leaked over " << data.allocations
+                                  cout << formatBytes(data.getDisplay()->leaked) << " leaked over " << data.getDisplay()->allocations
                                        << " calls from\n";
                               },
                               [](const AllocationData& data) {
-                                  cout << formatBytes(data.leaked) << " leaked over " << data.allocations
+                                  cout << formatBytes(data.getDisplay()->leaked) << " leaked over " << data.getDisplay()->allocations
                                        << " calls from:\n";
                               });
         cout << endl;
@@ -707,31 +703,31 @@ int main(int argc, char** argv)
     if (printTemporary) {
         // sort by amount of temporary allocations
         cout << "MOST TEMPORARY ALLOCATIONS\n";
-        data.printAllocations(&AllocationData::temporary,
+        data.printAllocations(&AllocationData::Stats::temporary,
                               [](const AllocationData& data) {
-                                  cout << data.temporary << " temporary allocations of " << data.allocations
+                                  cout << data.getDisplay()->temporary << " temporary allocations of " << data.getDisplay()->allocations
                                        << " allocations in total (" << fixed << setprecision(2)
-                                       << (float(data.temporary) * 100.f / data.allocations) << "%) from\n";
+                                       << (float(data.getDisplay()->temporary) * 100.f / data.getDisplay()->allocations) << "%) from\n";
                               },
                               [](const AllocationData& data) {
-                                  cout << data.temporary << " temporary allocations of " << data.allocations
+                                  cout << data.getDisplay()->temporary << " temporary allocations of " << data.getDisplay()->allocations
                                        << " allocations in total (" << fixed << setprecision(2)
-                                       << (float(data.temporary) * 100.f / data.allocations) << "%) from:\n";
+                                       << (float(data.getDisplay()->temporary) * 100.f / data.getDisplay()->allocations) << "%) from:\n";
                               });
         cout << endl;
     }
 
     const double totalTimeS = 0.001 * data.totalTime;
     cout << "total runtime: " << fixed << totalTimeS << "s.\n"
-         << "bytes allocated in total (ignoring deallocations): " << formatBytes(data.totalCost.allocated) << " ("
-         << formatBytes(data.totalCost.allocated / totalTimeS) << "/s)" << '\n'
-         << "calls to allocation functions: " << data.totalCost.allocations << " ("
-         << int64_t(data.totalCost.allocations / totalTimeS) << "/s)\n"
-         << "temporary memory allocations: " << data.totalCost.temporary << " ("
-         << int64_t(data.totalCost.temporary / totalTimeS) << "/s)\n"
-         << "peak heap memory consumption: " << formatBytes(data.totalCost.peak) << '\n'
+         << "bytes allocated in total (ignoring deallocations): " << formatBytes(data.totalCost.getDisplay()->allocated) << " ("
+         << formatBytes(data.totalCost.getDisplay()->allocated / totalTimeS) << "/s)" << '\n'
+         << "calls to allocation functions: " << data.totalCost.getDisplay()->allocations << " ("
+         << int64_t(data.totalCost.getDisplay()->allocations / totalTimeS) << "/s)\n"
+         << "temporary memory allocations: " << data.totalCost.getDisplay()->temporary << " ("
+         << int64_t(data.totalCost.getDisplay()->temporary / totalTimeS) << "/s)\n"
+         << "peak heap memory consumption: " << formatBytes(data.totalCost.getDisplay()->peak) << '\n'
          << "peak RSS (including heaptrack overhead): " << formatBytes(data.peakRSS * data.systemInfo.pageSize) << '\n'
-         << "total memory leaked: " << formatBytes(data.totalCost.leaked) << '\n';
+         << "total memory leaked: " << formatBytes(data.totalCost.getDisplay()->leaked) << '\n';
 
     if (!printHistogram.empty()) {
         ofstream histogram(printHistogram, ios_base::out);
@@ -755,7 +751,7 @@ int main(int argc, char** argv)
                 } else {
                     data.printFlamegraph(data.findTrace(allocation.traceIndex), flamegraph);
                 }
-                flamegraph << ' ' << allocation.allocations << '\n';
+                flamegraph << ' ' << allocation.getDisplay()->allocations << '\n';
             }
         }
     }

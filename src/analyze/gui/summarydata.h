@@ -26,7 +26,7 @@
 struct SummaryData
 {
     QString debuggee;
-    AllocationData cost;
+    AllocationData::Stats cost;
     int64_t totalTime;
     int64_t peakTime;
     int64_t peakRSS;

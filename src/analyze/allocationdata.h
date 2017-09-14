@@ -19,26 +19,114 @@
 #ifndef ALLOCATIONDATA_H
 #define ALLOCATIONDATA_H
 
+#include <cassert>
 #include <cstdint>
 
 struct AllocationData
 {
-    // number of allocations
-    int64_t allocations = 0;
-    // number of temporary allocations
-    int64_t temporary = 0;
-    // bytes allocated in total
-    int64_t allocated = 0;
-    // amount of bytes leaked
-    int64_t leaked = 0;
-    // largest amount of bytes allocated
-    int64_t peak = 0;
+    enum class DisplayId
+    {
+        malloc,
+        privateClean,
+        privateDirty,
+        shared
+    };
+
+    AllocationData()
+        : malloc(),
+          privateClean(),
+          privateDirty(),
+          shared()
+    {
+    }
+
+    struct Stats
+    {
+        // number of allocations
+        int64_t allocations = 0;
+        // number of temporary allocations
+        int64_t temporary = 0;
+        // bytes allocated in total
+        int64_t allocated = 0;
+        // amount of bytes leaked
+        int64_t leaked = 0;
+        // largest amount of bytes allocated
+        int64_t peak = 0;
+    };
+
+    Stats malloc, privateClean, privateDirty, shared;
+
+    static DisplayId display;
+
+    const Stats *getDisplay() const
+    {
+        switch (display)
+        {
+            case DisplayId::malloc:
+                return &malloc;
+            case DisplayId::privateClean:
+                return &privateClean;
+            case DisplayId::privateDirty:
+                return &privateDirty;
+            default:
+                assert(display == DisplayId::shared);
+                return &shared;
+        }
+    }
 };
+
+inline bool operator==(const AllocationData::Stats &lhs, const AllocationData::Stats &rhs)
+{
+    return (lhs.allocations == rhs.allocations
+            && lhs.temporary == rhs.temporary
+            && lhs.allocated == rhs.allocated
+            && lhs.leaked == rhs.leaked
+            && lhs.peak == rhs.peak);
+}
+
+inline bool operator!=(const AllocationData::Stats &lhs, const AllocationData::Stats &rhs)
+{
+    return !(lhs == rhs);
+}
+
+inline AllocationData::Stats& operator+=(AllocationData::Stats& lhs, const AllocationData::Stats& rhs)
+{
+    lhs.allocations += rhs.allocations;
+    lhs.temporary += rhs.temporary;
+    lhs.allocated += rhs.allocated;
+    lhs.leaked += rhs.leaked;
+    lhs.peak += rhs.peak;
+
+    return lhs;
+}
+
+inline AllocationData::Stats& operator-=(AllocationData::Stats& lhs, const AllocationData::Stats& rhs)
+{
+    lhs.allocations -= rhs.allocations;
+    lhs.temporary -= rhs.temporary;
+    lhs.allocated -= rhs.allocated;
+    lhs.leaked -= rhs.leaked;
+    lhs.peak -= rhs.peak;
+
+    return lhs;
+}
+
+inline AllocationData::Stats operator+(AllocationData::Stats lhs, const AllocationData::Stats& rhs)
+{
+    return lhs += rhs;
+}
+
+inline AllocationData::Stats operator-(AllocationData::Stats lhs, const AllocationData::Stats& rhs)
+{
+    return lhs -= rhs;
+}
 
 inline bool operator==(const AllocationData& lhs, const AllocationData& rhs)
 {
-    return lhs.allocations == rhs.allocations && lhs.temporary == rhs.temporary && lhs.allocated == rhs.allocated
-        && lhs.leaked == rhs.leaked && lhs.peak == rhs.peak;
+    return (lhs.malloc == rhs.malloc
+            && lhs.privateClean == rhs.privateClean
+            && lhs.privateDirty == rhs.privateDirty
+            && lhs.shared == rhs.shared);
 }
 
 inline bool operator!=(const AllocationData& lhs, const AllocationData& rhs)
@@ -48,21 +136,19 @@ inline bool operator!=(const AllocationData& lhs, const AllocationData& rhs)
 
 inline AllocationData& operator+=(AllocationData& lhs, const AllocationData& rhs)
 {
-    lhs.allocations += rhs.allocations;
-    lhs.temporary += rhs.temporary;
-    lhs.peak += rhs.peak;
-    lhs.leaked += rhs.leaked;
-    lhs.allocated += rhs.allocated;
+    lhs.malloc += rhs.malloc;
+    lhs.privateClean += rhs.privateClean;
+    lhs.privateDirty += rhs.privateDirty;
+    lhs.shared += rhs.shared;
     return lhs;
 }
 
 inline AllocationData& operator-=(AllocationData& lhs, const AllocationData& rhs)
 {
-    lhs.allocations -= rhs.allocations;
-    lhs.temporary -= rhs.temporary;
-    lhs.peak -= rhs.peak;
-    lhs.leaked -= rhs.leaked;
-    lhs.allocated -= rhs.allocated;
+    lhs.malloc -= rhs.malloc;
+    lhs.privateClean -= rhs.privateClean;
+    lhs.privateDirty -= rhs.privateDirty;
+    lhs.shared -= rhs.shared;
     return lhs;
 }
 

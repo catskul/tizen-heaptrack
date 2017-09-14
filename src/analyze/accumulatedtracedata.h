@@ -127,7 +127,10 @@ struct AccumulatedTraceData
     std::vector<Allocation> allocations;
     AllocationData totalCost;
     int64_t totalTime = 0;
-    int64_t peakTime = 0;
+    int64_t mallocPeakTime = 0;
+    int64_t privateCleanPeakTime = 0;
+    int64_t privateDirtyPeakTime = 0;
+    int64_t sharedPeakTime = 0;
     int64_t peakRSS = 0;
 
     struct SystemInfo
@@ -141,6 +144,22 @@ struct AccumulatedTraceData
     // occur with an index larger than any other we encountered so far
     // this can be used to our advantage in speeding up the findAllocation calls.
     TraceIndex m_maxAllocationTraceIndex;
+
+    int64_t getPeakTime()
+    {
+        switch (AllocationData::display)
+        {
+            case AllocationData::DisplayId::malloc:
+                return mallocPeakTime;
+            case AllocationData::DisplayId::privateClean:
+                return privateCleanPeakTime;
+            case AllocationData::DisplayId::privateDirty:
+                return privateDirtyPeakTime;
+            default:
+                assert(AllocationData::display == AllocationData::DisplayId::shared);
+                return sharedPeakTime;
+        }
+    }
 
     Allocation& findAllocation(const TraceIndex traceIndex);
 

@@ -39,6 +39,8 @@
 
 using namespace std;
 
+AllocationData::DisplayId AllocationData::display = AllocationData::DisplayId::malloc;
+
 namespace {
 
 template <typename Base>
@@ -161,12 +163,12 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
 
     vector<string> stopStrings = {"main", "__libc_start_main", "__static_initialization_and_destruction_0"};
 
-    const auto lastPeakCost = pass != FirstPass ? totalCost.peak : 0;
-    const auto lastPeakTime = pass != FirstPass ? peakTime : 0;
+    const auto lastMallocPeakCost = pass != FirstPass ? totalCost.malloc.peak : 0;
+    const auto lastMallocPeakTime = pass != FirstPass ? mallocPeakTime : 0;
 
     m_maxAllocationTraceIndex.index = 0;
     totalCost = {};
-    peakTime = 0;
+    mallocPeakTime = 0;
     systemInfo = {};
     peakRSS = 0;
     allocations.clear();
@@ -267,23 +269,23 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
 
             if (pass != FirstPass) {
                 auto& allocation = findAllocation(info.traceIndex);
-                allocation.leaked += info.size;
-                allocation.allocated += info.size;
-                ++allocation.allocations;
+                allocation.malloc.leaked += info.size;
+                allocation.malloc.allocated += info.size;
+                ++allocation.malloc.allocations;
 
                 handleAllocation(info, allocationIndex);
             }
 
-            ++totalCost.allocations;
-            totalCost.allocated += info.size;
-            totalCost.leaked += info.size;
-            if (totalCost.leaked > totalCost.peak) {
-                totalCost.peak = totalCost.leaked;
-                peakTime = timeStamp;
+            ++totalCost.malloc.allocations;
+            totalCost.malloc.allocated += info.size;
+            totalCost.malloc.leaked += info.size;
+            if (totalCost.malloc.leaked > totalCost.malloc.peak) {
+                totalCost.malloc.peak = totalCost.malloc.leaked;
+                mallocPeakTime = timeStamp;
 
-                if (pass == SecondPass && totalCost.peak == lastPeakCost && peakTime == lastPeakTime) {
+                if (pass == SecondPass && totalCost.malloc.peak == lastMallocPeakCost && mallocPeakTime == lastMallocPeakTime) {
                     for (auto& allocation : allocations) {
-                        allocation.peak = allocation.leaked;
+                        allocation.malloc.peak = allocation.malloc.leaked;
                     }
                 }
             }
@@ -313,16 +315,16 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             lastAllocationPtr = 0;
 
             const auto& info = allocationInfos[allocationInfoIndex.index];
-            totalCost.leaked -= info.size;
+            totalCost.malloc.leaked -= info.size;
             if (temporary) {
-                ++totalCost.temporary;
+                ++totalCost.malloc.temporary;
             }
 
             if (pass != FirstPass) {
                 auto& allocation = findAllocation(info.traceIndex);
-                allocation.leaked -= info.size;
+                allocation.malloc.leaked -= info.size;
                 if (temporary) {
-                    ++allocation.temporary;
+                    ++allocation.malloc.temporary;
                 }
             }
         } else if (reader.mode() == 'a') {

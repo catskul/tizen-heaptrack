@@ -310,7 +310,7 @@ FrameGraphicsItem* findItemByFunction(const QList<QGraphicsItem*>& items, const 
 /**
  * Convert the top-down graph into a tree of FrameGraphicsItem.
  */
-void toGraphicsItems(const QVector<RowData>& data, FrameGraphicsItem* parent, int64_t AllocationData::*member,
+void toGraphicsItems(const QVector<RowData>& data, FrameGraphicsItem* parent, int64_t AllocationData::Stats::*member,
                      const double costThreshold, bool collapseRecursion)
 {
     foreach (const auto& row, data) {
@@ -333,19 +333,19 @@ void toGraphicsItems(const QVector<RowData>& data, FrameGraphicsItem* parent, in
     }
 }
 
-int64_t AllocationData::*memberForType(CostType type)
+int64_t AllocationData::Stats::*memberForType(CostType type)
 {
     switch (type) {
     case Allocations:
-        return &AllocationData::allocations;
+        return &AllocationData::Stats::allocations;
     case Temporary:
-        return &AllocationData::temporary;
+        return &AllocationData::Stats::temporary;
     case Peak:
-        return &AllocationData::peak;
+        return &AllocationData::Stats::peak;
     case Leaked:
-        return &AllocationData::leaked;
+        return &AllocationData::Stats::leaked;
     case Allocated:
-        return &AllocationData::allocated;
+        return &AllocationData::Stats::allocated;
     }
     Q_UNREACHABLE();
 }
@@ -385,7 +385,7 @@ FrameGraphicsItem* parseData(const QVector<RowData>& topDownData, CostType type,
     auto rootItem = new FrameGraphicsItem(totalCost, type, label);
     rootItem->setBrush(scheme.background());
     rootItem->setPen(pen);
-    toGraphicsItems(topDownData, rootItem, member, totalCost * costThreshold / 100., collapseRecursion);
+    toGraphicsItems(topDownData, rootItem, member, totalCost * costThreshold / 100, collapseRecursion);
     return rootItem;
 }
 

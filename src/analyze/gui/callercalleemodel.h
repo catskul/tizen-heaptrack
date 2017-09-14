@@ -30,8 +30,8 @@
 
 struct CallerCalleeData
 {
-    AllocationData inclusiveCost;
-    AllocationData selfCost;
+    AllocationData::Stats inclusiveCost;
+    AllocationData::Stats selfCost;
     LocationData::Ptr location;
 };
 Q_DECLARE_TYPEINFO(CallerCalleeData, Q_MOVABLE_TYPE);
