@@ -281,6 +281,14 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             rangeInfo.setTraceIndex(traceIndex.index);
 
             combineContiguousSimilarRanges();
+
+            if (pass != FirstPass) {
+                auto& allocation = findAllocation(traceIndex);
+
+                assert(allocation.traceIndex == traceIndex);
+
+                handleTotalCostUpdate();
+            }
         } else if (reader.mode() == '/') {
             uint64_t length, ptr;
 
@@ -410,6 +418,8 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
                     }
                 }
             }
+
+            handleTotalCostUpdate();
         } else if (reader.mode() == 'k') {
             if (!isSmapsChunkInProcess) {
                 cerr << "wrong trace format (smaps data outside of smaps chunk)" << endl;
@@ -483,6 +493,7 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
                 allocation.malloc.allocated += info.size;
                 ++allocation.malloc.allocations;
 
+                handleTotalCostUpdate();
                 handleAllocation(info, allocationIndex);
             }
 

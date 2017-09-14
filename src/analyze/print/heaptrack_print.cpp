@@ -464,6 +464,10 @@ struct Printer final : public AccumulatedTraceData
         }
     }
 
+    void handleTotalCostUpdate()
+    {
+    }
+
     void handleAllocation(const AllocationInfo& info, const AllocationIndex /*index*/) override
     {
         if (printHistogram) {
