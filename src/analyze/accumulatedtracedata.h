@@ -97,6 +97,139 @@ struct AllocationInfo
     }
 };
 
+/**
+ * Information for an virtual address range (usually created through mmap)
+ */
+struct AddressRangeInfo
+{
+    AddressRangeInfo(uint64_t vStart, uint64_t vSize)
+        : start(vStart), size(vSize), isProtSet(false), isPhysicalMemoryConsumptionSet(false), isFdSet(false)
+    {
+        assert(!traceIndex);
+    }
+
+    mutable uint64_t start;
+    mutable uint64_t size;
+
+    mutable double privateDirty;
+    mutable double privateClean;
+    mutable double sharedDirty;
+    mutable double sharedClean;
+
+    mutable TraceIndex traceIndex; // allocation call site information (false means unknown call site)
+
+    mutable int prot;
+    mutable int fd;
+
+    mutable bool isProtSet;
+    mutable bool isPhysicalMemoryConsumptionSet;
+    mutable bool isFdSet;
+
+    bool combineIfSimilar(const AddressRangeInfo &other)
+    {
+        assert (start + size == other.start);
+
+        if ((isProtSet && !other.isProtSet) || (!isProtSet && other.isProtSet))
+            return false;
+
+        if ((isPhysicalMemoryConsumptionSet && !other.isPhysicalMemoryConsumptionSet)
+            || (!isPhysicalMemoryConsumptionSet && other.isPhysicalMemoryConsumptionSet))
+            return false;
+
+        if ((isFdSet && !other.isFdSet) || (!isFdSet && other.isFdSet))
+            return false;
+
+        if (isProtSet && prot != other.prot)
+            return false;
+
+        if (isFdSet && fd != other.fd)
+            return false;
+
+        if (traceIndex.index != other.traceIndex.index)
+            return false;
+
+        size += other.size;
+
+        if (isPhysicalMemoryConsumptionSet)
+        {
+            privateDirty += other.privateDirty;
+            privateClean += other.privateClean;
+            sharedDirty  += other.sharedDirty;
+            sharedClean  += other.sharedClean;
+        }
+
+        return true;
+    }
+
+    AddressRangeInfo split(uint64_t splitSize)
+    {
+        assert (splitSize < size);
+
+        AddressRangeInfo newRange = *this;
+
+        uint64_t initialSize = size;
+
+        size = splitSize;
+        newRange.start = start + splitSize;
+        newRange.size = initialSize - splitSize;
+
+        if (isPhysicalMemoryConsumptionSet)
+        {
+            double ratio = double(splitSize) / double(initialSize);
+
+            privateDirty *= ratio;
+            privateClean *= ratio;
+            sharedDirty  *= ratio;
+            sharedClean  *= ratio;
+
+            newRange.privateDirty -= privateDirty;
+            newRange.privateClean -= privateClean;
+            newRange.sharedDirty  -= sharedDirty;
+            newRange.sharedClean  -= sharedClean;
+        }
+
+        return newRange;
+    }
+
+    void setTraceIndex(int v)
+    {
+        traceIndex.index = v;
+    }
+
+    void setProt(int v)
+    {
+        prot = v;
+        isProtSet = true;
+    }
+
+    void setFd(int v)
+    {
+        fd = v;
+        isFdSet = true;
+    }
+
+    void setPhysicalMemoryConsumption(uint64_t smapsRangeSize,
+                                      uint64_t vPrivateDirty,
+                                      uint64_t vPrivateClean,
+                                      uint64_t vSharedDirty,
+                                      uint64_t vSharedClean)
+    {
+        assert(size <= smapsRangeSize);
+
+        double ratio = double(size) / double(smapsRangeSize);
+
+        privateDirty = ratio * vPrivateDirty;
+        privateClean = ratio * vPrivateClean;
+        sharedDirty = ratio * vSharedDirty;
+        sharedClean = ratio * vSharedClean;
+
+        isPhysicalMemoryConsumptionSet = true;
+    }
+};
+
+typedef std::map<uint64_t, AddressRangeInfo> AddressRangesMap;
+typedef std::pair<AddressRangesMap::iterator, AddressRangesMap::iterator> AddressRangesMapIteratorPair;
+
 struct AccumulatedTraceData
 {
     AccumulatedTraceData();
@@ -169,6 +302,11 @@ struct AccumulatedTraceData
 
     bool isStopIndex(const StringIndex index) const;
 
+    AddressRangesMapIteratorPair mapUpdateRange(const uint64_t start, const uint64_t size);
+
+    void mapRemoveRanges(const uint64_t start, const uint64_t size);
+    void combineContiguousSimilarRanges();
+
     // indices of functions that should stop the backtrace, e.g. main or static
     // initialization
     std::vector<StringIndex> stopIndices;
@@ -178,6 +316,8 @@ struct AccumulatedTraceData
     std::vector<IpIndex> opNewIpIndices;
 
     std::vector<AllocationInfo> allocationInfos;
+
+    AddressRangesMap addressRangeInfos;
 };
 
 #endif // ACCUMULATEDTRACEDATA_H

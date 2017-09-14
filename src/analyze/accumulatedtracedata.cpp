@@ -172,7 +172,9 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
     systemInfo = {};
     peakRSS = 0;
     allocations.clear();
+    addressRangeInfos.clear();
     uint fileVersion = 0;
+    bool isSmapsChunkInProcess = false;
 
     // required for backwards compatibility
     // newer versions handle this in heaptrack_interpret already
@@ -239,6 +241,115 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
                 IpIndex index;
                 index.index = instructionPointers.size();
                 opNewIpIndices.push_back(index);
+            }
+        } else if (reader.mode() == '*') {
+            uint64_t length, ptr;
+            int prot, fd;
+            TraceIndex traceIndex;
+
+            if (!(reader >> length)
+                || !(reader >> prot)
+                || !(reader >> fd)
+                || !(reader >> traceIndex.index)
+                || !(reader >> ptr)) {
+                cerr << "failed to parse line: " << reader.line() << endl;
+                continue;
+            }
+
+            mapRemoveRanges(ptr, length);
+
+            AddressRangesMapIteratorPair ranges = mapUpdateRange(ptr, length);
+
+            assert (std::next(ranges.first) == ranges.second);
+
+            AddressRangeInfo &rangeInfo = ranges.first->second;
+
+            rangeInfo.setProt(prot);
+            rangeInfo.setFd(fd);
+            rangeInfo.setTraceIndex(traceIndex.index);
+
+            combineContiguousSimilarRanges();
+        } else if (reader.mode() == '/') {
+            uint64_t length, ptr;
+
+            if (!(reader >> length)
+                || !(reader >> ptr)) {
+                cerr << "failed to parse line: " << reader.line() << endl;
+                continue;
+            }
+
+            mapRemoveRanges(ptr, length);
+        } else if (reader.mode() == 'K') {
+            int isStart;
+
+            if (!(reader >> isStart) || !(isStart == 1 || isStart == 0)) {
+                cerr << "failed to parse line: " << reader.line() << endl;
+                continue;
+            }
+
+            if (isStart)
+            {
+                // smaps chunk start
+                if (isSmapsChunkInProcess) {
+                    cerr << "wrong trace format (nested smaps chunks)" << endl;
+                    continue;
+                }
+
+                isSmapsChunkInProcess = true;
+            }
+            else
+            {
+                assert (!isStart);
+
+                // smaps chunk end
+                if (!isSmapsChunkInProcess) {
+                    cerr << "wrong trace format (nested smaps chunks?)" << endl;
+                    continue;
+                }
+
+                combineContiguousSimilarRanges();
+
+                isSmapsChunkInProcess = false;
+            }
+        } else if (reader.mode() == 'k') {
+            if (!isSmapsChunkInProcess) {
+                cerr << "wrong trace format (smaps data outside of smaps chunk)" << endl;
+                continue;
+            }
+
+            uint64_t addr, diff, size, privateDirty, privateClean, sharedDirty, sharedClean;
+            int prot;
+
+            constexpr uint64_t kilobyteSize = 1024;
+
+            if (!(reader >> addr)
+                || !(reader >> diff)
+                || !(reader >> size)
+                || !(reader >> privateDirty)
+                || !(reader >> privateClean)
+                || !(reader >> sharedDirty)
+                || !(reader >> sharedClean)
+                || !(reader >> prot)
+                /* the value can be different on Tizen for [stack] area */
+                /* || !(diff == size * kilobyteSize) */
+                ) {
+                    cerr << "failed to parse line: " << reader.line() << endl;
+                    continue;
+            }
+
+            AddressRangesMapIteratorPair ranges = mapUpdateRange(addr, diff);
+
+            for (auto i = ranges.first; i != ranges.second; i++)
+            {
+                AddressRangeInfo &rangeInfo = i->second;
+
+                rangeInfo.setProt(prot);
+
+                rangeInfo.setPhysicalMemoryConsumption(diff,
+                                                       privateDirty * kilobyteSize,
+                                                       privateClean * kilobyteSize,
+                                                       sharedDirty  * kilobyteSize,
+                                                       sharedClean  * kilobyteSize);
             }
         } else if (reader.mode() == '+') {
             AllocationInfo info;
@@ -694,4 +805,153 @@ TraceNode AccumulatedTraceData::findTrace(const TraceIndex traceIndex) const
 bool AccumulatedTraceData::isStopIndex(const StringIndex index) const
 {
     return find(stopIndices.begin(), stopIndices.end(), index) != stopIndices.end();
+}
+
+AddressRangesMapIteratorPair AccumulatedTraceData::mapUpdateRange(const uint64_t start,
+                                                                  const uint64_t size)
+{
+    uint64_t ptr = start;
+    uint64_t endPtr = start + size;
+
+    auto rangesIter = addressRangeInfos.lower_bound(ptr);
+    auto rangesEnd = addressRangeInfos.lower_bound(endPtr);
+
+    if (rangesIter != addressRangeInfos.begin())
+    {
+        auto prev = std::prev(rangesIter);
+
+        if (prev->first + prev->second.size > start)
+        {
+            AddressRangeInfo newRange = prev->second.split(start - prev->first);
+
+            addressRangeInfos.insert(std::make_pair(start, newRange));
+
+            rangesIter = std::next(prev);
+
+            assert (rangesIter->first == ptr);
+        }
+    }
+
+    while (ptr != endPtr)
+    {
+        if (rangesIter == rangesEnd)
+        {
+            addressRangeInfos.insert(std::make_pair(ptr,
+                                                    AddressRangeInfo(ptr,
+                                                                     endPtr - ptr)));
+
+            ptr = endPtr;
+        }
+        else
+        {
+            if (ptr != rangesIter->first)
+            {
+                assert(ptr < rangesIter->first);
+
+                uint64_t newSubrangeStart = ptr;
+                uint64_t newSubrangeEnd = std::min(endPtr, rangesIter->first);
+                uint64_t newSubrangeSize = newSubrangeEnd - newSubrangeStart;
+
+                addressRangeInfos.insert(std::make_pair(ptr,
+                                                        AddressRangeInfo(newSubrangeStart,
+                                                                         newSubrangeSize)));
+
+                ptr = newSubrangeEnd;
+            }
+            else
+            {
+                uint64_t subrangeStart = rangesIter->first;
+                uint64_t subrangeEnd = subrangeStart + rangesIter->second.size;
+
+                if (subrangeEnd <= endPtr)
+                {
+                    ptr = subrangeEnd;
+
+                    ++rangesIter;
+                }
+                else
+                {
+                    assert (std::next(rangesIter) == rangesEnd);
+
+                    AddressRangeInfo newRange = rangesIter->second.split(endPtr - ptr);
+
+                    addressRangeInfos.insert(std::make_pair(endPtr, newRange));
+                }
+            }
+        }
+    }
+
+    return std::make_pair(addressRangeInfos.lower_bound(start),
+                          addressRangeInfos.lower_bound(endPtr));
+}
+
+void AccumulatedTraceData::mapRemoveRanges(const uint64_t start,
+                                           const uint64_t size)
+{
+    auto i = addressRangeInfos.lower_bound(start);
+    auto e = addressRangeInfos.lower_bound(start + size);
+
+    if (i != addressRangeInfos.begin())
+    {
+        auto prev = std::prev(i);
+
+        if (prev->first + prev->second.size > start)
+        {
+            AddressRangeInfo newRange = prev->second.split(start - prev->first);
+
+            addressRangeInfos.insert(std::make_pair(start, newRange));
+
+            i = std::next(prev);
+
+            assert(i->first == start);
+        }
+    }
+
+    if (i != e)
+    {
+        auto last = std::prev(e);
+
+        assert (last->first < start + size);
+
+        if (last->first + last->second.size > start + size)
+        {
+            AddressRangeInfo newRange = last->second.split(start + size - last->first);
+
+            addressRangeInfos.insert(std::make_pair(start + size, newRange));
+
+            e = std::next(last);
+
+            assert(last->first + last->second.size == start + size);
+        }
+    }
+
+    addressRangeInfos.erase(i, e);
+}
+
+void AccumulatedTraceData::combineContiguousSimilarRanges()
+{
+    for (auto i = addressRangeInfos.begin (); i != addressRangeInfos.end(); ++i)
+    {
+        assert(i->first == i->second.start);
+
+        auto j = std::next (i);
+
+        assert (j == addressRangeInfos.end()
+                || i->second.start + i->second.size <= j->first);
+
+        while (j != addressRangeInfos.end()
+               && i->first + i->second.size == j->first)
+        {
+            if (i->second.combineIfSimilar(j->second))
+            {
+                addressRangeInfos.erase(j);
+
+                j = std::next (i);
+            }
+            else
+            {
+                break;
+            }
+        }
+    }
 }
