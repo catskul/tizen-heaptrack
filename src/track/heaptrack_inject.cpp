@@ -175,7 +175,9 @@ struct posix_memalign
     {
         auto ret = original(memptr, alignment, size);
         if (!ret) {
-            heaptrack_malloc(*memptr, size);
+            size_t aligned_size = ((size + alignment - 1) / alignment) * alignment;
+
+            heaptrack_malloc(*memptr, aligned_size);
         }
         return ret;
     }

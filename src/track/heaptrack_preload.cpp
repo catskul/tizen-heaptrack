@@ -260,7 +260,9 @@ int posix_memalign(void** memptr, size_t alignment, size_t size) noexcept
     int ret = hooks::posix_memalign(memptr, alignment, size);
 
     if (!ret) {
-        heaptrack_malloc(*memptr, size);
+        size_t aligned_size = ((size + alignment - 1) / alignment) * alignment;
+
+        heaptrack_malloc(*memptr, aligned_size);
     }
 
     return ret;
