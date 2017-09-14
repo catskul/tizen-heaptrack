@@ -59,34 +59,9 @@
 
 using namespace std;
 
+thread_local bool RecursionGuard::isActive = false;
+
 namespace {
-
-enum DebugVerbosity
-{
-    NoDebugOutput,
-    MinimalOutput,
-    VerboseOutput,
-    VeryVerboseOutput,
-};
-
-// change this to add more debug output to stderr
-constexpr const DebugVerbosity s_debugVerbosity = NoDebugOutput;
-
-/**
- * Call this to optionally show debug information but give the compiler
- * a hand in removing it all if debug output is disabled.
- */
-template <DebugVerbosity debugLevel, typename... Args>
-inline void debugLog(const char fmt[], Args... args)
-{
-    if (debugLevel <= s_debugVerbosity) {
-        flockfile(stderr);
-        fprintf(stderr, "heaptrack debug [%d]: ", static_cast<int>(debugLevel));
-        fprintf(stderr, fmt, args...);
-        fputc('\n', stderr);
-        funlockfile(stderr);
-    }
-}
 
 /**
  * Set to true in an atexit handler. In such conditions, the stop callback
@@ -99,29 +74,6 @@ atomic<bool> s_atexit{false};
  * we always fully unload and cleanup behind ourselves
  */
 atomic<bool> s_forceCleanup{false};
-
-/**
- * A per-thread handle guard to prevent infinite recursion, which should be
- * acquired before doing any special symbol handling.
- */
-struct RecursionGuard
-{
-    RecursionGuard()
-        : wasLocked(isActive)
-    {
-        isActive = true;
-    }
-
-    ~RecursionGuard()
-    {
-        isActive = wasLocked;
-    }
-
-    const bool wasLocked;
-    static thread_local bool isActive;
-};
-
-thread_local bool RecursionGuard::isActive = false;
 
 void writeVersion(FILE* out)
 {
@@ -791,6 +743,44 @@ void heaptrack_stop()
     }
 
     heaptrack.shutdown();
+}
+
+void heaptrack_dlopen(const vector<pair<void *, pair<size_t, int>>> &newMmaps, bool isPreloaded, void *dlopenOriginal)
+{
+    if (!RecursionGuard::isActive) {
+        RecursionGuard guard;
+
+        debugLog<VeryVerboseOutput>("heaptrack_dlopen(... [%d] ...)", newMmaps.size());
+
+        Trace trace;
+
+        if (isPreloaded)
+        {
+            trace.fill(dlopenOriginal);
+        } else {
+            trace.fill(2);
+        }
+
+        HeapTrack heaptrack(guard);
+
+        for (const auto &mmapRecord : newMmaps) {
+            heaptrack.handleMmap(mmapRecord.first, mmapRecord.second.first, mmapRecord.second.second, -2 /* FIXME: */, trace);
+        }
+    }
+}
+
+void heaptrack_dlclose(const vector<pair<void *, size_t>> &unmaps)
+{
+    if (!RecursionGuard::isActive) {
+        RecursionGuard guard;
+
+        debugLog<VeryVerboseOutput>("heaptrack_dlclose(... [%d] ...)", unmaps.size());
+
+        HeapTrack heaptrack(guard);
+        for (const auto &unmapRecord : unmaps) {
+            heaptrack.handleMunmap(unmapRecord.first, unmapRecord.second);
+        }
+    }
 }
 
 void heaptrack_malloc(void* ptr, size_t size)
