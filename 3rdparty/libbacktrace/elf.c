@@ -1227,6 +1227,12 @@ elf_initialize_syminfo (struct backtrace_state *state,
   if (elf_symbols == NULL)
     return 0;
 
+  char *strtab_copy = (char*)backtrace_alloc (state, strtab_size, error_callback, data);
+  if (strtab_copy == NULL)
+    return 0;
+
+  memcpy(strtab_copy, strtab, strtab_size);
+
   sym = (const b_elf_sym *) symtab_data;
   j = 0;
   for (i = 0; i < sym_count; ++i, ++sym)
@@ -1245,7 +1251,7 @@ elf_initialize_syminfo (struct backtrace_state *state,
 			  data);
 	  return 0;
 	}
-      elf_symbols[j].name = (const char *) strtab + sym->st_name;
+      elf_symbols[j].name = (const char *) strtab_copy + sym->st_name;
       elf_symbols[j].address = sym->st_value + base_address;
       elf_symbols[j].size = sym->st_size;
       ++j;
