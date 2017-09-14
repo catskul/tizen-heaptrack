@@ -57,6 +57,7 @@ fileline_initialize (struct backtrace_state *state,
   int pass;
   int called_error_callback;
   int descriptor;
+  int debug_descriptor;
 
   if (!state->threaded)
     failed = state->fileline_initialization_failed;
@@ -79,6 +80,7 @@ fileline_initialize (struct backtrace_state *state,
   /* We have not initialized the information.  Do it now.  */
 
   descriptor = -1;
+  debug_descriptor = -1;
   called_error_callback = 0;
   for (pass = 0; pass < 4; ++pass)
     {
@@ -108,13 +110,22 @@ fileline_initialize (struct backtrace_state *state,
 
       descriptor = backtrace_open (filename, error_callback, data,
 				   &does_not_exist);
+
       if (descriptor < 0 && !does_not_exist)
 	{
 	  called_error_callback = 1;
 	  break;
 	}
+
       if (descriptor >= 0)
-	break;
+	{
+	  debug_descriptor
+	    = backtrace_open_debugfile (descriptor, filename, error_callback,
+					data, state);
+	  if (debug_descriptor >= 0)
+	    descriptor = debug_descriptor;
+	  break;
+	}
     }
 
   if (descriptor < 0)

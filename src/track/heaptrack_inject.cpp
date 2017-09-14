@@ -53,10 +53,17 @@ namespace {
 namespace Elf {
 using Addr = ElfW(Addr);
 using Dyn = ElfW(Dyn);
+using Rel = ElfW(Rel);
 using Rela = ElfW(Rela);
 using Sym = ElfW(Sym);
 using Sxword = ElfW(Sxword);
 using Xword = ElfW(Xword);
+
+union Rel_Rela
+{
+    Rel rel;
+    Rela rela;
+};
 }
 
 void overwrite_symbols() noexcept;
@@ -235,8 +242,25 @@ struct elftable
 };
 
 using elf_string_table = elftable<const char, DT_STRTAB, DT_STRSZ>;
-using elf_jmprel_table = elftable<Elf::Rela, DT_JMPREL, DT_PLTRELSZ>;
+using elf_jmprel_table = elftable<Elf::Rel_Rela, DT_JMPREL, DT_PLTRELSZ>;
 using elf_symbol_table = elftable<Elf::Sym, DT_SYMTAB, DT_SYMENT>;
+
+template<typename T>
+void try_overwrite_symbols_rel_or_rela(const elf_jmprel_table &jmprels,
+                                       const elf_string_table &strings,
+                                       const elf_symbol_table &symbols,
+                                       const Elf::Addr base,
+                                       const bool restore)
+{
+    const auto rel_end = reinterpret_cast<T*>(reinterpret_cast<char*>(jmprels.table) + jmprels.size);
+    for (auto rel = reinterpret_cast<T*>(jmprels.table); rel < rel_end; rel++) {
+        const auto index = ELF_R_SYM(rel->r_info);
+        const char* symname = strings.table + symbols.table[index].st_name;
+        auto addr = rel->r_offset + base;
+
+        hooks::apply(symname, addr, restore);
+    }
+}
 
 void try_overwrite_symbols(const Elf::Dyn* dyn, const Elf::Addr base, const bool restore) noexcept
 {
@@ -244,19 +268,22 @@ void try_overwrite_symbols(const Elf::Dyn* dyn, const Elf::Addr base, const bool
     elf_jmprel_table jmprels;
     elf_string_table strings;
 
+    bool is_rela = false;
+
     // initialize the elf tables
     for (; dyn->d_tag != DT_NULL; ++dyn) {
+        if (dyn->d_tag == DT_PLTREL && dyn->d_un.d_val == DT_RELA) {
+            is_rela = true;
+        }
+
         symbols.consume(dyn) || jmprels.consume(dyn) || strings.consume(dyn);
     }
 
     // find symbols to overwrite
-    const auto rela_end = reinterpret_cast<Elf::Rela*>(reinterpret_cast<char*>(jmprels.table) + jmprels.size);
-    for (auto rela = jmprels.table; rela < rela_end; rela++) {
-        const auto index = ELF_R_SYM(rela->r_info);
-        const char* symname = strings.table + symbols.table[index].st_name;
-        auto addr = rela->r_offset + base;
-
-        hooks::apply(symname, addr, restore);
+    if (is_rela) {
+        try_overwrite_symbols_rel_or_rela<Elf::Rela>(jmprels, strings, symbols, base, restore);
+    } else {
+        try_overwrite_symbols_rel_or_rela<Elf::Rel>(jmprels, strings, symbols, base, restore);
     }
 }
 
