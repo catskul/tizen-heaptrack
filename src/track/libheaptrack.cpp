@@ -32,6 +32,7 @@
 #include <stdio_ext.h>
 #include <pthread.h>
 #include <signal.h>
+#include <unistd.h>
 
 #include <atomic>
 #include <cinttypes>
@@ -273,6 +274,8 @@ public:
         writeCommandLine(out);
         writeSystemInfo(out);
 
+        k_pageSize = sysconf(_SC_PAGESIZE);
+
         s_data = new LockedData(out, stopCallback);
 
         if (initAfterCallback) {
@@ -387,6 +390,42 @@ public:
 #endif
 
         if (fprintf(s_data->out, "- %" PRIxPTR "\n", reinterpret_cast<uintptr_t>(ptr)) < 0) {
+            writeError();
+            return;
+        }
+    }
+
+    void handleMmap(void* ptr,
+                    size_t length,
+                    int prot,
+                    int fd,
+                    const Trace& trace)
+    {
+        if (!s_data || !s_data->out) {
+            return;
+        }
+        updateModuleCache();
+        const auto index = s_data->traceTree.index(trace, s_data->out);
+
+        size_t alignedLength = ((length + k_pageSize - 1) / k_pageSize) * k_pageSize;
+
+        if (fprintf(s_data->out, "* %zx %x %d %x %" PRIxPTR "\n",
+                    alignedLength, prot, fd, index, reinterpret_cast<uintptr_t>(ptr)) < 0) {
+            writeError();
+            return;
+        }
+    }
+
+    void handleMunmap(void* ptr,
+                      size_t length)
+    {
+        if (!s_data || !s_data->out) {
+            return;
+        }
+
+        size_t alignedLength = ((length + k_pageSize - 1) / k_pageSize) * k_pageSize;
+
+        if (fprintf(s_data->out, "/ %zx %" PRIxPTR "\n", alignedLength, reinterpret_cast<uintptr_t>(ptr)) < 0) {
             writeError();
             return;
         }
@@ -636,10 +675,13 @@ private:
 
     static atomic<bool> s_locked;
     static LockedData* s_data;
+
+    static size_t k_pageSize;
 };
 
 atomic<bool> HeapTrack::s_locked{false};
 HeapTrack::LockedData* HeapTrack::s_data{nullptr};
+size_t HeapTrack::k_pageSize{0u};
 }
 extern "C" {
 
@@ -716,18 +758,31 @@ void heaptrack_realloc(void* ptr_in, size_t size, void* ptr_out)
 
 void heaptrack_mmap(void* ptr, size_t length, int prot, int flags, int fd, off64_t offset)
 {
-    debugLog<VeryVerboseOutput>("heaptrack_mmap(%p, %zu, %d, %d, %d, %llu)",
-                                ptr, length, prot, flags, fd, offset);
+    if (ptr && !RecursionGuard::isActive) {
+        RecursionGuard guard;
 
-    // TODO
+        debugLog<VeryVerboseOutput>("heaptrack_mmap(%p, %zu, %d, %d, %d, %llu)",
+                                    ptr, length, prot, flags, fd, offset);
+
+        Trace trace;
+        trace.fill(2 + HEAPTRACK_DEBUG_BUILD);
+
+        HeapTrack heaptrack(guard);
+        heaptrack.handleMmap(ptr, length, prot, fd, trace);
+    }
 }
 
 void heaptrack_munmap(void* ptr, size_t length)
 {
-    debugLog<VeryVerboseOutput>("heaptrack_munmap(%p, %zu)",
-                                ptr, length);
+    if (ptr && !RecursionGuard::isActive) {
+        RecursionGuard guard;
 
-    // TODO
+        debugLog<VeryVerboseOutput>("heaptrack_munmap(%p, %zu)",
+                                    ptr, length);
+
+        HeapTrack heaptrack(guard);
+        heaptrack.handleMunmap(ptr, length);
+    }
 }
 
 void heaptrack_invalidate_module_cache()

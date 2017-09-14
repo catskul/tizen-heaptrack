@@ -271,7 +271,7 @@ void *mmap(void *addr,
            int prot,
            int flags,
            int fd,
-           off_t offset)
+           off_t offset) noexcept
 {
     if (!hooks::mmap) {
         hooks::init();
@@ -291,7 +291,7 @@ void *mmap64(void *addr,
              int prot,
              int flags,
              int fd,
-             off64_t offset)
+             off64_t offset) noexcept
 {
     if (!hooks::mmap64) {
         hooks::init();
@@ -307,7 +307,7 @@ void *mmap64(void *addr,
 }
 
 int munmap(void *addr,
-           size_t length)
+           size_t length) noexcept
 {
     if (!hooks::munmap) {
         hooks::init();

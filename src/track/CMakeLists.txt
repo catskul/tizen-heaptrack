@@ -18,11 +18,14 @@ add_library(heaptrack_preload MODULE
     libheaptrack.cpp
 )
 
+target_compile_options(heaptrack_preload PRIVATE "-ftls-model=initial-exec")
+
 target_link_libraries(heaptrack_preload LINK_PRIVATE
     ${CMAKE_DL_LIBS}
     ${CMAKE_THREAD_LIBS_INIT}
     ${LIBUNWIND_LIBRARY}
     rt
+    -ftls-model=initial-exec
 )
 
 set_target_properties(heaptrack_preload PROPERTIES
