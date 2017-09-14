@@ -249,7 +249,7 @@ public:
 
         debugLog<MinimalOutput>("%s", "shutdown()");
 
-        writeSMAPS();
+        writeSMAPS(*this);
         writeTimestamp();
 
         // NOTE: we leak heaptrack data on exit, intentionally
@@ -286,7 +286,7 @@ public:
         }
     }
 
-    void writeSMAPS()
+    void writeSMAPS(HeapTrack &heaptrack)
     {
         if (!s_data || !s_data->out || !s_data->procSmaps) {
             return;
@@ -306,11 +306,19 @@ public:
         size_t totalRSS = 0;
         char protR, protW, protX;
         unsigned int counter = 0;
+        bool isHeap = false;
 
         while (fgets(smapsLine, sizeof (smapsLine), s_data->procSmaps))
         {
             if (sscanf (smapsLine, "%zx-%zx %c%c%c%*c", &begin, &end, &protR, &protW, &protX) == 5)
             {
+                const char* heapMapName = "[heap]";
+                char *heapSubstrPtr = strstr(smapsLine, heapMapName);
+                if (heapSubstrPtr != NULL
+                    && (heapSubstrPtr[strlen(heapMapName)] == '\n' || heapSubstrPtr[strlen(heapMapName)] == '\0')) {
+                    isHeap = true;
+                }
+
                 counter++;
             }
             else
@@ -348,8 +356,16 @@ public:
             if (counter == 6)
             {
                 // all data for current range was read, send to trace
-
                 counter = 0;
+
+                if (isHeap) {
+                    Trace trace;
+                    trace.fill((void *) sbrk);
+
+                    heaptrack.handleMmap((void *) begin, end - begin, PROT_READ | PROT_WRITE, -1, trace);
+                }
+
+                isHeap = false;
 
                 int prot = 0;
 
@@ -633,7 +649,7 @@ private:
                     if (!stopTimerThread) {
 
                         if (++counter == 32) {
-                            heaptrack.writeSMAPS();
+                            heaptrack.writeSMAPS(heaptrack);
 
                             counter = 0;
                         }
@@ -727,7 +743,7 @@ void heaptrack_init(const char* outputFileName, heaptrack_callback_t initBeforeC
     HeapTrack heaptrack(guard);
     heaptrack.initialize(outputFileName, initBeforeCallback, initAfterCallback, stopCallback);
 
-    heaptrack.writeSMAPS();
+    heaptrack.writeSMAPS(heaptrack);
 }
 
 void heaptrack_stop()
