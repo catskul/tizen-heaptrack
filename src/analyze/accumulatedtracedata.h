@@ -125,6 +125,21 @@ struct AddressRangeInfo
     mutable bool isPhysicalMemoryConsumptionSet;
     mutable bool isFdSet;
 
+    uint64_t getPrivateClean() const
+    {
+        return (uint64_t) (privateClean + 0.5);
+    }
+
+    uint64_t getPrivateDirty() const
+    {
+        return (uint64_t) (privateDirty + 0.5);
+    }
+
+    uint64_t getShared() const
+    {
+        return (uint64_t) (sharedClean + 0.5) + (uint64_t) (sharedDirty + 0.5);
+    }
+
     bool combineIfSimilar(const AddressRangeInfo &other)
     {
         assert (start + size == other.start);

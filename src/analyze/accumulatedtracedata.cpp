@@ -166,9 +166,21 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
     const auto lastMallocPeakCost = pass != FirstPass ? totalCost.malloc.peak : 0;
     const auto lastMallocPeakTime = pass != FirstPass ? mallocPeakTime : 0;
 
+    const auto lastPrivateCleanPeakCost = pass != FirstPass ? totalCost.privateClean.peak : 0;
+    const auto lastPrivateCleanPeakTime = pass != FirstPass ? privateCleanPeakTime : 0;
+
+    const auto lastPrivateDirtyPeakCost = pass != FirstPass ? totalCost.privateDirty.peak : 0;
+    const auto lastPrivateDirtyPeakTime = pass != FirstPass ? privateDirtyPeakTime : 0;
+
+    const auto lastSharedPeakCost = pass != FirstPass ? totalCost.shared.peak : 0;
+    const auto lastSharedPeakTime = pass != FirstPass ? sharedPeakTime : 0;
+
     m_maxAllocationTraceIndex.index = 0;
     totalCost = {};
     mallocPeakTime = 0;
+    privateCleanPeakTime = 0;
+    privateDirtyPeakTime = 0;
+    sharedPeakTime = 0;
     systemInfo = {};
     peakRSS = 0;
     allocations.clear();
@@ -310,6 +322,93 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
                 combineContiguousSimilarRanges();
 
                 isSmapsChunkInProcess = false;
+
+                totalCost.privateClean.leaked = 0;
+                totalCost.privateClean.allocated = 0;
+
+                totalCost.privateDirty.leaked = 0;
+                totalCost.privateDirty.allocated = 0;
+
+                totalCost.shared.leaked = 0;
+                totalCost.shared.allocated = 0;
+
+                if (pass != FirstPass) {
+                    for (auto& allocation : allocations)
+                    {
+                        allocation.privateClean.leaked = 0;
+                        allocation.privateClean.allocated = 0;
+
+                        allocation.privateDirty.leaked = 0;
+                        allocation.privateDirty.allocated = 0;
+
+                        allocation.shared.leaked = 0;
+                        allocation.shared.allocated = 0;
+                    }
+                }
+
+                for (auto i = addressRangeInfos.begin (); i != addressRangeInfos.end(); ++i)
+                {
+                    const AddressRangeInfo& addressRangeInfo = i->second;
+
+                    if(!addressRangeInfo.isPhysicalMemoryConsumptionSet) {
+                        cerr << "Unknown range: 0x" << std::hex << addressRangeInfo.start << " (0x" << addressRangeInfo.size << " bytes)" << std::dec << endl;
+                    }
+
+                    totalCost.privateClean.allocated += addressRangeInfo.getPrivateClean();
+                    totalCost.privateClean.leaked += addressRangeInfo.getPrivateClean();
+
+                    if (totalCost.privateClean.leaked > totalCost.privateClean.peak) {
+                        totalCost.privateClean.peak = totalCost.privateClean.leaked;
+                        privateCleanPeakTime = timeStamp;
+
+                        if (pass == SecondPass && totalCost.privateClean.peak == lastPrivateCleanPeakCost && privateCleanPeakTime == lastPrivateCleanPeakTime) {
+                            for (auto& allocation : allocations) {
+                                allocation.privateClean.peak = allocation.privateClean.leaked;
+                            }
+                        }
+                    }
+
+                    totalCost.privateDirty.allocated += addressRangeInfo.getPrivateDirty();
+                    totalCost.privateDirty.leaked += addressRangeInfo.getPrivateDirty();
+
+                    if (totalCost.privateDirty.leaked > totalCost.privateDirty.peak) {
+                        totalCost.privateDirty.peak = totalCost.privateDirty.leaked;
+                        privateDirtyPeakTime = timeStamp;
+
+                        if (pass == SecondPass && totalCost.privateDirty.peak == lastPrivateDirtyPeakCost && privateDirtyPeakTime == lastPrivateDirtyPeakTime) {
+                            for (auto& allocation : allocations) {
+                                allocation.privateDirty.peak = allocation.privateDirty.leaked;
+                            }
+                        }
+                    }
+
+                    totalCost.shared.allocated += addressRangeInfo.getShared();
+                    totalCost.shared.leaked += addressRangeInfo.getShared();
+
+                    if (totalCost.shared.leaked > totalCost.shared.peak) {
+                        totalCost.shared.peak = totalCost.shared.leaked;
+                        sharedPeakTime = timeStamp;
+
+                        if (pass == SecondPass && totalCost.shared.peak == lastSharedPeakCost && sharedPeakTime == lastSharedPeakTime) {
+                            for (auto& allocation : allocations) {
+                                allocation.shared.peak = allocation.shared.leaked;
+                            }
+                        }
+                    }
+
+                    if (pass != FirstPass) {
+                        auto& allocation = findAllocation(addressRangeInfo.traceIndex);
+
+                        allocation.privateClean.leaked += addressRangeInfo.getPrivateClean();
+                        allocation.privateClean.allocated += addressRangeInfo.getPrivateClean();
+
+                        allocation.privateDirty.leaked += addressRangeInfo.getPrivateDirty();
+                        allocation.privateDirty.allocated += addressRangeInfo.getPrivateDirty();
+
+                        allocation.shared.leaked += addressRangeInfo.getShared();
+                        allocation.shared.allocated += addressRangeInfo.getShared();
+                    }
+                }
             }
         } else if (reader.mode() == 'k') {
             if (!isSmapsChunkInProcess) {
