@@ -548,7 +548,7 @@ private:
             return 1;
         }
         if (raw_build_id_size == 0) {
-            if (fprintf(heaptrack->s_data->out, "- ") < 0) {
+            if (fprintf(heaptrack->s_data->out, "-------- ") < 0) {
                 heaptrack->writeError();
                 return 1;
             }
