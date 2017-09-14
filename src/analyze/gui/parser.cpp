@@ -570,7 +570,7 @@ void Parser::parse(const QString& path, const QString& diffBase)
         data->updateStringCache();
 
         emit summaryAvailable({QString::fromStdString(data->debuggee), *data->totalCost.getDisplay(), data->totalTime, data->getPeakTime(),
-                               data->peakRSS * data->systemInfo.pageSize,
+                               data->peakRSS * 1024,
                                data->systemInfo.pages * data->systemInfo.pageSize, data->fromAttached});
 
         emit progressMessageAvailable(i18n("merging allocations..."));

@@ -299,7 +299,6 @@ public:
 
         writeSMAPS();
         writeTimestamp();
-        writeRSS();
 
         // NOTE: we leak heaptrack data on exit, intentionally
         // This way, we can be sure to get all static deallocations.
@@ -335,31 +334,6 @@ public:
         }
     }
 
-    void writeRSS()
-    {
-        if (!s_data || !s_data->out || !s_data->procStatm) {
-            return;
-        }
-
-        // read RSS in pages from statm, then rewind for next read
-        size_t rss = 0;
-        if (fscanf(s_data->procStatm, "%*x %zx", &rss) != 1) {
-            fprintf(stderr, "WARNING: Failed to read RSS value from /proc/self/statm.\n");
-            fclose(s_data->procStatm);
-            s_data->procStatm = nullptr;
-            return;
-        }
-        rewind(s_data->procStatm);
-        // TODO: compare to rusage.ru_maxrss (getrusage) to find "real" peak?
-        // TODO: use custom allocators with known page sizes to prevent tainting
-        //       the RSS numbers with heaptrack-internal data
-
-        if (fprintf(s_data->out, "R %zx\n", rss) < 0) {
-            writeError();
-            return;
-        }
-    }
-
     void writeSMAPS()
     {
         if (!s_data || !s_data->out || !s_data->procSmaps) {
@@ -376,7 +350,8 @@ public:
         static char smapsLine[2 * PATH_MAX];
 
         size_t begin = 0, end = 0;
-        size_t size, privateDirty, privateClean, sharedDirty, sharedClean;
+        size_t size, rss, privateDirty, privateClean, sharedDirty, sharedClean;
+        size_t totalRSS = 0;
         char protR, protW, protX;
         unsigned int counter = 0;
 
@@ -407,6 +382,10 @@ public:
                 else if (sscanf (smapsLine, "Shared_Clean: %zu kB", &sharedClean) == 1)
                 {
                     counter++;
+                }
+                else if (sscanf (smapsLine, "Rss: %zu kB", &rss) == 1)
+                {
+                    totalRSS += rss;
                 }
                 else
                 {
@@ -440,6 +419,11 @@ public:
         }
 
         if (fprintf(s_data->out, "K 0\n") < 0) {
+            writeError();
+            return;
+        }
+
+        if (fprintf(s_data->out, "R %zx\n", totalRSS) < 0) {
             writeError();
             return;
         }
@@ -662,10 +646,6 @@ private:
             , stopCallback(stopCallback)
         {
             debugLog<MinimalOutput>("%s", "constructing LockedData");
-            procStatm = fopen("/proc/self/statm", "r");
-            if (!procStatm) {
-                fprintf(stderr, "WARNING: Failed to open /proc/self/statm for reading.\n");
-            }
 
             procSmaps = fopen("/proc/self/smaps", "r");
             if (!procSmaps) {
@@ -706,7 +686,6 @@ private:
                             counter = 0;
                         }
                         heaptrack.writeTimestamp();
-                        heaptrack.writeRSS();
                     }
                 }
             });
@@ -732,10 +711,6 @@ private:
                 fclose(out);
             }
 
-            if (procStatm) {
-                fclose(procStatm);
-            }
-
             if (procSmaps) {
                 fclose(procSmaps);
             }
@@ -752,9 +727,6 @@ private:
          *       to produce non-per-line-interleaved output.
          */
         FILE* out = nullptr;
-
-        /// /proc/self/statm file stream to read RSS value from
-        FILE* procStatm = nullptr;
 
         /// /proc/self/smaps file stream to read address range data from
         FILE* procSmaps = nullptr;

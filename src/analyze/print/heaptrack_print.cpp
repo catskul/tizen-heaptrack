@@ -730,7 +730,7 @@ int main(int argc, char** argv)
          << "temporary memory allocations: " << data.totalCost.getDisplay()->temporary << " ("
          << int64_t(data.totalCost.getDisplay()->temporary / totalTimeS) << "/s)\n"
          << "peak heap memory consumption: " << formatBytes(data.totalCost.getDisplay()->peak) << '\n'
-         << "peak RSS (including heaptrack overhead): " << formatBytes(data.peakRSS * data.systemInfo.pageSize) << '\n'
+         << "peak RSS (including heaptrack overhead): " << formatBytes(data.peakRSS * 1024) << '\n'
          << "total memory leaked: " << formatBytes(data.totalCost.getDisplay()->leaked) << '\n';
 
     if (!printHistogram.empty()) {
