@@ -34,6 +34,8 @@
 #include <signal.h>
 #include <unistd.h>
 
+#include <sys/mman.h>
+
 #include <atomic>
 #include <cinttypes>
 #include <memory>
@@ -295,6 +297,7 @@ public:
 
         debugLog<MinimalOutput>("%s", "shutdown()");
 
+        writeSMAPS();
         writeTimestamp();
         writeRSS();
 
@@ -357,6 +360,91 @@ public:
         }
     }
 
+    void writeSMAPS()
+    {
+        if (!s_data || !s_data->out || !s_data->procSmaps) {
+            return;
+        }
+
+        if (fprintf(s_data->out, "K 1\n") < 0) {
+            writeError();
+            return;
+        }
+
+        fseek(s_data->procSmaps, 0, SEEK_SET);
+
+        static char smapsLine[2 * PATH_MAX];
+
+        size_t begin = 0, end = 0;
+        size_t size, privateDirty, privateClean, sharedDirty, sharedClean;
+        char protR, protW, protX;
+        unsigned int counter = 0;
+
+        while (fgets(smapsLine, sizeof (smapsLine), s_data->procSmaps))
+        {
+            if (sscanf (smapsLine, "%zx-%zx %c%c%c%*c", &begin, &end, &protR, &protW, &protX) == 5)
+            {
+                counter++;
+            }
+            else
+            {
+                if (sscanf (smapsLine, "Size: %zu kB", &size) == 1)
+                {
+                    counter++;
+                }
+                else if (sscanf (smapsLine, "Private_Dirty: %zu kB", &privateDirty) == 1)
+                {
+                    counter++;
+                }
+                else if (sscanf (smapsLine, "Private_Clean: %zu kB", &privateClean) == 1)
+                {
+                    counter++;
+                }
+                else if (sscanf (smapsLine, "Shared_Dirty: %zu kB", &sharedDirty) == 1)
+                {
+                    counter++;
+                }
+                else if (sscanf (smapsLine, "Shared_Clean: %zu kB", &sharedClean) == 1)
+                {
+                    counter++;
+                }
+                else
+                {
+                    continue;
+                }
+            }
+
+            if (counter == 6)
+            {
+                // all data for current range was read, send to trace
+
+                counter = 0;
+
+                int prot = 0;
+
+                if (protR == 'r')
+                    prot |= PROT_READ;
+
+                if (protW == 'w')
+                    prot |= PROT_WRITE;
+
+                if (protX == 'x')
+                    prot |= PROT_EXEC;
+
+                if (fprintf(s_data->out, "k %zx %zx %zx %zx %zx %zx %zx %x\n",
+                            begin, end - begin, size, privateDirty, privateClean, sharedDirty, sharedClean, prot) < 0) {
+                    writeError();
+                    return;
+                }
+            }
+        }
+
+        if (fprintf(s_data->out, "K 0\n") < 0) {
+            writeError();
+            return;
+        }
+    }
+
     void handleMalloc(void* ptr, size_t size, const Trace& trace)
     {
         if (!s_data || !s_data->out) {
@@ -409,7 +497,7 @@ public:
 
         size_t alignedLength = ((length + k_pageSize - 1) / k_pageSize) * k_pageSize;
 
-        if (fprintf(s_data->out, "* %zx %x %d %x %" PRIxPTR "\n",
+        if (fprintf(s_data->out, "* %zx %x %x %x %" PRIxPTR "\n",
                     alignedLength, prot, fd, index, reinterpret_cast<uintptr_t>(ptr)) < 0) {
             writeError();
             return;
@@ -579,6 +667,11 @@ private:
                 fprintf(stderr, "WARNING: Failed to open /proc/self/statm for reading.\n");
             }
 
+            procSmaps = fopen("/proc/self/smaps", "r");
+            if (!procSmaps) {
+                fprintf(stderr, "WARNING: Failed to open /proc/self/smaps for reading.\n");
+            }
+
             // ensure this utility thread is not handling any signals
             // our host application may assume only one specific thread
             // will handle the threads, if that's not the case things
@@ -597,6 +690,8 @@ private:
                 RecursionGuard::isActive = true;
                 debugLog<MinimalOutput>("%s", "timer thread started");
 
+                int counter = 0;
+
                 // now loop and repeatedly print the timestamp and RSS usage to the data stream
                 while (!stopTimerThread) {
                     // TODO: make interval customizable
@@ -604,6 +699,12 @@ private:
 
                     HeapTrack heaptrack([&] { return !stopTimerThread.load(); });
                     if (!stopTimerThread) {
+
+                        if (++counter == 32) {
+                            heaptrack.writeSMAPS();
+
+                            counter = 0;
+                        }
                         heaptrack.writeTimestamp();
                         heaptrack.writeRSS();
                     }
@@ -635,6 +736,10 @@ private:
                 fclose(procStatm);
             }
 
+            if (procSmaps) {
+                fclose(procSmaps);
+            }
+
             if (stopCallback && (!s_atexit || s_forceCleanup)) {
                 stopCallback();
             }
@@ -650,6 +755,9 @@ private:
 
         /// /proc/self/statm file stream to read RSS value from
         FILE* procStatm = nullptr;
+
+        /// /proc/self/smaps file stream to read address range data from
+        FILE* procSmaps = nullptr;
 
         /**
          * Calls to dlopen/dlclose mark the cache as dirty.
@@ -694,6 +802,8 @@ void heaptrack_init(const char* outputFileName, heaptrack_callback_t initBeforeC
 
     HeapTrack heaptrack(guard);
     heaptrack.initialize(outputFileName, initBeforeCallback, initAfterCallback, stopCallback);
+
+    heaptrack.writeSMAPS();
 }
 
 void heaptrack_stop()
