@@ -280,7 +280,12 @@ struct AccumulatedTraceData
         m_modulesDirty = true;
     }
 
-    size_t addIp(const uintptr_t instructionPointer)
+    void addManagedNameForIP(uintptr_t ip, string managedName)
+    {
+        m_managedNames.insert(std::make_pair(ip, managedName));
+    }
+
+    size_t addIp(const uintptr_t instructionPointer, bool isManaged)
     {
         if (!instructionPointer) {
             return 0;
@@ -294,18 +299,25 @@ struct AccumulatedTraceData
         const size_t ipId = m_encounteredIps.size() + 1;
         m_encounteredIps.insert(it, make_pair(instructionPointer, ipId));
 
-        const auto ip = resolve(instructionPointer);
-        fprintf(stdout, "i %zx %zx %zx", instructionPointer, ip.moduleIndex, ip.frame.moduleOffset);
-        if (ip.frame.functionIndex || ip.frame.fileIndex) {
-            fprintf(stdout, " %zx", ip.frame.functionIndex);
-            if (ip.frame.fileIndex) {
-                fprintf(stdout, " %zx %x", ip.frame.fileIndex, ip.frame.line);
-                for (const auto& inlined : ip.inlined) {
-                    fprintf(stdout, " %zx %zx %x", inlined.functionIndex, inlined.fileIndex, inlined.line);
+        if (isManaged) {
+            size_t functionIndex = intern(m_managedNames[instructionPointer]);
+
+            fprintf(stdout, "i %llx 1 0 0 %zx\n", (1ull << 63) | instructionPointer, functionIndex);
+        } else {
+            const auto ip = resolve(instructionPointer);
+            fprintf(stdout, "i %zx 0 %zx %zx", instructionPointer, ip.moduleIndex, ip.frame.moduleOffset);
+            if (ip.frame.functionIndex || ip.frame.fileIndex) {
+                fprintf(stdout, " %zx", ip.frame.functionIndex);
+                if (ip.frame.fileIndex) {
+                    fprintf(stdout, " %zx %x", ip.frame.fileIndex, ip.frame.line);
+                    for (const auto& inlined : ip.inlined) {
+                        fprintf(stdout, " %zx %zx %x", inlined.functionIndex, inlined.fileIndex, inlined.line);
+                    }
                 }
             }
+            fputc('\n', stdout);
         }
-        fputc('\n', stdout);
+
         return ipId;
     }
 
@@ -391,6 +403,7 @@ private:
     unordered_map<std::string, backtrace_state*> m_backtraceStates;
     bool m_modulesDirty = false;
 
+    unordered_map<uintptr_t, string> m_managedNames;
     unordered_map<string, size_t> m_internedData;
     unordered_map<uintptr_t, size_t> m_encounteredIps;
 };
@@ -404,6 +417,8 @@ int main(int /*argc*/, char** /*argv*/)
     __fsetlocking(stdin, FSETLOCKING_BYCALLER);
 
     AccumulatedTraceData data;
+
+    unordered_map<string, int> managed_name_ids;
 
     LineReader reader;
 
@@ -451,12 +466,13 @@ int main(int /*argc*/, char** /*argv*/)
         } else if (reader.mode() == 't') {
             uintptr_t instructionPointer = 0;
             size_t parentIndex = 0;
-            if (!(reader >> instructionPointer) || !(reader >> parentIndex)) {
+            int is_managed;
+            if (!(reader >> instructionPointer) || !(reader >> parentIndex) || !(reader >> is_managed)) {
                 cerr << "failed to parse line: " << reader.line() << endl;
                 return 1;
             }
             // ensure ip is encountered
-            const auto ipId = data.addIp(instructionPointer);
+            const auto ipId = data.addIp(instructionPointer, is_managed);
             // trace point, map current output index to parent index
             fprintf(stdout, "t %zx %zx\n", ipId, parentIndex);
         } else if (reader.mode() == '+') {
@@ -494,6 +510,23 @@ int main(int /*argc*/, char** /*argv*/)
                 ++temporaryAllocations;
             }
             --leakedAllocations;
+        } else if (reader.mode() == 'n') {
+            uint64_t ip;
+            string methodName;
+            if (!(reader >> ip) || !(reader >> methodName)) {
+                cerr << "failed to parse line: " << reader.line() << endl;
+            }
+
+            if (managed_name_ids.find(methodName) == managed_name_ids.end()) {
+		managed_name_ids.insert(std::make_pair(methodName, 1));
+            } else {
+                int id = ++managed_name_ids[methodName];
+
+                methodName.append("~");
+                methodName.append(std::to_string(id));
+            }
+
+            data.addManagedNameForIP(ip, methodName);
         } else {
             fputs(reader.line().c_str(), stdout);
             fputc('\n', stdout);

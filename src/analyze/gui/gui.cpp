@@ -22,6 +22,7 @@
 #include <KAboutData>
 #include <KLocalizedString>
 
+#include "../accumulatedtracedata.h"
 #include "../allocationdata.h"
 #include "mainwindow.h"
 
@@ -65,6 +66,9 @@ int main(int argc, char** argv)
     parser.addOption(showPrivateCleanOption);
     parser.addOption(showSharedOption);
 
+    QCommandLineOption hideUnmanagedStackPartsOption(QStringLiteral("hide-unmanaged-stacks"), QStringLiteral("Hide unmanaged parts of call stacks"));
+    parser.addOption(hideUnmanagedStackPartsOption);
+
     parser.process(app);
     aboutData.processCommandLine(&parser);
 
@@ -72,6 +76,7 @@ int main(int argc, char** argv)
     bool isShowPrivateDirty = parser.isSet(showPrivateDirtyOption);
     bool isShowPrivateClean = parser.isSet(showPrivateCleanOption);
     bool isShowShared = parser.isSet(showSharedOption);
+    bool isHideUnmanagedStackParts = parser.isSet(hideUnmanagedStackPartsOption);
 
     if ((isShowMalloc ? 1 : 0)
         + (isShowPrivateDirty ? 1 : 0)
@@ -92,6 +97,10 @@ int main(int argc, char** argv)
         assert (isShowShared);
 
         AllocationData::display = AllocationData::DisplayId::shared;
+    }
+
+    if (isHideUnmanagedStackParts) {
+        AccumulatedTraceData::isHideUnmanagedStackParts = true;
     }
 
     auto createWindow = []() -> MainWindow* {

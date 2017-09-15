@@ -24,10 +24,17 @@
  * @brief Efficiently combine and store the data of multiple Traces.
  */
 
+#include <string.h>
+
 #include <algorithm>
 #include <vector>
+#include <unordered_set>
 
 #include "trace.h"
+
+#include "../profiler/src/stackentry.h"
+
+extern __thread StackEntry* g_shadowStack;
 
 struct TraceEdge
 {
@@ -65,24 +72,65 @@ public:
     {
         uint32_t index = 0;
         TraceEdge* parent = &m_root;
-        for (int i = trace.size() - 1; i >= 0; --i) {
-            const auto ip = trace[i];
-            if (!ip) {
-                continue;
-            }
+
+        auto handleIP = [this, out, &parent, &index] (void *ip, bool isManaged) {
             auto it =
                 std::lower_bound(parent->children.begin(), parent->children.end(), ip,
                                  [](const TraceEdge& l, const Trace::ip_t ip) { return l.instructionPointer < ip; });
             if (it == parent->children.end() || it->instructionPointer != ip) {
                 index = m_index++;
                 it = parent->children.insert(it, {ip, index, {}});
-                fprintf(out, "t %" PRIxPTR " %x\n", reinterpret_cast<uintptr_t>(ip), parent->index);
+                fprintf(out, "t %" PRIxPTR " %x %x\n", reinterpret_cast<uintptr_t>(ip), parent->index, isManaged ? 1 : 0);
             }
             index = it->index;
             parent = &(*it);
+        };
+
+        // process managed stack
+        StackEntry *stackIter = g_shadowStack;
+
+        if (stackIter != nullptr) {
+	    void* managedStack[Trace::MAX_SIZE];
+	    int managedStackSize = 0;
+
+            handleIP((void *) (uintptr_t) -1, false);
+
+            while (stackIter != nullptr && managedStackSize < Trace::MAX_SIZE) {
+                void *ip = reinterpret_cast<void *>(stackIter->m_funcId);
+
+                if (knownNames.find(ip) == knownNames.end()) {
+                    std::string managed_name = stackIter->m_className;
+                    managed_name.append(".");
+                    managed_name.append(stackIter->m_methodName);
+
+                    fprintf(out, "n %" PRIxPTR " %s\n", reinterpret_cast<uintptr_t>(ip), managed_name.c_str());
+
+		    knownNames.insert(ip);
+                }
+
+		managedStack[managedStackSize++] = ip;
+
+                stackIter = stackIter->m_next;
+            }
+
+            for (int i = managedStackSize - 1; i >= 0; --i) {
+                handleIP(managedStack[i], true);
+            }
+        }
+
+        // process unmanaged stack
+        for (int i = trace.size() - 1; i >= 0; --i) {
+            const auto ip = trace[i];
+            if (!ip) {
+                continue;
+            }
+
+            handleIP(ip, false);
         }
         return index;
     }
+
+    static std::unordered_set<Trace::ip_t> knownNames;
 
 private:
     TraceEdge m_root = {0, 0, {}};

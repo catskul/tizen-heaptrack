@@ -59,7 +59,12 @@
 
 using namespace std;
 
+unordered_set<Trace::ip_t> TraceTree::knownNames;
+
 thread_local bool RecursionGuard::isActive = false;
+
+// CoreCLR profiler will fill this up with the current managed stack.
+__thread StackEntry* g_shadowStack = nullptr;
 
 namespace {
 
@@ -231,6 +236,10 @@ public:
         k_pageSize = sysconf(_SC_PAGESIZE);
 
         s_data = new LockedData(out, stopCallback);
+
+	fprintf(out,
+                "n %" PRIxPTR " [Unmanaged->Managed]\n",
+                (uintptr_t) -1);
 
         if (initAfterCallback) {
             debugLog<MinimalOutput>("%s", "calling initAfterCallback");

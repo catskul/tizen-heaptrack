@@ -19,12 +19,14 @@
 #ifndef TRACE_H
 #define TRACE_H
 
+#include <cassert>
 #include <cstring>
 
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
 
 #include <execinfo.h>
+#include <string>
 
 /**
  * @brief A libunwind based backtrace.
@@ -55,7 +57,7 @@ struct Trace
 
     int size() const
     {
-        return m_size;
+        return m_size - m_skip;
     }
 
     __attribute__((noinline))
@@ -67,7 +69,7 @@ struct Trace
         while (size > 0 && !m_data[size - 1]) {
             --size;
         }
-        m_size = size > skip ? size - skip : 0;
+        m_size = size;
         m_skip = skip;
         return m_size > 0;
     }
@@ -79,6 +81,7 @@ struct Trace
         m_data[0] = addr;
         m_data[1] = addr;
     }
+
 private:
     int m_size = 0;
     int m_skip = 0;

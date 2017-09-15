@@ -41,6 +41,8 @@ using namespace std;
 
 AllocationData::DisplayId AllocationData::display = AllocationData::DisplayId::malloc;
 
+bool AccumulatedTraceData::isHideUnmanagedStackParts = false;
+
 namespace {
 
 template <typename Base>
@@ -228,6 +230,20 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             while (find(opNewIpIndices.begin(), opNewIpIndices.end(), node.ipIndex) != opNewIpIndices.end()) {
                 node = findTrace(node.parentIndex);
             }
+
+            if (isHideUnmanagedStackParts) {
+                while (node.ipIndex) {
+                    const auto& ip = findIp(node.ipIndex);
+
+                    if (ip.isManaged)
+                    {
+                        break;
+                    }
+
+                    node = findTrace(node.parentIndex);
+                }
+            }
+
             traces.push_back(node);
         } else if (reader.mode() == 'i') {
             if (pass != FirstPass) {
@@ -235,6 +251,7 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             }
             InstructionPointer ip;
             reader >> ip.instructionPointer;
+            reader >> ip.isManaged;
             reader >> ip.moduleIndex;
 
             reader >> ip.moduleOffset;

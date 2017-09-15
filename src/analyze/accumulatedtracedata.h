@@ -59,6 +59,7 @@ struct InstructionPointer
     uint64_t moduleOffset = 0;
     Frame frame;
     std::vector<Frame> inlined;
+    int isManaged;
 
     bool compareWithoutAddress(const InstructionPointer& other) const
     {
@@ -336,6 +337,8 @@ struct AccumulatedTraceData
     std::vector<AllocationInfo> allocationInfos;
 
     AddressRangesMap addressRangeInfos;
+
+    static bool isHideUnmanagedStackParts;
 };
 
 #endif // ACCUMULATEDTRACEDATA_H
