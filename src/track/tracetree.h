@@ -100,7 +100,7 @@ public:
 
                 if (knownNames.find(ip) == knownNames.end()) {
                     std::string managed_name = stackIter->m_className;
-                    managed_name.append("::");
+                    managed_name.append(".");
                     managed_name.append(stackIter->m_methodName);
 
                     fprintf(out, "n %" PRIxPTR " %s\n", reinterpret_cast<uintptr_t>(ip), managed_name.c_str());
