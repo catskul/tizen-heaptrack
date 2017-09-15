@@ -42,6 +42,7 @@ using namespace std;
 AllocationData::DisplayId AllocationData::display = AllocationData::DisplayId::malloc;
 
 bool AccumulatedTraceData::isHideUnmanagedStackParts = false;
+bool AccumulatedTraceData::isShowCoreCLRPartOption = false;
 
 namespace {
 
@@ -230,6 +231,13 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             TraceNode node;
             reader >> node.ipIndex;
             reader >> node.parentIndex;
+
+            AllocationData::CoreCLRType coreclrType;
+            if (isShowCoreCLRPartOption)
+            {
+                coreclrType = checkIsNodeCoreCLR(node.ipIndex);
+            }
+
             // skip operator new and operator new[] at the beginning of traces
             while (find(opNewIpIndices.begin(), opNewIpIndices.end(), node.ipIndex) != opNewIpIndices.end()) {
                 node = findTrace(node.parentIndex);
@@ -246,6 +254,16 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
 
                     node = findTrace(node.parentIndex);
                 }
+            }
+
+            if (isShowCoreCLRPartOption)
+            {
+                coreclrType = combineTwoTypes(checkIsNodeCoreCLR(node.ipIndex), coreclrType);
+                if (coreclrType != AllocationData::CoreCLRType::CoreCLR)
+                {
+                    coreclrType = combineTwoTypes(checkCallStackIsCoreCLR(node.parentIndex), coreclrType);
+                }
+                node.coreclrType = coreclrType;
             }
 
             traces.push_back(node);
@@ -280,17 +298,12 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             }
         } else if (reader.mode() == '*') {
             uint64_t length, ptr;
-            int prot, fd;
+            int prot, fd, isCoreclr;
             TraceIndex traceIndex;
-
-            if (AllocationData::display == AllocationData::DisplayId::malloc
-                || AllocationData::display == AllocationData::DisplayId::managed) {
-                // we don't need the mmap/munmap details information for malloc/managed statistics
-                continue;
-            }
 
             if (!(reader >> length)
                 || !(reader >> prot)
+                || !(reader >> isCoreclr)
                 || !(reader >> fd)
                 || !(reader >> traceIndex.index)
                 || !(reader >> ptr)) {
@@ -308,6 +321,7 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
 
             rangeInfo.setProt(prot);
             rangeInfo.setFd(fd);
+            rangeInfo.setIsCoreCLR(isCoreclr);
             rangeInfo.setTraceIndex(traceIndex.index);
 
             combineContiguousSimilarRanges();
@@ -321,12 +335,6 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             }
         } else if (reader.mode() == '/') {
             uint64_t length, ptr;
-
-            if (AllocationData::display == AllocationData::DisplayId::malloc
-                || AllocationData::display == AllocationData::DisplayId::managed) {
-                // we don't need the mmap/munmap details information for malloc/managed statistics
-                continue;
-            }
 
             if (!(reader >> length)
                 || !(reader >> ptr)) {
@@ -396,6 +404,7 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
 
                     if(!addressRangeInfo.isPhysicalMemoryConsumptionSet) {
                         cerr << "Unknown range: 0x" << std::hex << addressRangeInfo.start << " (0x" << addressRangeInfo.size << " bytes)" << std::dec << endl;
+                        continue;
                     }
 
                     totalCost.privateClean.allocated += addressRangeInfo.getPrivateClean();
@@ -453,18 +462,48 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
                         allocation.shared.allocated += addressRangeInfo.getShared();
                     }
                 }
+
+                if (isShowCoreCLRPartOption)
+                {
+                    if (pass == SecondPass && totalCost.privateClean.peak == lastPrivateCleanPeakCost && timeStamp == lastPrivateCleanPeakTime
+                        && AllocationData::display == AllocationData::DisplayId::privateClean)
+                    {
+                        partCoreclrMMAP.peak = 0;
+                        partNonCoreclrMMAP.peak = 0;
+                        partUnknownMMAP.peak = 0;
+                        partUntrackedMMAP.peak = 0;
+
+                        calculatePeak(AllocationData::DisplayId::privateClean);
+                    }
+
+                    if (pass == SecondPass && totalCost.privateDirty.peak == lastPrivateDirtyPeakCost && timeStamp == lastPrivateDirtyPeakTime
+                        && AllocationData::display == AllocationData::DisplayId::privateDirty)
+                    {
+                        partCoreclrMMAP.peak = 0;
+                        partNonCoreclrMMAP.peak = 0;
+                        partUnknownMMAP.peak = 0;
+                        partUntrackedMMAP.peak = 0;
+
+                        calculatePeak(AllocationData::DisplayId::privateDirty);
+                    }
+
+                    if (pass == SecondPass && totalCost.shared.peak == lastSharedPeakCost && timeStamp == lastSharedPeakTime
+                        && AllocationData::display == AllocationData::DisplayId::shared)
+                    {
+                        partCoreclrMMAP.peak = 0;
+                        partNonCoreclrMMAP.peak = 0;
+                        partUnknownMMAP.peak = 0;
+                        partUntrackedMMAP.peak = 0;
+
+                        calculatePeak(AllocationData::DisplayId::shared);
+                    }
+                }
             }
 
             handleTotalCostUpdate();
         } else if (reader.mode() == 'k') {
             if (!isSmapsChunkInProcess) {
                 cerr << "wrong trace format (smaps data outside of smaps chunk)" << endl;
-                continue;
-            }
-
-            if (AllocationData::display == AllocationData::DisplayId::malloc
-                || AllocationData::display == AllocationData::DisplayId::managed) {
-                // we don't need the physical memory consumption details information for malloc/managed statistics
                 continue;
             }
 
@@ -750,7 +789,265 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
         handleTimeStamp(timeStamp, totalTime);
     }
 
+    if (isShowCoreCLRPartOption)
+    {
+        AllocationData::Stats totalCoreclr;
+        AllocationData::Stats totalNonCoreclr;
+        AllocationData::Stats totalUnknown;
+        AllocationData::Stats totalUntracked;
+
+        if (AllocationData::display == AllocationData::DisplayId::malloc)
+        {
+            for (auto it = allocations.begin(); it != allocations.end(); ++it)
+            {
+                if (!isValidTrace(it->traceIndex))
+                {
+                    totalUnknown += *(it->getDisplay ());
+                    continue;
+                }
+
+                AllocationData::CoreCLRType isCoreclr = findTrace(it->traceIndex).coreclrType;
+
+                if (isCoreclr == AllocationData::CoreCLRType::CoreCLR)
+                {
+                    totalCoreclr += *(it->getDisplay ());
+                }
+                else if (isCoreclr == AllocationData::CoreCLRType::nonCoreCLR)
+                {
+                    totalNonCoreclr += *(it->getDisplay ());
+                }
+                else if (isCoreclr == AllocationData::CoreCLRType::untracked)
+                {
+                    totalUntracked += *(it->getDisplay ());
+                }
+                else if (isCoreclr == AllocationData::CoreCLRType::unknown)
+                {
+                    totalUnknown += *(it->getDisplay ());
+                }
+            }
+
+            partCoreclr = totalCoreclr;
+            partNonCoreclr = totalNonCoreclr;
+            partUnknown = totalUnknown;
+            partUntracked = totalUntracked;
+        }
+        else if (AllocationData::display == AllocationData::DisplayId::privateDirty
+                 || AllocationData::display == AllocationData::DisplayId::privateClean
+                 || AllocationData::display == AllocationData::DisplayId::shared)
+        {
+            for (auto it = addressRangeInfos.begin(); it != addressRangeInfos.end(); ++it)
+            {
+                int64_t val = AllocationData::display == AllocationData::DisplayId::privateDirty
+                              ? it->second.getPrivateDirty()
+                              : AllocationData::display == AllocationData::DisplayId::privateClean
+                                ? it->second.getPrivateClean()
+                                : AllocationData::display == AllocationData::DisplayId::shared
+                                  ? it->second.getShared()
+                                  : 0;
+
+                if (!isValidTrace(it->second.traceIndex))
+                {
+                    totalUnknown.leaked += val;
+                    continue;
+                }
+
+                AllocationData::CoreCLRType coreclrType = AllocationData::CoreCLRType::unknown;
+                if (it->second.isCoreCLR == 0)
+                {
+                    coreclrType = AllocationData::CoreCLRType::nonCoreCLR;
+                }
+                else if (it->second.isCoreCLR == 1)
+                {
+                    coreclrType = AllocationData::CoreCLRType::CoreCLR;
+                }
+                else if (it->second.isCoreCLR == 2)
+                {
+                    coreclrType = AllocationData::CoreCLRType::untracked;
+                }
+                assert(coreclrType != AllocationData::CoreCLRType::unknown);
+
+                AllocationData::CoreCLRType isCoreclr = combineTwoTypes(findTrace(it->second.traceIndex).coreclrType, coreclrType);
+
+                if (isCoreclr == AllocationData::CoreCLRType::CoreCLR)
+                {
+                    totalCoreclr.leaked += val;
+                }
+                else if (isCoreclr == AllocationData::CoreCLRType::nonCoreCLR)
+                {
+                    totalNonCoreclr.leaked += val;
+                }
+                else if (isCoreclr == AllocationData::CoreCLRType::untracked)
+                {
+                    totalUntracked.leaked += val;
+                }
+                else if (isCoreclr == AllocationData::CoreCLRType::unknown)
+                {
+                    totalUnknown.leaked += val;
+                }
+            }
+
+            partCoreclrMMAP.leaked = totalCoreclr.leaked;
+            partNonCoreclrMMAP.leaked = totalNonCoreclr.leaked;
+            partUnknownMMAP.leaked = totalUnknown.leaked;
+            partUntrackedMMAP.leaked = totalUntracked.leaked;
+        }
+    }
+
     return true;
+}
+
+void
+AccumulatedTraceData::calculatePeak(AllocationData::DisplayId type)
+{
+    for (auto i = addressRangeInfos.begin (); i != addressRangeInfos.end(); ++i)
+    {
+        const AddressRangeInfo& addressRangeInfo = i->second;
+
+        int64_t peak = 0;
+        switch (type)
+        {
+            case AllocationData::DisplayId::privateDirty:
+            {
+                peak = addressRangeInfo.getPrivateDirty();
+                break;
+            }
+            case AllocationData::DisplayId::privateClean:
+            {
+                peak = addressRangeInfo.getPrivateClean();
+                break;
+            }
+            case AllocationData::DisplayId::shared:
+            {
+                peak = addressRangeInfo.getShared();
+                break;
+            }
+            default:
+            {
+                assert(0);
+            }
+        }
+
+        if(!addressRangeInfo.isPhysicalMemoryConsumptionSet) {
+            continue;
+        }
+
+        if (!isValidTrace(addressRangeInfo.traceIndex))
+        {
+            partUnknownMMAP.peak += peak;
+            continue;
+        }
+
+        AllocationData::CoreCLRType coreclrType = AllocationData::CoreCLRType::unknown;
+        if (addressRangeInfo.isCoreCLR == 0)
+        {
+            coreclrType = AllocationData::CoreCLRType::nonCoreCLR;
+        }
+        else if (addressRangeInfo.isCoreCLR == 1)
+        {
+            coreclrType = AllocationData::CoreCLRType::CoreCLR;
+        }
+        else if (addressRangeInfo.isCoreCLR == 2)
+        {
+            coreclrType = AllocationData::CoreCLRType::untracked;
+        }
+
+        AllocationData::CoreCLRType isCoreclr = combineTwoTypes(findTrace(addressRangeInfo.traceIndex).coreclrType, coreclrType);
+
+        if (isCoreclr == AllocationData::CoreCLRType::CoreCLR)
+        {
+            partCoreclrMMAP.peak += peak;
+        }
+        else if (isCoreclr == AllocationData::CoreCLRType::nonCoreCLR)
+        {
+            partNonCoreclrMMAP.peak += peak;
+        }
+        else if (isCoreclr == AllocationData::CoreCLRType::untracked)
+        {
+            partUntrackedMMAP.peak += peak;
+        }
+        else if (isCoreclr == AllocationData::CoreCLRType::unknown)
+        {
+            partUnknownMMAP.peak += peak;
+        }
+    }
+}
+
+AllocationData::CoreCLRType
+AccumulatedTraceData::checkIsNodeCoreCLR(IpIndex ipindex)
+{
+    InstructionPointer ip = findIp(ipindex);
+    AllocationData::CoreCLRType coreclrType = AllocationData::CoreCLRType::unknown;
+
+    for (auto iter = addressRangeInfos.begin(); iter != addressRangeInfos.end(); ++iter)
+    {
+        if (iter->second.start <= ip.instructionPointer && iter->second.start + iter->second.size > ip.instructionPointer)
+        {
+            if (iter->second.isCoreCLR == 0)
+            {
+                coreclrType = AllocationData::CoreCLRType::nonCoreCLR;
+            }
+            else if (iter->second.isCoreCLR == 1)
+            {
+                coreclrType = AllocationData::CoreCLRType::CoreCLR;
+            }
+            else if (iter->second.isCoreCLR == 2)
+            {
+                coreclrType = AllocationData::CoreCLRType::untracked;
+            }
+            break;
+        }
+    }
+    if (coreclrType == AllocationData::CoreCLRType::unknown)
+    {
+        // warning here, address is not found in ranges
+    }
+
+    return coreclrType;
+}
+
+AllocationData::CoreCLRType
+AccumulatedTraceData::combineTwoTypes(AllocationData::CoreCLRType a, AllocationData::CoreCLRType b)
+{
+    if (a == AllocationData::CoreCLRType::CoreCLR
+        || b == AllocationData::CoreCLRType::CoreCLR)
+    {
+        return AllocationData::CoreCLRType::CoreCLR;
+    }
+
+    if (a == AllocationData::CoreCLRType::untracked
+        || b == AllocationData::CoreCLRType::untracked)
+    {
+        return AllocationData::CoreCLRType::untracked;
+    }
+
+    if (a == AllocationData::CoreCLRType::nonCoreCLR
+        || b == AllocationData::CoreCLRType::nonCoreCLR)
+    {
+        return AllocationData::CoreCLRType::nonCoreCLR;
+    }
+
+    return AllocationData::CoreCLRType::unknown;
+}
+
+AllocationData::CoreCLRType
+AccumulatedTraceData::checkCallStackIsCoreCLR(TraceIndex index)
+{
+    AllocationData::CoreCLRType isCoreclr = AllocationData::CoreCLRType::unknown;
+
+    while (isValidTrace(index))
+    {
+        TraceNode node = findTrace(index);
+        index = node.parentIndex;
+
+        if (node.coreclrType == AllocationData::CoreCLRType::CoreCLR)
+        {
+            return node.coreclrType;
+        }
+
+        isCoreclr = combineTwoTypes(isCoreclr, node.coreclrType);
+    }
+
+    return isCoreclr;
 }
 
 namespace { // helpers for diffing
@@ -1045,6 +1342,11 @@ TraceNode AccumulatedTraceData::findTrace(const TraceIndex traceIndex) const
     } else {
         return traces[traceIndex.index - 1];
     }
+}
+
+bool AccumulatedTraceData::isValidTrace(const TraceIndex traceIndex) const
+{
+    return !(!traceIndex || traceIndex.index > traces.size());
 }
 
 TraceNode AccumulatedTraceData::findPrevTrace(const TraceIndex traceIndex) const

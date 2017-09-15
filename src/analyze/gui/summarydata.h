@@ -32,6 +32,11 @@ struct SummaryData
     int64_t peakRSS;
     int64_t totalSystemMemory;
     bool fromAttached;
+
+    AllocationData::Stats CoreCLRPart;
+    AllocationData::Stats nonCoreCLRPart;
+    AllocationData::Stats untrackedPart;
+    AllocationData::Stats unknownPart;
 };
 Q_DECLARE_METATYPE(SummaryData)
 

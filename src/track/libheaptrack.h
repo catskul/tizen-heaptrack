@@ -81,7 +81,7 @@ void heaptrack_init(const char* outputFileName, heaptrack_callback_t initCallbac
 
 void heaptrack_stop();
 
-void heaptrack_dlopen(const std::vector<std::pair<void *, std::pair<size_t, int>>> &newMmaps, bool isPreloaded, void *dlopenOriginal);
+void heaptrack_dlopen(const std::vector<std::pair<void *, std::tuple<size_t, int, int>>> &newMmaps, bool isPreloaded, void *dlopenOriginal);
 void heaptrack_dlclose(const std::vector<std::pair<void *, size_t>> &unmaps);
 
 void heaptrack_malloc(void* ptr, size_t size);

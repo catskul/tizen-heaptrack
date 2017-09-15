@@ -622,9 +622,30 @@ void Parser::parse(const QString& path, const QString& diffBase)
 
         data->updateStringCache();
 
+        AllocationData::Stats *partCoreclr;
+        AllocationData::Stats *partNonCoreclr;
+        AllocationData::Stats *partUntracked;
+        AllocationData::Stats *partUnknown;
+
+        if (AllocationData::display == AllocationData::DisplayId::malloc)
+        {
+            partCoreclr = &data->partCoreclr;
+            partNonCoreclr = &data->partNonCoreclr;
+            partUntracked = &data->partUntracked;
+            partUnknown = &data->partUnknown;
+        }
+        else
+        {
+            partCoreclr = &data->partCoreclrMMAP;
+            partNonCoreclr = &data->partNonCoreclrMMAP;
+            partUntracked = &data->partUntrackedMMAP;
+            partUnknown = &data->partUnknownMMAP;
+        }
+
         emit summaryAvailable({QString::fromStdString(data->debuggee), *data->totalCost.getDisplay(), data->totalTime, data->getPeakTime(),
                                data->peakRSS * 1024,
-                               data->systemInfo.pages * data->systemInfo.pageSize, data->fromAttached});
+                               data->systemInfo.pages * data->systemInfo.pageSize, data->fromAttached,
+                               *partCoreclr, *partNonCoreclr, *partUntracked, *partUnknown});
 
         emit progressMessageAvailable(i18n("merging allocations..."));
         // merge allocations before modifying the data again
