@@ -188,7 +188,8 @@ struct ParserData final : public AccumulatedTraceData
                 const auto ip = alloc.ip;
                 (labelIds[ip].*label) = i + 1;
                 const auto function = stringCache.func(findIp(ip).frame);
-                data->labels[i + 1] = function;
+                const auto module = stringCache.module(findIp(ip));
+                data->labels[i + 1] = i18nc("Function and module, if known", "%1 (%2)", function, module);
             }
         };
         findTopChartEntries(&ChartMergeData::consumed, &LabelIds::consumed, &consumedChartData);
