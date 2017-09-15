@@ -40,6 +40,7 @@ signals:
     void progressMessageAvailable(const QString& progress);
     void summaryAvailable(const SummaryData& summary);
     void bottomUpDataAvailable(const TreeData& data);
+    void bottomUpFilterOutLeavesDataAvailable(const TreeData& data);
     void topDownDataAvailable(const TreeData& data);
     void callerCalleeDataAvailable(const CallerCalleeRows& data);
     void consumedChartDataAvailable(const ChartData& data);

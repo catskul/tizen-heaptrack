@@ -912,6 +912,13 @@ TraceNode AccumulatedTraceData::findTrace(const TraceIndex traceIndex) const
     }
 }
 
+TraceNode AccumulatedTraceData::findPrevTrace(const TraceIndex traceIndex) const
+{
+    TraceNode trace = findTrace(traceIndex);
+
+    return findTrace(trace.parentIndex);
+}
+
 bool AccumulatedTraceData::isStopIndex(const StringIndex index) const
 {
     return find(stopIndices.begin(), stopIndices.end(), index) != stopIndices.end();

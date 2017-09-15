@@ -165,7 +165,7 @@ struct ParserData final : public AccumulatedTraceData
         // TODO: aggregate by function instead?
         // TODO: traverse the merged call stack up until the first fork
         for (const auto& alloc : allocations) {
-            const auto ip = findTrace(alloc.traceIndex).ipIndex;
+            const auto ip = findPrevTrace(alloc.traceIndex).ipIndex;
             auto it = lower_bound(merged.begin(), merged.end(), ip);
             if (it == merged.end() || it->ip != ip) {
                 it = merged.insert(it, {ip, 0, 0, 0, 0});
@@ -233,7 +233,7 @@ struct ParserData final : public AccumulatedTraceData
             rows->cost[labelId] += cost;
         };
         for (const auto& alloc : allocations) {
-            const auto ip = findTrace(alloc.traceIndex).ipIndex;
+            const auto ip = findPrevTrace(alloc.traceIndex).ipIndex;
             auto it = labelIds.constFind(ip);
             if (it == labelIds.constEnd()) {
                 continue;
@@ -315,7 +315,7 @@ void setParents(QVector<RowData>& children, const RowData* parent)
     }
 }
 
-TreeData mergeAllocations(const ParserData& data)
+TreeData mergeAllocations(const ParserData& data, bool bIncludeLeaves)
 {
     TreeData topRows;
     auto addRow = [](TreeData* rows, const LocationData::Ptr& location, const Allocation::Stats& cost) -> TreeData* {
@@ -330,6 +330,11 @@ TreeData mergeAllocations(const ParserData& data)
     // merge allocations, leave parent pointers invalid (their location may change)
     for (const auto& allocation : data.allocations) {
         auto traceIndex = allocation.traceIndex;
+
+        if (!bIncludeLeaves) {
+            traceIndex = data.findTrace(traceIndex).parentIndex;
+        }
+
         auto rows = &topRows;
         while (traceIndex) {
             const auto& trace = data.findTrace(traceIndex);
@@ -516,7 +521,7 @@ HistogramData buildSizeHistogram(ParserData& data)
         } else {
             row.columns[0].allocations += info.allocations;
         }
-        const auto ipIndex = data.findTrace(info.info.traceIndex).ipIndex;
+        const auto ipIndex = data.findPrevTrace(info.info.traceIndex).ipIndex;
         const auto ip = data.findIp(ipIndex);
         const auto location = data.stringCache.location(ipIndex, ip);
         auto it = lower_bound(columnData.begin(), columnData.end(), location);
@@ -575,8 +580,11 @@ void Parser::parse(const QString& path, const QString& diffBase)
 
         emit progressMessageAvailable(i18n("merging allocations..."));
         // merge allocations before modifying the data again
-        const auto mergedAllocations = mergeAllocations(*data);
+        const auto mergedAllocations = mergeAllocations(*data, true);
         emit bottomUpDataAvailable(mergedAllocations);
+
+        const auto mergedAllocationsFilterOutLeaves = mergeAllocations(*data, false);
+        emit bottomUpFilterOutLeavesDataAvailable(mergedAllocationsFilterOutLeaves);
 
         // also calculate the size histogram
         emit progressMessageAvailable(i18n("building size histogram..."));

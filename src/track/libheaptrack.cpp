@@ -761,6 +761,7 @@ void heaptrack_stop()
     heaptrack.shutdown();
 }
 
+__attribute__((noinline))
 void heaptrack_dlopen(const vector<pair<void *, pair<size_t, int>>> &newMmaps, bool isPreloaded, void *dlopenOriginal)
 {
     if (!RecursionGuard::isActive) {
@@ -799,6 +800,7 @@ void heaptrack_dlclose(const vector<pair<void *, size_t>> &unmaps)
     }
 }
 
+__attribute__((noinline))
 void heaptrack_malloc(void* ptr, size_t size)
 {
     if (ptr && !RecursionGuard::isActive) {
@@ -807,7 +809,7 @@ void heaptrack_malloc(void* ptr, size_t size)
         debugLog<VeryVerboseOutput>("heaptrack_malloc(%p, %zu)", ptr, size);
 
         Trace trace;
-        trace.fill(2 + HEAPTRACK_DEBUG_BUILD);
+        trace.fill(2);
 
         HeapTrack heaptrack(guard);
         heaptrack.handleMalloc(ptr, size, trace);
@@ -826,6 +828,7 @@ void heaptrack_free(void* ptr)
     }
 }
 
+__attribute__((noinline))
 void heaptrack_realloc(void* ptr_in, size_t size, void* ptr_out)
 {
     if (ptr_out && !RecursionGuard::isActive) {
@@ -834,7 +837,7 @@ void heaptrack_realloc(void* ptr_in, size_t size, void* ptr_out)
         debugLog<VeryVerboseOutput>("heaptrack_realloc(%p, %zu, %p)", ptr_in, size, ptr_out);
 
         Trace trace;
-        trace.fill(2 + HEAPTRACK_DEBUG_BUILD);
+        trace.fill(2);
 
         HeapTrack heaptrack(guard);
         if (ptr_in) {
@@ -844,6 +847,7 @@ void heaptrack_realloc(void* ptr_in, size_t size, void* ptr_out)
     }
 }
 
+__attribute__((noinline))
 void heaptrack_mmap(void* ptr, size_t length, int prot, int flags, int fd, off64_t offset)
 {
     if (ptr && !RecursionGuard::isActive) {
@@ -853,7 +857,7 @@ void heaptrack_mmap(void* ptr, size_t length, int prot, int flags, int fd, off64
                                     ptr, length, prot, flags, fd, offset);
 
         Trace trace;
-        trace.fill(2 + HEAPTRACK_DEBUG_BUILD);
+        trace.fill(2);
 
         HeapTrack heaptrack(guard);
         heaptrack.handleMmap(ptr, length, prot, fd, trace);

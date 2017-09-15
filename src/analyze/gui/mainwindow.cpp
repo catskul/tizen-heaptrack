@@ -199,9 +199,11 @@ MainWindow::MainWindow(QWidget* parent)
     m_ui->loadingProgress->setMaximum(0);
 
     auto bottomUpModel = new TreeModel(this);
+    auto bottomUpModelFilterOutLeaves = new TreeModel(this);
     auto topDownModel = new TreeModel(this);
     auto callerCalleeModel = new CallerCalleeModel(this);
     connect(this, &MainWindow::clearData, bottomUpModel, &TreeModel::clearData);
+    connect(this, &MainWindow::clearData, bottomUpModelFilterOutLeaves, &TreeModel::clearData);
     connect(this, &MainWindow::clearData, topDownModel, &TreeModel::clearData);
     connect(this, &MainWindow::clearData, callerCalleeModel, &CallerCalleeModel::clearData);
     connect(this, &MainWindow::clearData, m_ui->flameGraphTab, &FlameGraph::clearData);
@@ -221,6 +223,9 @@ MainWindow::MainWindow(QWidget* parent)
         m_ui->pages->setCurrentWidget(m_ui->resultsPage);
         m_ui->tabWidget->setTabEnabled(m_ui->tabWidget->indexOf(m_ui->bottomUpTab), true);
     });
+    connect(m_parser, &Parser::bottomUpFilterOutLeavesDataAvailable, this, [=](const TreeData& data) {
+        bottomUpModelFilterOutLeaves->resetData(data);
+    });
     connect(m_parser, &Parser::callerCalleeDataAvailable, this, [=](const CallerCalleeRows& data) {
         callerCalleeModel->resetData(data);
         m_ui->tabWidget->setTabEnabled(m_ui->tabWidget->indexOf(m_ui->callerCalleeTab), true);
@@ -235,6 +240,7 @@ MainWindow::MainWindow(QWidget* parent)
     });
     connect(m_parser, &Parser::summaryAvailable, this, [=](const SummaryData& data) {
         bottomUpModel->setSummary(data);
+        bottomUpModelFilterOutLeaves->setSummary(data);
         topDownModel->setSummary(data);
         callerCalleeModel->setSummary(data);
         KFormat format;
@@ -344,7 +350,7 @@ MainWindow::MainWindow(QWidget* parent)
 
     auto costDelegate = new CostDelegate(this);
 
-    setupTreeModel(bottomUpModel, m_ui->bottomUpResults, costDelegate, m_ui->bottomUpFilterFunction,
+    setupTreeModel(bottomUpModelFilterOutLeaves, m_ui->bottomUpResults, costDelegate, m_ui->bottomUpFilterFunction,
                    m_ui->bottomUpFilterFile, m_ui->bottomUpFilterModule);
 
     setupTreeModel(topDownModel, m_ui->topDownResults, costDelegate, m_ui->topDownFilterFunction,
@@ -388,18 +394,18 @@ MainWindow::MainWindow(QWidget* parent)
 
     setupStacks();
 
-    setupTopView(bottomUpModel, m_ui->topPeak, TopProxy::Peak);
+    setupTopView(bottomUpModelFilterOutLeaves, m_ui->topPeak, TopProxy::Peak);
     m_ui->topPeak->setItemDelegate(costDelegate);
-    setupTopView(bottomUpModel, m_ui->topLeaked, TopProxy::Leaked);
+    setupTopView(bottomUpModelFilterOutLeaves, m_ui->topLeaked, TopProxy::Leaked);
     m_ui->topLeaked->setItemDelegate(costDelegate);
 
     if(AllocationData::display == AllocationData::DisplayId::malloc)
     {
-        setupTopView(bottomUpModel, m_ui->topAllocations, TopProxy::Allocations);
+        setupTopView(bottomUpModelFilterOutLeaves, m_ui->topAllocations, TopProxy::Allocations);
         m_ui->topAllocations->setItemDelegate(costDelegate);
-        setupTopView(bottomUpModel, m_ui->topTemporary, TopProxy::Temporary);
+        setupTopView(bottomUpModelFilterOutLeaves, m_ui->topTemporary, TopProxy::Temporary);
         m_ui->topTemporary->setItemDelegate(costDelegate);
-        setupTopView(bottomUpModel, m_ui->topAllocated, TopProxy::Allocated);
+        setupTopView(bottomUpModelFilterOutLeaves, m_ui->topAllocated, TopProxy::Allocated);
         m_ui->topAllocated->setItemDelegate(costDelegate);
     }
     else

@@ -315,6 +315,7 @@ struct AccumulatedTraceData
     InstructionPointer findIp(const IpIndex ipIndex) const;
 
     TraceNode findTrace(const TraceIndex traceIndex) const;
+    TraceNode findPrevTrace(const TraceIndex traceIndex) const;
 
     bool isStopIndex(const StringIndex index) const;
 
