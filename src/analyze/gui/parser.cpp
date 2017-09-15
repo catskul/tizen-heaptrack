@@ -36,13 +36,17 @@ namespace {
 // TODO: use QString directly
 struct StringCache
 {
-    QString func(const Frame& frame) const
+    QString func(const Frame& frame, bool isUntrackedLocation) const
     {
         if (frame.functionIndex) {
             // TODO: support removal of template arguments
             return stringify(frame.functionIndex);
         } else {
-            return unresolvedFunctionName();
+            if (isUntrackedLocation) {
+                return untrackedFunctionName();
+            } else {
+                return unresolvedFunctionName();
+            }
         }
     }
 
@@ -78,22 +82,22 @@ struct StringCache
         }
     }
 
-    LocationData::Ptr location(const IpIndex& index, const InstructionPointer& ip) const
+    LocationData::Ptr location(const IpIndex& index, const InstructionPointer& ip, bool isUntrackedLocation) const
     {
         // first try a fast index-based lookup
         auto& location = m_locationsMap[index];
         if (!location) {
-            location = frameLocation(ip.frame, ip);
+            location = frameLocation(ip.frame, ip, isUntrackedLocation);
         }
         return location;
     }
 
-    LocationData::Ptr frameLocation(const Frame& frame, const InstructionPointer& ip) const
+    LocationData::Ptr frameLocation(const Frame& frame, const InstructionPointer& ip, bool isUntrackedLocation) const
     {
         LocationData::Ptr location;
         // slow-path, look for interned location
         // note that we can get the same location for different IPs
-        LocationData data = {func(frame), file(frame), module(ip), frame.line};
+        LocationData data = {func(frame, isUntrackedLocation), file(frame), module(ip), frame.line};
         auto it = lower_bound(m_locations.begin(), m_locations.end(), data);
         if (it != m_locations.end() && **it == data) {
             // we got the location already from a different ip, cache it
@@ -123,6 +127,7 @@ struct StringCache
 struct ChartMergeData
 {
     IpIndex ip;
+    bool isUntrackedLocation;
     qint64 consumed;
     qint64 allocations;
     qint64 allocated;
@@ -174,10 +179,12 @@ struct ParserData final : public AccumulatedTraceData
         // TODO: aggregate by function instead?
         // TODO: traverse the merged call stack up until the first fork
         for (const auto& alloc : allocations) {
-            const auto ip = findPrevTrace(alloc.traceIndex).ipIndex;
+            const auto &trace = findPrevTrace(alloc.traceIndex);
+            const auto ip = trace.ipIndex;
+            bool isUntrackedLocation = (!alloc.traceIndex);
             auto it = lower_bound(merged.begin(), merged.end(), ip);
             if (it == merged.end() || it->ip != ip) {
-                it = merged.insert(it, {ip, 0, 0, 0, 0});
+                it = merged.insert(it, {ip, isUntrackedLocation, 0, 0, 0, 0});
             }
             it->consumed += alloc.getDisplay()->peak; // we want to track the top peaks in the chart
             it->allocated += alloc.getDisplay()->allocated;
@@ -196,7 +203,7 @@ struct ParserData final : public AccumulatedTraceData
                 }
                 const auto ip = alloc.ip;
                 (labelIds[ip].*label) = i + 1;
-                const auto function = stringCache.func(findIp(ip).frame);
+                const auto function = stringCache.func(findIp(ip).frame, alloc.isUntrackedLocation);
                 const auto module = stringCache.module(findIp(ip));
                 data->labels[i + 1] = i18nc("Function and module, if known", "%1 (%2)", function, module);
             }
@@ -352,20 +359,22 @@ TreeData mergeAllocations(const ParserData& data, bool bIncludeLeaves)
         }
 
         auto rows = &topRows;
-        while (traceIndex) {
+        do {
+            bool isUntrackedLocation = (!traceIndex);
+
             const auto& trace = data.findTrace(traceIndex);
             const auto& ip = data.findIp(trace.ipIndex);
-            auto location = data.stringCache.location(trace.ipIndex, ip);
+            auto location = data.stringCache.location(trace.ipIndex, ip, isUntrackedLocation);
             rows = addRow(rows, location, *stats);
             for (const auto& inlined : ip.inlined) {
-                auto inlinedLocation = data.stringCache.frameLocation(inlined, ip);
+                auto inlinedLocation = data.stringCache.frameLocation(inlined, ip, isUntrackedLocation);
                 rows = addRow(rows, inlinedLocation, *stats);
             }
             if (data.isStopIndex(ip.frame.functionIndex)) {
                 break;
             }
             traceIndex = trace.parentIndex;
-        }
+        } while (traceIndex);
     }
     // now set the parents, the data is constant from here on
     setParents(topRows, nullptr);
@@ -537,9 +546,11 @@ HistogramData buildSizeHistogram(ParserData& data)
         } else {
             row.columns[0].allocations += info.allocations;
         }
-        const auto ipIndex = data.findPrevTrace(info.info.traceIndex).ipIndex;
+        const auto &trace = data.findPrevTrace(info.info.traceIndex);
+        bool isUntrackedLocation = (!info.info.traceIndex);
+        const auto ipIndex = trace.ipIndex;
         const auto ip = data.findIp(ipIndex);
-        const auto location = data.stringCache.location(ipIndex, ip);
+        const auto location = data.stringCache.location(ipIndex, ip, isUntrackedLocation);
         auto it = lower_bound(columnData.begin(), columnData.end(), location);
         if (it == columnData.end() || it->location != location) {
             columnData.insert(it, {location, info.allocations});

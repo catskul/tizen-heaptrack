@@ -64,6 +64,11 @@ inline QString unresolvedFunctionName()
     return i18n("<unresolved function>");
 }
 
+inline QString untrackedFunctionName()
+{
+    return i18n("<untracked>");
+}
+
 inline bool operator<(const LocationData::Ptr& lhs, const LocationData& rhs)
 {
     return *lhs < rhs;
