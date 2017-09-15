@@ -279,6 +279,11 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             int prot, fd;
             TraceIndex traceIndex;
 
+            if (AllocationData::display == AllocationData::DisplayId::malloc) {
+                // we don't need the mmap/munmap details information for malloc statistics
+                continue;
+            }
+
             if (!(reader >> length)
                 || !(reader >> prot)
                 || !(reader >> fd)
@@ -311,6 +316,11 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             }
         } else if (reader.mode() == '/') {
             uint64_t length, ptr;
+
+            if (AllocationData::display == AllocationData::DisplayId::malloc) {
+                // we don't need the mmap/munmap details information for malloc statistics
+                continue;
+            }
 
             if (!(reader >> length)
                 || !(reader >> ptr)) {
@@ -446,6 +456,11 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
                 continue;
             }
 
+            if (AllocationData::display == AllocationData::DisplayId::malloc) {
+                // we don't need the physical memory consumption details information for malloc statistics
+                continue;
+            }
+
             uint64_t addr, diff, size, privateDirty, privateClean, sharedDirty, sharedClean;
             int prot;
 
@@ -483,6 +498,12 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
         } else if (reader.mode() == '+') {
             AllocationInfo info;
             AllocationIndex allocationIndex;
+
+            if (AllocationData::display != AllocationData::DisplayId::malloc) {
+                // we don't need the malloc/calloc/realloc/free details information for malloc statistics
+                continue;
+            }
+
             if (fileVersion >= 1) {
                 if (!(reader >> allocationIndex.index)) {
                     cerr << "failed to parse line: " << reader.line() << endl;
@@ -533,6 +554,12 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
         } else if (reader.mode() == '-') {
             AllocationIndex allocationInfoIndex;
             bool temporary = false;
+
+            if (AllocationData::display != AllocationData::DisplayId::malloc) {
+                // we don't need the malloc/calloc/realloc/free details information for malloc statistics
+                continue;
+            }
+
             if (fileVersion >= 1) {
                 if (!(reader >> allocationInfoIndex.index)) {
                     cerr << "failed to parse line: " << reader.line() << endl;
