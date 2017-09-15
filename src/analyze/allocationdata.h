@@ -27,6 +27,7 @@ struct AllocationData
     enum class DisplayId
     {
         malloc,
+        managed,
         privateClean,
         privateDirty,
         shared
@@ -34,6 +35,7 @@ struct AllocationData
 
     AllocationData()
         : malloc(),
+          managed(),
           privateClean(),
           privateDirty(),
           shared()
@@ -63,7 +65,7 @@ struct AllocationData
         }
     };
 
-    Stats malloc, privateClean, privateDirty, shared;
+    Stats malloc, managed, privateClean, privateDirty, shared;
 
     static DisplayId display;
 
@@ -73,6 +75,8 @@ struct AllocationData
         {
             case DisplayId::malloc:
                 return &malloc;
+            case DisplayId::managed:
+                return &managed;
             case DisplayId::privateClean:
                 return &privateClean;
             case DisplayId::privateDirty:
@@ -133,6 +137,7 @@ inline AllocationData::Stats operator-(AllocationData::Stats lhs, const Allocati
 inline bool operator==(const AllocationData& lhs, const AllocationData& rhs)
 {
     return (lhs.malloc == rhs.malloc
+            && lhs.managed == rhs.managed
             && lhs.privateClean == rhs.privateClean
             && lhs.privateDirty == rhs.privateDirty
             && lhs.shared == rhs.shared);
@@ -146,6 +151,7 @@ inline bool operator!=(const AllocationData& lhs, const AllocationData& rhs)
 inline AllocationData& operator+=(AllocationData& lhs, const AllocationData& rhs)
 {
     lhs.malloc += rhs.malloc;
+    lhs.managed += rhs.managed;
     lhs.privateClean += rhs.privateClean;
     lhs.privateDirty += rhs.privateDirty;
     lhs.shared += rhs.shared;
@@ -155,6 +161,7 @@ inline AllocationData& operator+=(AllocationData& lhs, const AllocationData& rhs
 inline AllocationData& operator-=(AllocationData& lhs, const AllocationData& rhs)
 {
     lhs.malloc -= rhs.malloc;
+    lhs.managed -= rhs.managed;
     lhs.privateClean -= rhs.privateClean;
     lhs.privateDirty -= rhs.privateDirty;
     lhs.shared -= rhs.shared;

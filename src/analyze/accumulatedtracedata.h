@@ -279,6 +279,7 @@ struct AccumulatedTraceData
     std::vector<Allocation> allocations;
     AllocationData totalCost;
     int64_t totalTime = 0;
+    int64_t managedPeakTime = 0;
     int64_t mallocPeakTime = 0;
     int64_t privateCleanPeakTime = 0;
     int64_t privateDirtyPeakTime = 0;
@@ -303,6 +304,8 @@ struct AccumulatedTraceData
         {
             case AllocationData::DisplayId::malloc:
                 return mallocPeakTime;
+            case AllocationData::DisplayId::managed:
+                return managedPeakTime;
             case AllocationData::DisplayId::privateClean:
                 return privateCleanPeakTime;
             case AllocationData::DisplayId::privateDirty:
