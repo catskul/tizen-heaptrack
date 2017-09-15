@@ -443,23 +443,28 @@ FlameGraph::FlameGraph(QWidget* parent, Qt::WindowFlags flags)
     m_costSource->setItemData(1, i18n("Show a flame graph over the leaked heap memory of your application. "
                                       "Memory is considered to be leaked when it never got deallocated. "),
                               Qt::ToolTipRole);
-    if(AllocationData::display == AllocationData::DisplayId::malloc)
+    if(AllocationData::display == AllocationData::DisplayId::malloc
+       || AllocationData::display == AllocationData::DisplayId::managed)
     {
         m_costSource->addItem(i18n("Allocations"), QVariant::fromValue(Allocations));
         m_costSource->setItemData(2, i18n("Show a flame graph over the number of allocations triggered by "
                                           "functions in your code."),
-                                  Qt::ToolTipRole);
-        m_costSource->addItem(i18n("Temporary Allocations"), QVariant::fromValue(Temporary));
-        m_costSource->setItemData(3, i18n("Show a flame graph over the number of temporary allocations "
-                                          "triggered by functions in your code. "
-                                          "Allocations are marked as temporary when they are immediately "
-                                          "followed by their deallocation."),
                                   Qt::ToolTipRole);
         m_costSource->addItem(i18n("Allocated"), QVariant::fromValue(Allocated));
         m_costSource->setItemData(4, i18n("Show a flame graph over the total memory allocated by functions in "
                                           "your code. "
                                           "This aggregates all memory allocations and ignores deallocations."),
                                   Qt::ToolTipRole);
+
+        if(AllocationData::display == AllocationData::DisplayId::malloc)
+        {
+            m_costSource->addItem(i18n("Temporary Allocations"), QVariant::fromValue(Temporary));
+            m_costSource->setItemData(3, i18n("Show a flame graph over the number of temporary allocations "
+                                              "triggered by functions in your code. "
+                                              "Allocations are marked as temporary when they are immediately "
+                                              "followed by their deallocation."),
+                                      Qt::ToolTipRole);
+        }
     }
     connect(m_costSource, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this,
             &FlameGraph::showData);

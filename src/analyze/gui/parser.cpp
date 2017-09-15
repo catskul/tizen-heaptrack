@@ -612,8 +612,11 @@ void Parser::parse(const QString& path, const QString& diffBase)
         const auto mergedAllocations = mergeAllocations(*data, true);
         emit bottomUpDataAvailable(mergedAllocations);
 
-        const auto mergedAllocationsFilterOutLeaves = mergeAllocations(*data, false);
-        emit bottomUpFilterOutLeavesDataAvailable(mergedAllocationsFilterOutLeaves);
+        if (!AccumulatedTraceData::isHideUnmanagedStackParts) {
+            emit bottomUpFilterOutLeavesDataAvailable(mergeAllocations(*data, false));
+        } else {
+            emit bottomUpFilterOutLeavesDataAvailable(mergedAllocations);
+        }
 
         // also calculate the size histogram
         emit progressMessageAvailable(i18n("building size histogram..."));

@@ -53,11 +53,11 @@ public:
 
     enum Columns
     {
-        AllocationsColumn,
-        TemporaryColumn,
         PeakColumn,
         LeakedColumn,
+        AllocationsColumn,
         AllocatedColumn,
+        TemporaryColumn,
         FunctionColumn,
         FileColumn,
         LineColumn,

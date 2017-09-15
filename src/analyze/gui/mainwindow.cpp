@@ -34,6 +34,7 @@
 #include <QMenu>
 #include <QStatusBar>
 
+#include "../accumulatedtracedata.h"
 #include "callercalleemodel.h"
 #include "costdelegate.h"
 #include "parser.h"
@@ -133,6 +134,15 @@ void setupTreeModel(TreeModel* model, QTreeView* view, CostDelegate* costDelegat
     view->setItemDelegateForColumn(TreeModel::LeakedColumn, costDelegate);
     view->setItemDelegateForColumn(TreeModel::AllocationsColumn, costDelegate);
     view->setItemDelegateForColumn(TreeModel::TemporaryColumn, costDelegate);
+    if(AllocationData::display != AllocationData::DisplayId::malloc)
+    {
+        view->hideColumn(TreeModel::TemporaryColumn);
+
+        if(AllocationData::display != AllocationData::DisplayId::managed)
+        {
+            view->hideColumn(TreeModel::AllocationsColumn);
+        }
+    }
     view->hideColumn(TreeModel::FunctionColumn);
     view->hideColumn(TreeModel::FileColumn);
     view->hideColumn(TreeModel::LineColumn);
@@ -198,11 +208,9 @@ MainWindow::MainWindow(QWidget* parent)
     m_ui->loadingProgress->setMinimum(0);
     m_ui->loadingProgress->setMaximum(0);
 
-    auto bottomUpModel = new TreeModel(this);
     auto bottomUpModelFilterOutLeaves = new TreeModel(this);
     auto topDownModel = new TreeModel(this);
     auto callerCalleeModel = new CallerCalleeModel(this);
-    connect(this, &MainWindow::clearData, bottomUpModel, &TreeModel::clearData);
     connect(this, &MainWindow::clearData, bottomUpModelFilterOutLeaves, &TreeModel::clearData);
     connect(this, &MainWindow::clearData, topDownModel, &TreeModel::clearData);
     connect(this, &MainWindow::clearData, callerCalleeModel, &CallerCalleeModel::clearData);
@@ -213,7 +221,6 @@ MainWindow::MainWindow(QWidget* parent)
     m_ui->tabWidget->setTabEnabled(m_ui->tabWidget->indexOf(m_ui->flameGraphTab), false);
 
     connect(m_parser, &Parser::bottomUpDataAvailable, this, [=](const TreeData& data) {
-        bottomUpModel->resetData(data);
         if (!m_diffMode) {
             m_ui->flameGraphTab->setBottomUpData(data);
         }
@@ -223,7 +230,10 @@ MainWindow::MainWindow(QWidget* parent)
         m_ui->pages->setCurrentWidget(m_ui->resultsPage);
         m_ui->tabWidget->setTabEnabled(m_ui->tabWidget->indexOf(m_ui->bottomUpTab), true);
     });
-    connect(m_parser, &Parser::bottomUpFilterOutLeavesDataAvailable, this, [=](const TreeData& data) {
+    connect(m_parser,
+            (AccumulatedTraceData::isHideUnmanagedStackParts ?
+             &Parser::bottomUpDataAvailable : &Parser::bottomUpFilterOutLeavesDataAvailable),
+            this, [=](const TreeData& data) {
         bottomUpModelFilterOutLeaves->resetData(data);
     });
     connect(m_parser, &Parser::callerCalleeDataAvailable, this, [=](const CallerCalleeRows& data) {
@@ -239,7 +249,6 @@ MainWindow::MainWindow(QWidget* parent)
         m_ui->tabWidget->setTabEnabled(m_ui->tabWidget->indexOf(m_ui->flameGraphTab), !m_diffMode);
     });
     connect(m_parser, &Parser::summaryAvailable, this, [=](const SummaryData& data) {
-        bottomUpModel->setSummary(data);
         bottomUpModelFilterOutLeaves->setSummary(data);
         topDownModel->setSummary(data);
         callerCalleeModel->setSummary(data);
@@ -266,7 +275,8 @@ MainWindow::MainWindow(QWidget* parent)
                    << "</dl></qt>";
         }
 
-        if(AllocationData::display == AllocationData::DisplayId::malloc)
+        if(AllocationData::display == AllocationData::DisplayId::malloc
+           || AllocationData::display == AllocationData::DisplayId::managed)
         {
             QTextStream stream(&textCenter);
             stream << "<qt><dl>" << i18n("<dt><b>calls to allocation functions</b>:</dt><dd>%1 "
@@ -325,14 +335,20 @@ MainWindow::MainWindow(QWidget* parent)
     addChartTab(m_ui->tabWidget, i18n("Consumed"), ChartModel::Consumed, m_parser, &Parser::consumedChartDataAvailable,
                 this);
 
-    if(AllocationData::display == AllocationData::DisplayId::malloc)
+    if(AllocationData::display == AllocationData::DisplayId::malloc
+       || AllocationData::display == AllocationData::DisplayId::managed)
     {
         addChartTab(m_ui->tabWidget, i18n("Allocations"), ChartModel::Allocations, m_parser,
                     &Parser::allocationsChartDataAvailable, this);
-        addChartTab(m_ui->tabWidget, i18n("Temporary Allocations"), ChartModel::Temporary, m_parser,
-                    &Parser::temporaryChartDataAvailable, this);
+
         addChartTab(m_ui->tabWidget, i18n("Allocated"), ChartModel::Allocated, m_parser, &Parser::allocatedChartDataAvailable,
                     this);
+
+        if (AllocationData::display == AllocationData::DisplayId::malloc)
+        {
+            addChartTab(m_ui->tabWidget, i18n("Temporary Allocations"), ChartModel::Temporary, m_parser,
+                        &Parser::temporaryChartDataAvailable, this);
+        }
 
         auto sizesTab = new HistogramWidget(this);
         m_ui->tabWidget->addTab(sizesTab, i18n("Sizes"));
@@ -399,14 +415,23 @@ MainWindow::MainWindow(QWidget* parent)
     setupTopView(bottomUpModelFilterOutLeaves, m_ui->topLeaked, TopProxy::Leaked);
     m_ui->topLeaked->setItemDelegate(costDelegate);
 
-    if(AllocationData::display == AllocationData::DisplayId::malloc)
+    if(AllocationData::display == AllocationData::DisplayId::malloc
+       || AllocationData::display == AllocationData::DisplayId::managed)
     {
         setupTopView(bottomUpModelFilterOutLeaves, m_ui->topAllocations, TopProxy::Allocations);
         m_ui->topAllocations->setItemDelegate(costDelegate);
-        setupTopView(bottomUpModelFilterOutLeaves, m_ui->topTemporary, TopProxy::Temporary);
-        m_ui->topTemporary->setItemDelegate(costDelegate);
         setupTopView(bottomUpModelFilterOutLeaves, m_ui->topAllocated, TopProxy::Allocated);
         m_ui->topAllocated->setItemDelegate(costDelegate);
+
+        if (AllocationData::display == AllocationData::DisplayId::malloc)
+        {
+            setupTopView(bottomUpModelFilterOutLeaves, m_ui->topTemporary, TopProxy::Temporary);
+            m_ui->topTemporary->setItemDelegate(costDelegate);
+        }
+        else
+        {
+            m_ui->widget_8->hide();
+        }
     }
     else
     {
