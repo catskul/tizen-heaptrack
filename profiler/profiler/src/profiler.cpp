@@ -147,16 +147,36 @@ void PopShadowStack()
 static HRESULT GetClassNameFromTypeDefAndMetadata(mdTypeDef mdClass, IMetaDataImport * pIMetaDataImport, LPWSTR wszClass) {
   wchar_t wszTypeDef[MAX_NAME_LENGTH + 1];
   DWORD cchTypeDef = sizeof(wszTypeDef) / sizeof(wszTypeDef[0]);
+  HRESULT hr;
+
+  mdTypeDef enclosingClass;
+
+  wszClass[0] = L'\0';
+
+  if (pIMetaDataImport->GetNestedClassProps(mdClass, &enclosingClass) == S_OK) {
+    hr = GetClassNameFromTypeDefAndMetadata(enclosingClass, pIMetaDataImport, wszClass);
+    if (hr != S_OK)
+      return hr;
+  }
 
   if (mdClass == 0x02000000)
       mdClass = 0x02000001;
 
-  HRESULT hr = pIMetaDataImport->GetTypeDefProps (mdClass, wszTypeDef, cchTypeDef,
+  hr = pIMetaDataImport->GetTypeDefProps (mdClass, wszTypeDef, cchTypeDef,
                                           &cchTypeDef, 0, 0);
   if (hr != S_OK)
     return hr;
 
-  StringCchCopyW (wszClass, cchTypeDef, wszTypeDef);
+  size_t nameOffset = wcslen(wszClass);
+  nameOffset = (nameOffset == 0) ? -1 : nameOffset;
+
+  if (nameOffset + cchTypeDef + 1 > MAX_NAME_LENGTH)
+    return S_FALSE;
+
+  if (nameOffset > 0)
+    wszClass[nameOffset] = L'.';
+
+  StringCchCopyW (wszClass + nameOffset + 1, cchTypeDef, wszTypeDef);
 
   return S_OK;
 }
@@ -221,7 +241,7 @@ static HRESULT GetClassNameFromClassId(ICorProfilerInfo *info, ClassID classId, 
         return hr;
 
       size_t namelen = wcslen(wszClass);
-      if (namelen >= MAX_NAME_LENGTH - 2 * cRank)
+      if (namelen > MAX_NAME_LENGTH - 2 * cRank)
         return S_FALSE;
       
       for (int i = 0; i < cRank; ++i, namelen += 2)
@@ -240,7 +260,7 @@ static HRESULT GetClassNameFromClassId(ICorProfilerInfo *info, ClassID classId, 
   hr = info->GetModuleMetaData(moduleId, CorOpenFlags::ofRead, IID_IMetaDataImport, 
                                                               (LPUNKNOWN *)&pIMetaDataImport);
   if (hr != S_OK)
-    return hr; 
+    return hr;
 
   hr = GetClassNameFromTypeDefAndMetadata(mdClass, pIMetaDataImport, wszClass);
 
