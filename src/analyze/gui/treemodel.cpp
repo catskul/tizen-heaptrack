@@ -165,7 +165,7 @@ QVariant TreeModel::data(const QModelIndex& index, int role) const
             if (role == SortRole || role == MaxCostRole) {
                 return static_cast<qint64>(abs(row->cost.allocated));
             }
-            return m_format.formatByteSize(row->cost.allocated, 1, KFormat::MetricBinaryDialect);
+            return m_format.formatByteSize(row->cost.allocated, 1, KFormat::JEDECBinaryDialect);
         case AllocationsColumn:
             if (role == SortRole || role == MaxCostRole) {
                 return static_cast<qint64>(abs(row->cost.allocations));
@@ -180,7 +180,7 @@ QVariant TreeModel::data(const QModelIndex& index, int role) const
             if (role == SortRole || role == MaxCostRole) {
                 return static_cast<qint64>(abs(row->cost.peak));
             } else {
-                return m_format.formatByteSize(row->cost.peak, 1, KFormat::MetricBinaryDialect);
+                return m_format.formatByteSize(row->cost.peak, 1, KFormat::JEDECBinaryDialect);
             }
         case PeakInstancesColumn:
             if (role == SortRole || role == MaxCostRole) {
@@ -191,7 +191,7 @@ QVariant TreeModel::data(const QModelIndex& index, int role) const
             if (role == SortRole || role == MaxCostRole) {
                 return static_cast<qint64>(abs(row->cost.leaked));
             } else {
-                return m_format.formatByteSize(row->cost.leaked, 1, KFormat::MetricBinaryDialect);
+                return m_format.formatByteSize(row->cost.leaked, 1, KFormat::JEDECBinaryDialect);
             }
         case FunctionColumn:
             return row->location->function;
@@ -237,11 +237,11 @@ QVariant TreeModel::data(const QModelIndex& index, int role) const
         const auto temporaryFractionTotal =
             QString::number(double(row->cost.temporary) * 100. / m_maxCost.cost.temporary, 'g', 3);
         stream << i18n("allocated: %1 (%2% of total)\n",
-                       format.formatByteSize(row->cost.allocated, 1, KFormat::MetricBinaryDialect), allocatedFraction);
+                       format.formatByteSize(row->cost.allocated, 1, KFormat::JEDECBinaryDialect), allocatedFraction);
         stream << i18n("peak contribution: %1 (%2% of total)\n",
-                       format.formatByteSize(row->cost.peak, 1, KFormat::MetricBinaryDialect), peakFraction);
+                       format.formatByteSize(row->cost.peak, 1, KFormat::JEDECBinaryDialect), peakFraction);
         stream << i18n("leaked: %1 (%2% of total)\n",
-                       format.formatByteSize(row->cost.leaked, 1, KFormat::MetricBinaryDialect), leakedFraction);
+                       format.formatByteSize(row->cost.leaked, 1, KFormat::JEDECBinaryDialect), leakedFraction);
         stream << i18n("allocations: %1 (%2% of total)\n", row->cost.allocations, allocationsFraction);
         stream << i18n("temporary: %1 (%2% of allocations, %3% of total)\n", row->cost.temporary, temporaryFraction,
                        temporaryFractionTotal);

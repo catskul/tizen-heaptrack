@@ -68,7 +68,7 @@ ostream& operator<<(ostream& out, const formatBytes data)
         // handle negative values
         return out << '-' << formatBytes(-data.m_bytes);
     }
-    if (data.m_bytes < 1000) {
+    if (data.m_bytes < 1024) {
         // no fancy formatting for plain byte values, esp. no .00 factions
         return out << data.m_bytes << 'B';
     }
@@ -77,8 +77,8 @@ ostream& operator<<(ostream& out, const formatBytes data)
     auto unit = units.begin();
     size_t i = 0;
     double bytes = data.m_bytes;
-    while (i < units.size() - 1 && bytes > 1000.) {
-        bytes /= 1000.;
+    while (i < units.size() - 1 && bytes > 1024.) {
+        bytes /= 1024.;
         ++i;
         ++unit;
     }

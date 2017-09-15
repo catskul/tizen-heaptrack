@@ -228,7 +228,7 @@ QString FrameGraphicsItem::description() const
             i18nc("%1: peak consumption in bytes, %2: relative number, %3: "
                   "function label",
                   "%1 (%2%) contribution to peak consumption in %3 and below.",
-                  format.formatByteSize(m_cost, 1, KFormat::MetricBinaryDialect), fraction, function);
+                  format.formatByteSize(m_cost, 1, KFormat::JEDECBinaryDialect), fraction, function);
         break;
     case PeakInstances:
         tooltip =
@@ -239,12 +239,12 @@ QString FrameGraphicsItem::description() const
         break;
     case Leaked:
         tooltip = i18nc("%1: leaked bytes, %2: relative number, %3: function label", "%1 (%2%) leaked in %3 and below.",
-                        format.formatByteSize(m_cost, 1, KFormat::MetricBinaryDialect), fraction, function);
+                        format.formatByteSize(m_cost, 1, KFormat::JEDECBinaryDialect), fraction, function);
         break;
     case Allocated:
         tooltip = i18nc("%1: allocated bytes, %2: relative number, %3: function label",
                         "%1 (%2%) allocated in %3 and below.",
-                        format.formatByteSize(m_cost, 1, KFormat::MetricBinaryDialect), fraction, function);
+                        format.formatByteSize(m_cost, 1, KFormat::JEDECBinaryDialect), fraction, function);
         break;
     }
 
@@ -385,16 +385,16 @@ FrameGraphicsItem* parseData(const QVector<RowData>& topDownData, CostType type,
         label = i18n("%1 temporary allocations in total", totalCost);
         break;
     case Peak:
-        label = i18n("%1 contribution to peak consumption", format.formatByteSize(totalCost, 1, KFormat::MetricBinaryDialect));
+        label = i18n("%1 contribution to peak consumption", format.formatByteSize(totalCost, 1, KFormat::JEDECBinaryDialect));
         break;
     case PeakInstances:
         label = i18n("%1 contribution to peak number of instances", totalCost);
         break;
     case Leaked:
-        label = i18n("%1 leaked in total", format.formatByteSize(totalCost, 1, KFormat::MetricBinaryDialect));
+        label = i18n("%1 leaked in total", format.formatByteSize(totalCost, 1, KFormat::JEDECBinaryDialect));
         break;
     case Allocated:
-        label = i18n("%1 allocated in total", format.formatByteSize(totalCost, 1, KFormat::MetricBinaryDialect));
+        label = i18n("%1 allocated in total", format.formatByteSize(totalCost, 1, KFormat::JEDECBinaryDialect));
         break;
     }
     auto rootItem = new FrameGraphicsItem(totalCost, type, label);
@@ -776,8 +776,8 @@ void FlameGraph::setSearchValue(const QString& value)
         case Leaked:
         case Allocated:
             label = i18n("%1 (%2% of total of %3) matched by search.",
-                         format.formatByteSize(match.directCost, 1, KFormat::MetricBinaryDialect), costFraction,
-                         format.formatByteSize(m_rootItem->cost(), 1, KFormat::MetricBinaryDialect));
+                         format.formatByteSize(match.directCost, 1, KFormat::JEDECBinaryDialect), costFraction,
+                         format.formatByteSize(m_rootItem->cost(), 1, KFormat::JEDECBinaryDialect));
             break;
         }
         m_searchResultsLabel->setText(label);

@@ -183,7 +183,7 @@ QVariant CallerCalleeModel::data(const QModelIndex& index, int role) const
             if (role == SortRole || role == MaxCostRole) {
                 return static_cast<qint64>(row.selfCost.allocated);
             } else {
-                return m_format.formatByteSize(row.selfCost.allocated, 1, KFormat::MetricBinaryDialect);
+                return m_format.formatByteSize(row.selfCost.allocated, 1, KFormat::JEDECBinaryDialect);
             }
         case SelfAllocationsColumn:
             return static_cast<qint64>(row.selfCost.allocations);
@@ -193,7 +193,7 @@ QVariant CallerCalleeModel::data(const QModelIndex& index, int role) const
             if (role == SortRole || role == MaxCostRole) {
                 return static_cast<qint64>(row.selfCost.peak);
             } else {
-                return m_format.formatByteSize(row.selfCost.peak, 1, KFormat::MetricBinaryDialect);
+                return m_format.formatByteSize(row.selfCost.peak, 1, KFormat::JEDECBinaryDialect);
             }
         case SelfPeakInstancesColumn:
             return static_cast<qint64>(row.selfCost.peak_instances);
@@ -201,13 +201,13 @@ QVariant CallerCalleeModel::data(const QModelIndex& index, int role) const
             if (role == SortRole || role == MaxCostRole) {
                 return static_cast<qint64>(row.selfCost.leaked);
             } else {
-                return m_format.formatByteSize(row.selfCost.leaked, 1, KFormat::MetricBinaryDialect);
+                return m_format.formatByteSize(row.selfCost.leaked, 1, KFormat::JEDECBinaryDialect);
             }
         case InclusiveAllocatedColumn:
             if (role == SortRole || role == MaxCostRole) {
                 return static_cast<qint64>(row.inclusiveCost.allocated);
             } else {
-                return m_format.formatByteSize(row.inclusiveCost.allocated, 1, KFormat::MetricBinaryDialect);
+                return m_format.formatByteSize(row.inclusiveCost.allocated, 1, KFormat::JEDECBinaryDialect);
             }
         case InclusiveAllocationsColumn:
             return static_cast<qint64>(row.inclusiveCost.allocations);
@@ -217,7 +217,7 @@ QVariant CallerCalleeModel::data(const QModelIndex& index, int role) const
             if (role == SortRole || role == MaxCostRole) {
                 return static_cast<qint64>(row.inclusiveCost.peak);
             } else {
-                return m_format.formatByteSize(row.inclusiveCost.peak, 1, KFormat::MetricBinaryDialect);
+                return m_format.formatByteSize(row.inclusiveCost.peak, 1, KFormat::JEDECBinaryDialect);
             }
         case InclusivePeakInstancesColumn:
             return static_cast<qint64>(row.inclusiveCost.peak_instances);
@@ -225,7 +225,7 @@ QVariant CallerCalleeModel::data(const QModelIndex& index, int role) const
             if (role == SortRole || role == MaxCostRole) {
                 return static_cast<qint64>(row.inclusiveCost.leaked);
             } else {
-                return m_format.formatByteSize(row.inclusiveCost.leaked, 1, KFormat::MetricBinaryDialect);
+                return m_format.formatByteSize(row.inclusiveCost.leaked, 1, KFormat::JEDECBinaryDialect);
             }
         case FunctionColumn:
             return row.location->function;
@@ -260,23 +260,23 @@ QVariant CallerCalleeModel::data(const QModelIndex& index, int role) const
         stream << '\n';
         stream << i18n("inclusive: allocated %1 over %2 calls (%3 temporary, i.e. "
                        "%4%), peak at %5, leaked %6",
-                       m_format.formatByteSize(row.inclusiveCost.allocated, 1, KFormat::MetricBinaryDialect),
+                       m_format.formatByteSize(row.inclusiveCost.allocated, 1, KFormat::JEDECBinaryDialect),
                        row.inclusiveCost.allocations,
                        row.inclusiveCost.temporary, round(float(row.inclusiveCost.temporary) * 100.f * 100.f
                                                           / std::max(int64_t(1), row.inclusiveCost.allocations))
                            / 100.f,
-                       m_format.formatByteSize(row.inclusiveCost.peak, 1, KFormat::MetricBinaryDialect),
-                       m_format.formatByteSize(row.inclusiveCost.leaked, 1, KFormat::MetricBinaryDialect));
+                       m_format.formatByteSize(row.inclusiveCost.peak, 1, KFormat::JEDECBinaryDialect),
+                       m_format.formatByteSize(row.inclusiveCost.leaked, 1, KFormat::JEDECBinaryDialect));
         stream << '\n';
         stream << i18n(
             "self: allocated %1 over %2 calls (%3 temporary, i.e. %4%), "
             "peak at %5, leaked %6",
-            m_format.formatByteSize(row.selfCost.allocated, 1, KFormat::MetricBinaryDialect),
+            m_format.formatByteSize(row.selfCost.allocated, 1, KFormat::JEDECBinaryDialect),
             row.selfCost.allocations, row.selfCost.temporary,
             round(float(row.selfCost.temporary) * 100.f * 100.f / std::max(int64_t(1), row.selfCost.allocations))
                 / 100.f,
-            m_format.formatByteSize(row.selfCost.peak, 1, KFormat::MetricBinaryDialect),
-            m_format.formatByteSize(row.selfCost.leaked, 1, KFormat::MetricBinaryDialect));
+            m_format.formatByteSize(row.selfCost.peak, 1, KFormat::JEDECBinaryDialect),
+            m_format.formatByteSize(row.selfCost.leaked, 1, KFormat::JEDECBinaryDialect));
         stream << '\n';
         stream << "</pre></qt>";
         return tooltip;
