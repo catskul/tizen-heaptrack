@@ -7,8 +7,8 @@ usage()
 	echo "RootFS - (optional) path to target's rootfs directory. For native builds, leave empty"
 }
 
-coreclr_devel_rpm=$1
-rootfs=$2
+coreclr_devel_rpm=$(readlink -f $1)
+rootfs=$(readlink -f $2)
 
 if [ ! -f $coreclr_devel_rpm ]; then
 	usage
