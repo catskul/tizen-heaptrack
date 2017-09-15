@@ -26,8 +26,11 @@
 
 #include <algorithm>
 #include <vector>
+#include <unordered_set>
 
 #include "trace.h"
+
+static std::unordered_set<Trace::ip_t> knownNames;
 
 struct TraceEdge
 {
@@ -75,8 +78,13 @@ public:
                                  [](const TraceEdge& l, const Trace::ip_t ip) { return l.instructionPointer < ip; });
             if (it == parent->children.end() || it->instructionPointer != ip) {
                 index = m_index++;
+                if (trace.is_managed(i) && knownNames.find(ip) == knownNames.end()) {
+                    std::string managed_name = trace.getManagedName(i);
+                    fprintf(out, "n %" PRIxPTR " %s\n", reinterpret_cast<uintptr_t>(ip), managed_name.c_str());
+                    knownNames.insert(ip);
+                }
                 it = parent->children.insert(it, {ip, index, {}});
-                fprintf(out, "t %" PRIxPTR " %x\n", reinterpret_cast<uintptr_t>(ip), parent->index);
+                fprintf(out, "t %" PRIxPTR " %x %x\n", reinterpret_cast<uintptr_t>(ip), parent->index, trace.is_managed(i) ? 1 : 0);
             }
             index = it->index;
             parent = &(*it);

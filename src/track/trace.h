@@ -19,12 +19,19 @@
 #ifndef TRACE_H
 #define TRACE_H
 
+#include <cassert>
 #include <cstring>
 
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
 
 #include <execinfo.h>
+#include <string>
+#include <unordered_map>
+#include "../profiler/src/stackentry.h"
+
+// CoreCLR profiler will fill this up with the current managed stack.
+__thread StackEntry * g_shadowStack = nullptr;
 
 /**
  * @brief A libunwind based backtrace.
@@ -53,22 +60,35 @@ struct Trace
         return m_data[m_skip + i];
     }
 
+    std::string getManagedName(int i) const
+    {
+        return m_managed_names[m_skip + i];
+    }
+
     int size() const
     {
-        return m_size;
+        return m_size - m_skip;
+    }
+
+    bool is_managed(int i) const 
+    {
+        assert(i < size());
+        return (i >= m_size - m_skip - m_managed_size);
     }
 
     __attribute__((noinline))
     bool fill(int skip)
     {
-        int size = backtrace(m_data, MAX_SIZE);
+        int size = backtrace(m_data + m_managed_size, MAX_SIZE);
         // filter bogus frames at the end, which sometimes get returned by libunwind
         // cf.: https://bugs.kde.org/show_bug.cgi?id=379082
         while (size > 0 && !m_data[size - 1]) {
             --size;
         }
-        m_size = size > skip ? size - skip : 0;
+        m_size = size;
         m_skip = skip;
+        m_managed_size = managed_backtrace(m_size, MAX_SIZE);
+        m_size += m_managed_size;
         return m_size > 0;
     }
 
@@ -82,7 +102,32 @@ struct Trace
 private:
     int m_size = 0;
     int m_skip = 0;
-    ip_t m_data[MAX_SIZE];
+    int m_managed_size = 0;
+    ip_t m_data[MAX_SIZE * 2];
+    std::string m_managed_names[MAX_SIZE * 2];
+
+    int managed_backtrace(int start_index, int max_size) {
+        StackEntry *stackIter = g_shadowStack;
+        int i = start_index;
+
+        if (stackIter != nullptr && max_size > 0) {
+            m_data[i] = (void*) 0xffffffff;
+            m_managed_names[i] = "[Unmanaged->Managed]";
+            ++i;
+            --max_size;
+            while (stackIter != nullptr && max_size > 0) {
+                ip_t key = reinterpret_cast<ip_t>(stackIter->funcId);
+                m_managed_names[i] = stackIter->className;
+                m_managed_names[i].append("::");
+                m_managed_names[i].append(stackIter->methodName);
+                --max_size;
+                m_data[i] = key;
+                ++i;
+                stackIter = stackIter->next;
+            }
+        }
+        return i - start_index;
+    }
 };
 
 #endif // TRACE_H
