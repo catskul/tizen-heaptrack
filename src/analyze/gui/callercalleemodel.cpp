@@ -48,8 +48,8 @@ QVariant CallerCalleeModel::headerData(int section, Qt::Orientation orientation,
     }
     if (role == Qt::InitialSortOrderRole) {
         if (section == SelfAllocatedColumn || section == SelfAllocationsColumn || section == SelfPeakColumn
-            || section == SelfLeakedColumn || section == SelfTemporaryColumn || section == InclusiveAllocatedColumn
-            || section == InclusiveAllocationsColumn || section == InclusivePeakColumn
+            || section == SelfPeakInstancesColumn || section == SelfLeakedColumn || section == SelfTemporaryColumn || section == InclusiveAllocatedColumn
+            || section == InclusivePeakInstancesColumn || section == InclusiveAllocationsColumn || section == InclusivePeakColumn
             || section == InclusiveLeakedColumn || section == InclusiveTemporaryColumn) {
             return Qt::DescendingOrder;
         }
@@ -70,6 +70,8 @@ QVariant CallerCalleeModel::headerData(int section, Qt::Orientation orientation,
             return i18n("Temporary (Self)");
         case SelfPeakColumn:
             return i18n("Peak (Self)");
+        case SelfPeakInstancesColumn:
+            return i18n("Peak instances (Self.)");
         case SelfLeakedColumn:
             return i18n("Leaked (Self)");
         case SelfAllocatedColumn:
@@ -80,6 +82,8 @@ QVariant CallerCalleeModel::headerData(int section, Qt::Orientation orientation,
             return i18n("Temporary (Incl.)");
         case InclusivePeakColumn:
             return i18n("Peak (Incl.)");
+        case InclusivePeakInstancesColumn:
+            return i18n("Peak instances (Incl.)");
         case InclusiveLeakedColumn:
             return i18n("Leaked (Incl.)");
         case InclusiveAllocatedColumn:
@@ -116,6 +120,11 @@ QVariant CallerCalleeModel::headerData(int section, Qt::Orientation orientation,
                         "allocations originating directly at "
                         "this location. "
                         "This takes deallocations into account.</qt>");
+        case SelfPeakInstancesColumn:
+            return i18n("<qt>The maximum number of instances in created"
+                        "from allocations originating at this "
+                        "location or from functions called from here. "
+                        "This takes deallocations into account.</qt>");
         case SelfLeakedColumn:
             return i18n("<qt>The bytes allocated directly at this location that have "
                         "not been deallocated.</qt>");
@@ -132,6 +141,11 @@ QVariant CallerCalleeModel::headerData(int section, Qt::Orientation orientation,
                         "a free without any other allocations in-between.</qt>");
         case InclusivePeakColumn:
             return i18n("<qt>The inclusive maximum heap memory in bytes consumed "
+                        "from allocations originating at this "
+                        "location or from functions called from here. "
+                        "This takes deallocations into account.</qt>");
+        case InclusivePeakInstancesColumn:
+            return i18n("<qt>The inclusive maximum number of instances in created"
                         "from allocations originating at this "
                         "location or from functions called from here. "
                         "This takes deallocations into account.</qt>");
@@ -181,6 +195,8 @@ QVariant CallerCalleeModel::data(const QModelIndex& index, int role) const
             } else {
                 return m_format.formatByteSize(row.selfCost.peak, 1, KFormat::MetricBinaryDialect);
             }
+        case SelfPeakInstancesColumn:
+            return static_cast<qint64>(row.selfCost.peak_instances);
         case SelfLeakedColumn:
             if (role == SortRole || role == MaxCostRole) {
                 return static_cast<qint64>(row.selfCost.leaked);
@@ -203,6 +219,8 @@ QVariant CallerCalleeModel::data(const QModelIndex& index, int role) const
             } else {
                 return m_format.formatByteSize(row.inclusiveCost.peak, 1, KFormat::MetricBinaryDialect);
             }
+        case InclusivePeakInstancesColumn:
+            return static_cast<qint64>(row.inclusiveCost.peak_instances);
         case InclusiveLeakedColumn:
             if (role == SortRole || role == MaxCostRole) {
                 return static_cast<qint64>(row.inclusiveCost.leaked);

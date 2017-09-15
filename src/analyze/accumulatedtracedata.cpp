@@ -553,11 +553,13 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             totalCost.malloc.leaked += info.size;
             if (totalCost.malloc.leaked > totalCost.malloc.peak) {
                 totalCost.malloc.peak = totalCost.malloc.leaked;
+                totalCost.malloc.peak_instances = totalCost.malloc.allocations - totalCost.malloc.deallocations;
                 mallocPeakTime = timeStamp;
 
                 if (pass == SecondPass && totalCost.malloc.peak == lastMallocPeakCost && mallocPeakTime == lastMallocPeakTime) {
                     for (auto& allocation : allocations) {
                         allocation.malloc.peak = allocation.malloc.leaked;
+                        allocation.malloc.peak_instances = allocation.malloc.allocations - allocation.malloc.deallocations;
                     }
                 }
             }
@@ -596,6 +598,7 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             assert(!info.isManaged);
 
             totalCost.malloc.leaked -= info.size;
+            ++totalCost.malloc.deallocations;
             if (temporary) {
                 ++totalCost.malloc.temporary;
             }
@@ -603,6 +606,7 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             if (pass != FirstPass) {
                 auto& allocation = findAllocation(info.traceIndex);
                 allocation.malloc.leaked -= info.size;
+                ++allocation.malloc.deallocations;
                 if (temporary) {
                     ++allocation.malloc.temporary;
                 }
@@ -644,11 +648,13 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             totalCost.managed.leaked += info.size;
             if (totalCost.managed.leaked > totalCost.managed.peak) {
                 totalCost.managed.peak = totalCost.managed.leaked;
+                totalCost.managed.peak_instances = totalCost.managed.allocations - totalCost.managed.deallocations;
                 managedPeakTime = timeStamp;
 
                 if (pass == SecondPass && totalCost.managed.peak == lastManagedPeakCost && managedPeakTime == lastManagedPeakTime) {
                     for (auto& allocation : allocations) {
                         allocation.managed.peak = allocation.managed.leaked;
+                        allocation.managed.peak_instances = allocation.managed.allocations - allocation.managed.deallocations;
                     }
                 }
             }
@@ -669,10 +675,12 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             assert(info.isManaged);
 
             totalCost.managed.leaked -= info.size;
+            ++totalCost.managed.deallocations;
 
             if (pass != FirstPass) {
                 auto& allocation = findAllocation(info.traceIndex);
                 allocation.managed.leaked -= info.size;
+                ++allocation.managed.deallocations;
             }
         } else if (reader.mode() == 'a') {
             if (pass != FirstPass) {

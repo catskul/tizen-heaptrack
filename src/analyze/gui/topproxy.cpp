@@ -26,6 +26,8 @@ TreeModel::Columns toSource(TopProxy::Type type)
     switch (type) {
     case TopProxy::Peak:
         return TreeModel::PeakColumn;
+    case TopProxy::PeakInstances:
+        return TreeModel::PeakInstancesColumn;
     case TopProxy::Leaked:
         return TreeModel::LeakedColumn;
     case TopProxy::Allocations:

@@ -44,6 +44,7 @@ signals:
     void topDownDataAvailable(const TreeData& data);
     void callerCalleeDataAvailable(const CallerCalleeRows& data);
     void consumedChartDataAvailable(const ChartData& data);
+    void instancesChartDataAvailable(const ChartData& data);
     void allocationsChartDataAvailable(const ChartData& data);
     void allocatedChartDataAvailable(const ChartData& data);
     void temporaryChartDataAvailable(const ChartData& data);

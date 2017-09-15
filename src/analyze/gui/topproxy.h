@@ -30,6 +30,7 @@ public:
     enum Type
     {
         Peak,
+        PeakInstances,
         Leaked,
         Allocations,
         Allocated,

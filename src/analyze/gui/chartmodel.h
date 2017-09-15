@@ -55,6 +55,7 @@ public:
     enum Type
     {
         Consumed,
+        Instances,
         Allocations,
         Allocated,
         Temporary,

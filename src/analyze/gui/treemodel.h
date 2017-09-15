@@ -54,6 +54,7 @@ public:
     enum Columns
     {
         PeakColumn,
+        PeakInstancesColumn,
         LeakedColumn,
         AllocationsColumn,
         AllocatedColumn,

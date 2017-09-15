@@ -130,6 +130,7 @@ void setupTreeModel(TreeModel* model, QTreeView* view, CostDelegate* costDelegat
 
     view->setModel(proxy);
     view->setItemDelegateForColumn(TreeModel::PeakColumn, costDelegate);
+    view->setItemDelegateForColumn(TreeModel::PeakInstancesColumn, costDelegate);
     view->setItemDelegateForColumn(TreeModel::AllocatedColumn, costDelegate);
     view->setItemDelegateForColumn(TreeModel::LeakedColumn, costDelegate);
     view->setItemDelegateForColumn(TreeModel::AllocationsColumn, costDelegate);
@@ -141,6 +142,7 @@ void setupTreeModel(TreeModel* model, QTreeView* view, CostDelegate* costDelegat
         if(AllocationData::display != AllocationData::DisplayId::managed)
         {
             view->hideColumn(TreeModel::AllocationsColumn);
+            view->hideColumn(TreeModel::PeakInstancesColumn);
         }
     }
     view->hideColumn(TreeModel::FunctionColumn);
@@ -164,11 +166,13 @@ void setupCallerCalle(CallerCalleeModel* model, QTreeView* view, CostDelegate* c
     view->setModel(callerCalleeProxy);
     view->sortByColumn(CallerCalleeModel::InclusivePeakColumn);
     view->setItemDelegateForColumn(CallerCalleeModel::SelfPeakColumn, costDelegate);
+    view->setItemDelegateForColumn(CallerCalleeModel::SelfPeakInstancesColumn, costDelegate);
     view->setItemDelegateForColumn(CallerCalleeModel::SelfAllocatedColumn, costDelegate);
     view->setItemDelegateForColumn(CallerCalleeModel::SelfLeakedColumn, costDelegate);
     view->setItemDelegateForColumn(CallerCalleeModel::SelfAllocationsColumn, costDelegate);
     view->setItemDelegateForColumn(CallerCalleeModel::SelfTemporaryColumn, costDelegate);
     view->setItemDelegateForColumn(CallerCalleeModel::InclusivePeakColumn, costDelegate);
+    view->setItemDelegateForColumn(CallerCalleeModel::InclusivePeakInstancesColumn, costDelegate);
     view->setItemDelegateForColumn(CallerCalleeModel::InclusiveAllocatedColumn, costDelegate);
     view->setItemDelegateForColumn(CallerCalleeModel::InclusiveLeakedColumn, costDelegate);
     view->setItemDelegateForColumn(CallerCalleeModel::InclusiveAllocationsColumn, costDelegate);
@@ -177,6 +181,19 @@ void setupCallerCalle(CallerCalleeModel* model, QTreeView* view, CostDelegate* c
     view->hideColumn(CallerCalleeModel::FileColumn);
     view->hideColumn(CallerCalleeModel::LineColumn);
     view->hideColumn(CallerCalleeModel::ModuleColumn);
+    if(AllocationData::display != AllocationData::DisplayId::malloc)
+    {
+        view->hideColumn(CallerCalleeModel::SelfTemporaryColumn);
+        view->hideColumn(CallerCalleeModel::InclusiveTemporaryColumn);
+
+        if(AllocationData::display != AllocationData::DisplayId::managed)
+        {
+            view->hideColumn(CallerCalleeModel::SelfAllocationsColumn);
+            view->hideColumn(CallerCalleeModel::InclusiveAllocationsColumn);
+            view->hideColumn(CallerCalleeModel::SelfPeakInstancesColumn);
+            view->hideColumn(CallerCalleeModel::InclusivePeakInstancesColumn);
+        }
+    }
     QObject::connect(filterFunction, &QLineEdit::textChanged, callerCalleeProxy, &TreeProxy::setFunctionFilter);
     QObject::connect(filterFile, &QLineEdit::textChanged, callerCalleeProxy, &TreeProxy::setFileFilter);
     QObject::connect(filterModule, &QLineEdit::textChanged, callerCalleeProxy, &TreeProxy::setModuleFilter);
@@ -338,6 +355,9 @@ MainWindow::MainWindow(QWidget* parent)
     if(AllocationData::display == AllocationData::DisplayId::malloc
        || AllocationData::display == AllocationData::DisplayId::managed)
     {
+        addChartTab(m_ui->tabWidget, i18n("Instances"), ChartModel::Instances, m_parser,
+                    &Parser::instancesChartDataAvailable, this);
+
         addChartTab(m_ui->tabWidget, i18n("Allocations"), ChartModel::Allocations, m_parser,
                     &Parser::allocationsChartDataAvailable, this);
 
@@ -412,6 +432,8 @@ MainWindow::MainWindow(QWidget* parent)
 
     setupTopView(bottomUpModelFilterOutLeaves, m_ui->topPeak, TopProxy::Peak);
     m_ui->topPeak->setItemDelegate(costDelegate);
+    setupTopView(bottomUpModelFilterOutLeaves, m_ui->topPeakInstances, TopProxy::PeakInstances);
+    m_ui->topPeakInstances->setItemDelegate(costDelegate);
     setupTopView(bottomUpModelFilterOutLeaves, m_ui->topLeaked, TopProxy::Leaked);
     m_ui->topLeaked->setItemDelegate(costDelegate);
 
@@ -438,6 +460,7 @@ MainWindow::MainWindow(QWidget* parent)
         m_ui->widget_7->hide();
         m_ui->widget_8->hide();
         m_ui->widget_9->hide();
+        m_ui->widget_12->hide();
     }
 
     setWindowTitle(i18n("Heaptrack"));

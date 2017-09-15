@@ -46,6 +46,10 @@ struct AllocationData
     {
         // number of allocations
         int64_t allocations = 0;
+        // number of deallocations
+        int64_t deallocations = 0;
+        // largest number of instances
+        int64_t peak_instances = 0;
         // number of temporary allocations
         int64_t temporary = 0;
         // bytes allocated in total
@@ -58,6 +62,7 @@ struct AllocationData
         bool isEmpty() const
         {
             return (allocations == 0
+                    && deallocations == 0
                     && temporary == 0
                     && allocated == 0
                     && leaked == 0
@@ -91,6 +96,7 @@ struct AllocationData
 inline bool operator==(const AllocationData::Stats &lhs, const AllocationData::Stats &rhs)
 {
     return (lhs.allocations == rhs.allocations
+            && lhs.deallocations == rhs.deallocations
             && lhs.temporary == rhs.temporary
             && lhs.allocated == rhs.allocated
             && lhs.leaked == rhs.leaked
@@ -105,6 +111,8 @@ inline bool operator!=(const AllocationData::Stats &lhs, const AllocationData::S
 inline AllocationData::Stats& operator+=(AllocationData::Stats& lhs, const AllocationData::Stats& rhs)
 {
     lhs.allocations += rhs.allocations;
+    lhs.deallocations += rhs.deallocations;
+    lhs.peak_instances += rhs.peak_instances;
     lhs.temporary += rhs.temporary;
     lhs.allocated += rhs.allocated;
     lhs.leaked += rhs.leaked;
@@ -116,6 +124,8 @@ inline AllocationData::Stats& operator+=(AllocationData::Stats& lhs, const Alloc
 inline AllocationData::Stats& operator-=(AllocationData::Stats& lhs, const AllocationData::Stats& rhs)
 {
     lhs.allocations -= rhs.allocations;
+    lhs.deallocations -= rhs.deallocations;
+    lhs.peak_instances -= rhs.peak_instances;
     lhs.temporary -= rhs.temporary;
     lhs.allocated -= rhs.allocated;
     lhs.leaked -= rhs.leaked;
