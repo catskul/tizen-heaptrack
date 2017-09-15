@@ -1,6 +1,8 @@
 #ifndef STACKENTRY_H
 #define STACKENTRY_H
 
+#include <string.h>
+
 static constexpr size_t MAX_NAME_LENGTH = 512;
 
 class StackEntry {
