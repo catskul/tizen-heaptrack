@@ -24,6 +24,8 @@
  * @brief Efficiently combine and store the data of multiple Traces.
  */
 
+#include <string.h>
+
 #include <algorithm>
 #include <vector>
 #include <unordered_set>

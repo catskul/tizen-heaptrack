@@ -116,14 +116,14 @@ private:
             ++i;
             --max_size;
             while (stackIter != nullptr && max_size > 0) {
-                ip_t key = reinterpret_cast<ip_t>(stackIter->funcId);
-                m_managed_names[i] = stackIter->className;
+                ip_t key = reinterpret_cast<ip_t>(stackIter->m_funcId);
+                m_managed_names[i] = stackIter->m_className;
                 m_managed_names[i].append("::");
-                m_managed_names[i].append(stackIter->methodName);
+                m_managed_names[i].append(stackIter->m_methodName);
                 --max_size;
                 m_data[i] = key;
                 ++i;
-                stackIter = stackIter->next;
+                stackIter = stackIter->m_next;
             }
         }
         return i - start_index;

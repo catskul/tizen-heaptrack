@@ -78,15 +78,25 @@ ULONG STDMETHODCALLTYPE Profiler::Release(void) {
 }
 
 static IUnknown *g_pICorProfilerInfoUnknown;
-static constexpr size_t MAX_NAME_LENGTH = 256;
 static WCHAR *wszModuleNames = nullptr;
 
 extern __thread StackEntry* g_shadowStack;
+__thread StackEntry* g_freeStackEntryListItems = nullptr;
+
+StackEntry::StackEntry(unsigned int funcId,
+                       char* className,
+                       char* methodName,
+                       StackEntry *next)
+  : m_funcId(funcId), m_next(next)
+{
+    strncpy(m_className, className, sizeof (m_className));
+    strncpy(m_methodName, methodName, sizeof (m_methodName));
+}
 
 static HRESULT GetMethodNameFromTokenAndMetaData (mdToken dwToken, IMetaDataImport * pIMetaDataImport,
                                                LPWSTR wszClass, LPWSTR wszMethod)
 {
-  wchar_t _wszMethod[512];
+  wchar_t _wszMethod[MAX_NAME_LENGTH + 1];
   DWORD cchMethod = sizeof (_wszMethod)/sizeof (_wszMethod[0]);
   mdTypeDef mdClass;
   COR_SIGNATURE const * method_signature;
@@ -104,8 +114,8 @@ static HRESULT GetMethodNameFromTokenAndMetaData (mdToken dwToken, IMetaDataImpo
 
   StringCchCopyW (wszMethod, cchMethod, _wszMethod);
 
-  wchar_t wszTypeDef[512];
-  DWORD cchTypeDef = sizeof(wszTypeDef)/sizeof(wszTypeDef[0]);
+  wchar_t wszTypeDef[MAX_NAME_LENGTH + 1];
+  DWORD cchTypeDef = sizeof(wszTypeDef) / sizeof(wszTypeDef[0]);
 
   if (mdClass == 0x02000000)
       mdClass = 0x02000001;
@@ -141,7 +151,7 @@ static HRESULT GetMethodNameFromFunctionId (ICorProfilerInfo *info, FunctionID f
 void encodeWChar(WCHAR *orig, char *encoded) {
   int i = 0;
   while (orig[i] != 0) {
-    if (orig[i] > 128) {
+    if (orig[i] >= 128) {
       encoded[i] = '?';
     } else {
       encoded[i] = (char)orig[i];
@@ -160,28 +170,34 @@ void OnFunctionEnter(FunctionIDOrClientID functionID,
     assert(false && "Failed to retreive ICorProfilerInfo3");
   }
 
-  WCHAR *szClassName = new WCHAR[MAX_NAME_LENGTH];
-  WCHAR *szMethodName = new WCHAR[MAX_NAME_LENGTH];
-  hr = GetMethodNameFromFunctionId(info, functionID.functionID, szClassName,
-                             szMethodName);
+  WCHAR szClassName[MAX_NAME_LENGTH + 1];
+  WCHAR szMethodName[MAX_NAME_LENGTH + 1];
+
+  hr = GetMethodNameFromFunctionId(info, functionID.functionID, szClassName, szMethodName);
 
 
   if (hr != S_OK) {
-    delete[] szMethodName;
-    delete[] szClassName;
     return;
   }
 
-  char *className = new char[MAX_NAME_LENGTH];
-  char *methodName = new char[MAX_NAME_LENGTH];
+  char className[MAX_NAME_LENGTH + 1];
+  char methodName[MAX_NAME_LENGTH + 1];
 
   encodeWChar(szClassName, className);
   encodeWChar(szMethodName, methodName);
 
-  delete[] szClassName;
-  delete[] szMethodName;
+  StackEntry *se;
 
-  StackEntry *se = new StackEntry(functionID.functionID, className, methodName, g_shadowStack);
+  if (g_freeStackEntryListItems != nullptr) {
+    se = g_freeStackEntryListItems;
+
+    g_freeStackEntryListItems = g_freeStackEntryListItems->m_next;
+
+    new (se) StackEntry(functionID.functionID, className, methodName, g_shadowStack);
+  } else {
+    se = new StackEntry(functionID.functionID, className, methodName, g_shadowStack);
+  }
+
   g_shadowStack = se;
 }
 
@@ -189,8 +205,11 @@ void OnFunctionLeave(FunctionIDOrClientID functionID,
                      COR_PRF_ELT_INFO eltInfo) {
   if (g_shadowStack != nullptr) {
     StackEntry *top = g_shadowStack;
-    g_shadowStack = g_shadowStack->next;
-    delete top;
+
+    g_shadowStack = g_shadowStack->m_next;
+
+    top->m_next = g_freeStackEntryListItems;
+    g_freeStackEntryListItems = top;
   }
 }
 
