@@ -236,6 +236,9 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             InstructionPointer ip;
             reader >> ip.instructionPointer;
             reader >> ip.moduleIndex;
+
+            reader >> ip.moduleOffset;
+
             auto readFrame = [&reader](Frame* frame) {
                 return (reader >> frame->functionIndex)
                     && (reader >> frame->fileIndex)
@@ -707,8 +710,9 @@ POTENTIALLY_UNUSED void printTrace(const AccumulatedTraceData& data, TraceIndex 
         const auto trace = data.findTrace(index);
         const auto& ip = data.findIp(trace.ipIndex);
         cerr << index << " (" << trace.ipIndex << ", " << trace.parentIndex << ")" << '\t'
-             << data.stringify(ip.frame.functionIndex) << " in " << data.stringify(ip.moduleIndex) << " at "
-             << data.stringify(ip.frame.fileIndex) << ':' << ip.frame.line << '\n';
+             << data.stringify(ip.frame.functionIndex)
+             << " in " << data.stringify(ip.moduleIndex) << "+0x" << std::hex << ip.moduleOffset
+             << " at " << data.stringify(ip.frame.fileIndex) << ':' << ip.frame.line << '\n';
         for (const auto& inlined : ip.inlined) {
             cerr << '\t' << data.stringify(inlined.functionIndex) << " at "
                  << data.stringify(inlined.fileIndex) << ':' << inlined.line << '\n';
@@ -910,6 +914,13 @@ TraceNode AccumulatedTraceData::findTrace(const TraceIndex traceIndex) const
     } else {
         return traces[traceIndex.index - 1];
     }
+}
+
+TraceNode AccumulatedTraceData::findPrevTrace(const TraceIndex traceIndex) const
+{
+    TraceNode trace = findTrace(traceIndex);
+
+    return findTrace(trace.parentIndex);
 }
 
 bool AccumulatedTraceData::isStopIndex(const StringIndex index) const

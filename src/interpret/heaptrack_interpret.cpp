@@ -66,7 +66,7 @@ string demangle(const char* function)
 
 struct Frame
 {
-    Frame(string function = {}, string file = {}, int line = 0)
+    Frame(string function = {}, string file = {}, int line = 0, size_t moduleOffset = 0)
         : function(function)
         , file(file)
         , line(line)
@@ -80,6 +80,7 @@ struct Frame
     string function;
     string file;
     int line;
+    size_t moduleOffset;
 };
 
 struct AddressInformation
@@ -90,14 +91,16 @@ struct AddressInformation
 
 struct ResolvedFrame
 {
-    ResolvedFrame(size_t functionIndex = 0, size_t fileIndex = 0, int line = 0)
+    ResolvedFrame(size_t functionIndex = 0, size_t fileIndex = 0, int line = 0, size_t moduleOffset = 0)
         : functionIndex(functionIndex)
         , fileIndex(fileIndex)
         , line(line)
+        , moduleOffset(moduleOffset)
     {}
     size_t functionIndex;
     size_t fileIndex;
     int line;
+    size_t moduleOffset;
 };
 
 struct ResolvedIP
@@ -152,6 +155,8 @@ struct Module
                 },
                 &info);
         }
+
+        info.frame.moduleOffset = (address - addressStart);
 
         return info;
     }
@@ -221,7 +226,7 @@ struct AccumulatedTraceData
 
         auto resolveFrame = [this](const Frame& frame)
         {
-            return ResolvedFrame{intern(frame.function), intern(frame.file), frame.line};
+            return ResolvedFrame{intern(frame.function), intern(frame.file), frame.line, frame.moduleOffset};
         };
 
         ResolvedIP data;
@@ -290,7 +295,7 @@ struct AccumulatedTraceData
         m_encounteredIps.insert(it, make_pair(instructionPointer, ipId));
 
         const auto ip = resolve(instructionPointer);
-        fprintf(stdout, "i %zx %zx", instructionPointer, ip.moduleIndex);
+        fprintf(stdout, "i %zx %zx %zx", instructionPointer, ip.moduleIndex, ip.frame.moduleOffset);
         if (ip.frame.functionIndex || ip.frame.fileIndex) {
             fprintf(stdout, " %zx", ip.frame.functionIndex);
             if (ip.frame.fileIndex) {

@@ -314,7 +314,9 @@ void toGraphicsItems(const QVector<RowData>& data, FrameGraphicsItem* parent, in
                      const double costThreshold, bool collapseRecursion)
 {
     foreach (const auto& row, data) {
-        if (collapseRecursion && row.location->function != unresolvedFunctionName()
+        if (collapseRecursion
+            && row.location->function != unresolvedFunctionName()
+            && row.location->function != untrackedFunctionName()
             && row.location->function == parent->function())
         {
             continue;

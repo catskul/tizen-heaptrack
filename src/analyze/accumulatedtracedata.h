@@ -56,6 +56,7 @@ struct InstructionPointer
 {
     uint64_t instructionPointer = 0;
     ModuleIndex moduleIndex;
+    uint64_t moduleOffset = 0;
     Frame frame;
     std::vector<Frame> inlined;
 
@@ -315,6 +316,7 @@ struct AccumulatedTraceData
     InstructionPointer findIp(const IpIndex ipIndex) const;
 
     TraceNode findTrace(const TraceIndex traceIndex) const;
+    TraceNode findPrevTrace(const TraceIndex traceIndex) const;
 
     bool isStopIndex(const StringIndex index) const;
 

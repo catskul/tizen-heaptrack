@@ -58,6 +58,7 @@ struct Trace
         return m_size;
     }
 
+    __attribute__((noinline))
     bool fill(int skip)
     {
         int size = backtrace(m_data, MAX_SIZE);
