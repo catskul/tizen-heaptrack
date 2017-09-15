@@ -221,10 +221,11 @@ static HRESULT GetClassNameFromClassId(ICorProfilerInfo *info, ClassID classId, 
         return hr;
 
       size_t namelen = wcslen(wszClass);
-      if (namelen >= MAX_NAME_LENGTH - 2)
+      if (namelen >= MAX_NAME_LENGTH - 2 * cRank)
         return S_FALSE;
-
-      StringCchCopyW(wszClass + namelen, 3, W("[]"));
+      
+      for (int i = 0; i < cRank; ++i, namelen += 2)
+        StringCchCopyW(wszClass + namelen, 3, W("[]"));
 
       return S_OK;
     }
