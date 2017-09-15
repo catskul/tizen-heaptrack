@@ -302,10 +302,10 @@ struct AccumulatedTraceData
         if (isManaged) {
             size_t functionIndex = intern(m_managedNames[instructionPointer]);
 
-            fprintf(stdout, "i %llx 0 0 %zx\n", (1ull << 63) | instructionPointer, functionIndex);
+            fprintf(stdout, "i %llx 1 0 0 %zx\n", (1ull << 63) | instructionPointer, functionIndex);
         } else {
             const auto ip = resolve(instructionPointer);
-            fprintf(stdout, "i %zx %zx %zx", instructionPointer, ip.moduleIndex, ip.frame.moduleOffset);
+            fprintf(stdout, "i %zx 0 %zx %zx", instructionPointer, ip.moduleIndex, ip.frame.moduleOffset);
             if (ip.frame.functionIndex || ip.frame.fileIndex) {
                 fprintf(stdout, " %zx", ip.frame.functionIndex);
                 if (ip.frame.fileIndex) {

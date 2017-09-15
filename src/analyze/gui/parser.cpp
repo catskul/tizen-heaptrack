@@ -364,12 +364,14 @@ TreeData mergeAllocations(const ParserData& data, bool bIncludeLeaves)
 
             const auto& trace = data.findTrace(traceIndex);
             const auto& ip = data.findIp(trace.ipIndex);
-            auto location = data.stringCache.location(trace.ipIndex, ip, isUntrackedLocation);
-            rows = addRow(rows, location, *stats);
-            for (const auto& inlined : ip.inlined) {
-                auto inlinedLocation = data.stringCache.frameLocation(inlined, ip, isUntrackedLocation);
-                rows = addRow(rows, inlinedLocation, *stats);
-            }
+            if (!(AccumulatedTraceData::isHideUnmanagedStackParts && !ip.isManaged)) {
+                auto location = data.stringCache.location(trace.ipIndex, ip, isUntrackedLocation);
+                rows = addRow(rows, location, *stats);
+                for (const auto& inlined : ip.inlined) {
+                    auto inlinedLocation = data.stringCache.frameLocation(inlined, ip, isUntrackedLocation);
+                    rows = addRow(rows, inlinedLocation, *stats);
+                }
+	    }
             if (data.isStopIndex(ip.frame.functionIndex)) {
                 break;
             }

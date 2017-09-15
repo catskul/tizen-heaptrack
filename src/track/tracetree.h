@@ -93,7 +93,7 @@ public:
 	    void* managedStack[Trace::MAX_SIZE];
 	    int managedStackSize = 0;
 
-            managedStack[managedStackSize++] = (void *) (uintptr_t) -1;
+            handleIP((void *) (uintptr_t) -1, false);
 
             while (stackIter != nullptr && managedStackSize < Trace::MAX_SIZE) {
                 void *ip = reinterpret_cast<void *>(stackIter->m_funcId);
