@@ -97,6 +97,52 @@ StackEntry::StackEntry(unsigned int funcId,
     strncpy(m_methodName, methodName, sizeof (m_methodName));
 }
 
+void PushShadowStack(FunctionID functionId, char* className, char* methodName)
+{
+  StackEntry *se;
+
+  if (g_freeStackEntryListItems != nullptr) {
+    se = g_freeStackEntryListItems;
+
+    g_freeStackEntryListItems = g_freeStackEntryListItems->m_next;
+
+    new (se) StackEntry(functionId, className, methodName, g_shadowStack);
+  } else {
+    se = new StackEntry(functionId, className, methodName, g_shadowStack);
+  }
+
+  g_shadowStack = se;
+}
+
+void PopShadowStack()
+{
+  if (g_shadowStack != nullptr) {
+    StackEntry *top = g_shadowStack;
+
+    g_shadowStack = g_shadowStack->m_next;
+
+    top->m_next = g_freeStackEntryListItems;
+    g_freeStackEntryListItems = top;
+  }
+}
+
+static HRESULT GetClassNameFromTypeDefAndMetadata(mdTypeDef mdClass, IMetaDataImport * pIMetaDataImport, LPWSTR wszClass) {
+  wchar_t wszTypeDef[MAX_NAME_LENGTH + 1];
+  DWORD cchTypeDef = sizeof(wszTypeDef) / sizeof(wszTypeDef[0]);
+
+  if (mdClass == 0x02000000)
+      mdClass = 0x02000001;
+
+  HRESULT hr = pIMetaDataImport->GetTypeDefProps (mdClass, wszTypeDef, cchTypeDef,
+                                          &cchTypeDef, 0, 0);
+  if (hr != S_OK)
+    return hr;
+
+  StringCchCopyW (wszClass, cchTypeDef, wszTypeDef);
+
+  return S_OK;
+}
+
 static HRESULT GetMethodNameFromTokenAndMetaData (mdToken dwToken, IMetaDataImport * pIMetaDataImport,
                                                LPWSTR wszClass, LPWSTR wszMethod)
 {
@@ -118,19 +164,7 @@ static HRESULT GetMethodNameFromTokenAndMetaData (mdToken dwToken, IMetaDataImpo
 
   StringCchCopyW (wszMethod, cchMethod, _wszMethod);
 
-  wchar_t wszTypeDef[MAX_NAME_LENGTH + 1];
-  DWORD cchTypeDef = sizeof(wszTypeDef) / sizeof(wszTypeDef[0]);
-
-  if (mdClass == 0x02000000)
-      mdClass = 0x02000001;
-
-  hr = pIMetaDataImport->GetTypeDefProps (mdClass, wszTypeDef, cchTypeDef,
-                                          &cchTypeDef, 0, 0);
-  if (hr != S_OK)
-    return hr;
-
-  StringCchCopyW (wszClass, cchTypeDef, wszTypeDef);
-  return S_OK;
+  return GetClassNameFromTypeDefAndMetadata(mdClass, pIMetaDataImport, wszClass);
 }
 
 static HRESULT GetMethodNameFromFunctionId (ICorProfilerInfo *info, FunctionID functionId, LPWSTR wszClass, LPWSTR wszMethod)
@@ -150,6 +184,29 @@ static HRESULT GetMethodNameFromFunctionId (ICorProfilerInfo *info, FunctionID f
                                                    wszClass, wszMethod);
   pMetaDataImport->Release();
   return hr;
+}
+
+static HRESULT GetClassNameFromClassId(ICorProfilerInfo *info, ClassID classId, LPWSTR wszClass) {
+  ModuleID moduleId;
+  mdTypeDef mdClass;
+
+  HRESULT hr = info->GetClassIDInfo(classId, &moduleId, &mdClass);
+
+  if (hr != S_OK)
+    return hr;
+
+  IMetaDataImport * pIMetaDataImport;
+  hr = info->GetModuleMetaData(moduleId, CorOpenFlags::ofRead, IID_IMetaDataImport, 
+                                                              (LPUNKNOWN *)&pIMetaDataImport);
+  if (hr != S_OK)
+    return hr; 
+
+  hr = GetClassNameFromTypeDefAndMetadata(mdClass, pIMetaDataImport, wszClass);
+  if (hr != S_OK)
+    return hr;
+
+  pIMetaDataImport->Release();
+  return S_OK;
 }
 
 void encodeWChar(WCHAR *orig, char *encoded) {
@@ -190,31 +247,12 @@ void OnFunctionEnter(FunctionIDOrClientID functionID,
   encodeWChar(szClassName, className);
   encodeWChar(szMethodName, methodName);
 
-  StackEntry *se;
-
-  if (g_freeStackEntryListItems != nullptr) {
-    se = g_freeStackEntryListItems;
-
-    g_freeStackEntryListItems = g_freeStackEntryListItems->m_next;
-
-    new (se) StackEntry(functionID.functionID, className, methodName, g_shadowStack);
-  } else {
-    se = new StackEntry(functionID.functionID, className, methodName, g_shadowStack);
-  }
-
-  g_shadowStack = se;
+  PushShadowStack(functionID.functionID, className, methodName);
 }
 
 void OnFunctionLeave(FunctionIDOrClientID functionID,
                      COR_PRF_ELT_INFO eltInfo) {
-  if (g_shadowStack != nullptr) {
-    StackEntry *top = g_shadowStack;
-
-    g_shadowStack = g_shadowStack->m_next;
-
-    top->m_next = g_freeStackEntryListItems;
-    g_freeStackEntryListItems = top;
-  }
+  PopShadowStack();
 }
 
 HRESULT STDMETHODCALLTYPE Profiler::Initialize(IUnknown *pICorProfilerInfoUnk) {
@@ -456,6 +494,16 @@ HRESULT STDMETHODCALLTYPE
     assert(false && "Failed to retreive ICorProfilerInfo");
   }
 
+  WCHAR szClassName[MAX_NAME_LENGTH + 1];
+  hr = GetClassNameFromClassId(info, classId, szClassName);
+
+  if (hr == S_OK)
+  {
+    char className[MAX_NAME_LENGTH + 1];
+    encodeWChar(szClassName, className);
+    PushShadowStack((FunctionID)classId, className, className);
+  }
+
   ULONG objectSize;
 
   HRESULT hr2 = info->GetObjectSize(objectId, &objectSize);
@@ -465,6 +513,9 @@ HRESULT STDMETHODCALLTYPE
   }
 
   heaptrack_objectallocate((void *) objectId, objectSize);
+
+  if (hr == S_OK)
+    PopShadowStack();
 
   return S_OK;
 }
