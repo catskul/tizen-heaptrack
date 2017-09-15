@@ -168,6 +168,9 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
     const auto lastMallocPeakCost = pass != FirstPass ? totalCost.malloc.peak : 0;
     const auto lastMallocPeakTime = pass != FirstPass ? mallocPeakTime : 0;
 
+    const auto lastManagedPeakCost = pass != FirstPass ? totalCost.managed.peak : 0;
+    const auto lastManagedPeakTime = pass != FirstPass ? managedPeakTime : 0;
+
     const auto lastPrivateCleanPeakCost = pass != FirstPass ? totalCost.privateClean.peak : 0;
     const auto lastPrivateCleanPeakTime = pass != FirstPass ? privateCleanPeakTime : 0;
 
@@ -180,6 +183,7 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
     m_maxAllocationTraceIndex.index = 0;
     totalCost = {};
     mallocPeakTime = 0;
+    managedPeakTime = 0;
     privateCleanPeakTime = 0;
     privateDirtyPeakTime = 0;
     sharedPeakTime = 0;
@@ -279,6 +283,12 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             int prot, fd;
             TraceIndex traceIndex;
 
+            if (AllocationData::display == AllocationData::DisplayId::malloc
+                || AllocationData::display == AllocationData::DisplayId::managed) {
+                // we don't need the mmap/munmap details information for malloc/managed statistics
+                continue;
+            }
+
             if (!(reader >> length)
                 || !(reader >> prot)
                 || !(reader >> fd)
@@ -311,6 +321,12 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             }
         } else if (reader.mode() == '/') {
             uint64_t length, ptr;
+
+            if (AllocationData::display == AllocationData::DisplayId::malloc
+                || AllocationData::display == AllocationData::DisplayId::managed) {
+                // we don't need the mmap/munmap details information for malloc/managed statistics
+                continue;
+            }
 
             if (!(reader >> length)
                 || !(reader >> ptr)) {
@@ -446,6 +462,12 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
                 continue;
             }
 
+            if (AllocationData::display == AllocationData::DisplayId::malloc
+                || AllocationData::display == AllocationData::DisplayId::managed) {
+                // we don't need the physical memory consumption details information for malloc/managed statistics
+                continue;
+            }
+
             uint64_t addr, diff, size, privateDirty, privateClean, sharedDirty, sharedClean;
             int prot;
 
@@ -483,6 +505,13 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
         } else if (reader.mode() == '+') {
             AllocationInfo info;
             AllocationIndex allocationIndex;
+
+            if (AllocationData::display != AllocationData::DisplayId::malloc
+                && AllocationData::display != AllocationData::DisplayId::managed) {
+                // we only need the malloc/calloc/realloc/free details information for malloc and managed statistics
+                continue;
+            }
+
             if (fileVersion >= 1) {
                 if (!(reader >> allocationIndex.index)) {
                     cerr << "failed to parse line: " << reader.line() << endl;
@@ -493,6 +522,8 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
                     continue;
                 }
                 info = allocationInfos[allocationIndex.index];
+                assert(!info.isManaged);
+
                 lastAllocationPtr = allocationIndex.index;
             } else { // backwards compatibility
                 uint64_t ptr = 0;
@@ -500,7 +531,7 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
                     cerr << "failed to parse line: " << reader.line() << endl;
                     continue;
                 }
-                if (allocationInfoSet.add(info.size, info.traceIndex, &allocationIndex)) {
+                if (allocationInfoSet.add(info.size, info.traceIndex, &allocationIndex, 0)) {
                     allocationInfos.push_back(info);
                 }
                 pointers.addPointer(ptr, allocationIndex);
@@ -522,17 +553,25 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             totalCost.malloc.leaked += info.size;
             if (totalCost.malloc.leaked > totalCost.malloc.peak) {
                 totalCost.malloc.peak = totalCost.malloc.leaked;
+                totalCost.malloc.peak_instances = totalCost.malloc.allocations - totalCost.malloc.deallocations;
                 mallocPeakTime = timeStamp;
 
                 if (pass == SecondPass && totalCost.malloc.peak == lastMallocPeakCost && mallocPeakTime == lastMallocPeakTime) {
                     for (auto& allocation : allocations) {
                         allocation.malloc.peak = allocation.malloc.leaked;
+                        allocation.malloc.peak_instances = allocation.malloc.allocations - allocation.malloc.deallocations;
                     }
                 }
             }
         } else if (reader.mode() == '-') {
             AllocationIndex allocationInfoIndex;
             bool temporary = false;
+
+            if (AllocationData::display != AllocationData::DisplayId::malloc) {
+                // we don't need the malloc/calloc/realloc/free details information for malloc statistics
+                continue;
+            }
+
             if (fileVersion >= 1) {
                 if (!(reader >> allocationInfoIndex.index)) {
                     cerr << "failed to parse line: " << reader.line() << endl;
@@ -556,7 +595,10 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             lastAllocationPtr = 0;
 
             const auto& info = allocationInfos[allocationInfoIndex.index];
+            assert(!info.isManaged);
+
             totalCost.malloc.leaked -= info.size;
+            ++totalCost.malloc.deallocations;
             if (temporary) {
                 ++totalCost.malloc.temporary;
             }
@@ -564,16 +606,88 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             if (pass != FirstPass) {
                 auto& allocation = findAllocation(info.traceIndex);
                 allocation.malloc.leaked -= info.size;
+                ++allocation.malloc.deallocations;
                 if (temporary) {
                     ++allocation.malloc.temporary;
                 }
+            }
+        } else if (reader.mode() == '^') {
+            AllocationInfo info;
+            AllocationIndex allocationIndex;
+
+            if (AllocationData::display != AllocationData::DisplayId::malloc
+                && AllocationData::display != AllocationData::DisplayId::managed) {
+                // we only need the managed allocation details information for malloc and managed allocation statistics
+                continue;
+            }
+
+            if (!(reader >> allocationIndex.index)) {
+                cerr << "failed to parse line: " << reader.line() << endl;
+                continue;
+            } else if (allocationIndex.index >= allocationInfos.size()) {
+                cerr << "allocation index out of bounds: " << allocationIndex.index
+                    << ", maximum is: " << allocationInfos.size() << endl;
+                continue;
+            }
+            info = allocationInfos[allocationIndex.index];
+
+            assert(info.isManaged);
+
+            if (pass != FirstPass) {
+                auto& allocation = findAllocation(info.traceIndex);
+                allocation.managed.leaked += info.size;
+                allocation.managed.allocated += info.size;
+                ++allocation.managed.allocations;
+
+                handleTotalCostUpdate();
+                handleAllocation(info, allocationIndex);
+            }
+
+            ++totalCost.managed.allocations;
+            totalCost.managed.allocated += info.size;
+            totalCost.managed.leaked += info.size;
+            if (totalCost.managed.leaked > totalCost.managed.peak) {
+                totalCost.managed.peak = totalCost.managed.leaked;
+                totalCost.managed.peak_instances = totalCost.managed.allocations - totalCost.managed.deallocations;
+                managedPeakTime = timeStamp;
+
+                if (pass == SecondPass && totalCost.managed.peak == lastManagedPeakCost && managedPeakTime == lastManagedPeakTime) {
+                    for (auto& allocation : allocations) {
+                        allocation.managed.peak = allocation.managed.leaked;
+                        allocation.managed.peak_instances = allocation.managed.allocations - allocation.managed.deallocations;
+                    }
+                }
+            }
+        } else if (reader.mode() == '~') {
+            AllocationIndex allocationInfoIndex;
+
+            if (AllocationData::display != AllocationData::DisplayId::managed) {
+                // we don't need the managed deallocation details information for non-managed allocation statistics
+                continue;
+            }
+
+            if (!(reader >> allocationInfoIndex.index)) {
+                cerr << "failed to parse line: " << reader.line() << endl;
+                continue;
+            }
+
+            const auto& info = allocationInfos[allocationInfoIndex.index];
+            assert(info.isManaged);
+
+            totalCost.managed.leaked -= info.size;
+            ++totalCost.managed.deallocations;
+
+            if (pass != FirstPass) {
+                auto& allocation = findAllocation(info.traceIndex);
+                allocation.managed.leaked -= info.size;
+                ++allocation.managed.deallocations;
             }
         } else if (reader.mode() == 'a') {
             if (pass != FirstPass) {
                 continue;
             }
             AllocationInfo info;
-            if (!(reader >> info.size) || !(reader >> info.traceIndex)) {
+            if (!(reader >> info.size) || !(reader >> info.traceIndex) || !(reader >> info.isManaged)) {
                 cerr << "failed to parse line: " << reader.line() << endl;
                 continue;
             }

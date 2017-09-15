@@ -71,7 +71,7 @@ QVariant TreeModel::headerData(int section, Qt::Orientation orientation, int rol
     }
     if (role == Qt::InitialSortOrderRole) {
         if (section == AllocatedColumn || section == AllocationsColumn || section == PeakColumn
-            || section == LeakedColumn || section == TemporaryColumn) {
+            || section == PeakInstancesColumn || section == LeakedColumn || section == TemporaryColumn) {
             return Qt::DescendingOrder;
         }
     }
@@ -91,6 +91,8 @@ QVariant TreeModel::headerData(int section, Qt::Orientation orientation, int rol
             return i18n("Temporary");
         case PeakColumn:
             return i18n("Peak");
+        case PeakInstancesColumn:
+            return i18n("Peak instances");
         case LeakedColumn:
             return i18n("Leaked");
         case AllocatedColumn:
@@ -126,6 +128,10 @@ QVariant TreeModel::headerData(int section, Qt::Orientation orientation, int rol
             return i18n("<qt>The contributions from a given location to the maximum heap "
                         "memory consumption in bytes. This takes deallocations "
                         "into account.</qt>");
+        case PeakInstancesColumn:
+            return i18n("<qt>The contributions from a given location to the maximum heap "
+                        "memory consumption in number of instances. This takes deallocations "
+                        "into account (i.e. number of allocations minus number of deallocations).</qt>");
         case LeakedColumn:
             return i18n("<qt>The bytes allocated at this location that have not been "
                         "deallocated.</qt>");
@@ -176,6 +182,11 @@ QVariant TreeModel::data(const QModelIndex& index, int role) const
             } else {
                 return m_format.formatByteSize(row->cost.peak, 1, KFormat::MetricBinaryDialect);
             }
+        case PeakInstancesColumn:
+            if (role == SortRole || role == MaxCostRole) {
+                return static_cast<qint64>(abs(row->cost.peak_instances));
+            }
+            return static_cast<qint64>(row->cost.peak_instances);
         case LeakedColumn:
             if (role == SortRole || role == MaxCostRole) {
                 return static_cast<qint64>(abs(row->cost.leaked));

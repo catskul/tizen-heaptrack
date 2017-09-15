@@ -18,6 +18,10 @@ MIDL_DEFINE_GUID(IID, IID_ICorProfilerCallback2, 0x8A8CC829, 0xCCF2, 0x49fe,
                  0xBB, 0xAE, 0x0F, 0x02, 0x22, 0x28, 0x07, 0x1A);
 MIDL_DEFINE_GUID(IID, IID_ICorProfilerCallback3, 0x4FD2ED52, 0x7731, 0x4b8d,
                  0x94, 0x69, 0x03, 0xD2, 0xCC, 0x30, 0x86, 0xC5);
+MIDL_DEFINE_GUID(IID, IID_ICorProfilerInfo, 0x28B5557D, 0x3F3F, 0x48b4,
+                 0x90, 0xB2, 0x5F, 0x9E, 0xEA, 0x2F, 0x6C, 0x48);
+MIDL_DEFINE_GUID(IID, IID_ICorProfilerInfo2, 0xCC0935CD, 0xA518, 0x487d,
+                 0xB0, 0xBB, 0xA9, 0x32, 0x14, 0xE6, 0x54, 0x78);
 MIDL_DEFINE_GUID(IID, IID_ICorProfilerInfo3, 0xB555ED4F, 0x452A, 0x4E54, 0x8B,
                  0x39, 0xB5, 0x36, 0x0B, 0xAD, 0x32, 0xA0);
 
@@ -221,7 +225,8 @@ HRESULT STDMETHODCALLTYPE Profiler::Initialize(IUnknown *pICorProfilerInfoUnk) {
     info->SetEventMask(
         COR_PRF_MONITOR_ENTERLEAVE | COR_PRF_ENABLE_FUNCTION_ARGS |
         COR_PRF_ENABLE_FUNCTION_RETVAL | COR_PRF_ENABLE_FRAME_INFO |
-        COR_PRF_ENABLE_STACK_SNAPSHOT);
+        COR_PRF_ENABLE_STACK_SNAPSHOT |
+        COR_PRF_ENABLE_OBJECT_ALLOCATED | COR_PRF_MONITOR_OBJECT_ALLOCATED | COR_PRF_MONITOR_GC);
     info->SetEnterLeaveFunctionHooks3WithInfo(OnFunctionEnter, OnFunctionLeave,
                                               NULL);
     info->Release();
@@ -442,15 +447,25 @@ HRESULT STDMETHODCALLTYPE Profiler::RuntimeThreadResumed(ThreadID threadId) {
 }
 
 HRESULT STDMETHODCALLTYPE
-    Profiler::MovedReferences(ULONG cMovedObjectIDRanges,
-                              ObjectID oldObjectIDRangeStart[],
-                              ObjectID newObjectIDRangeStart[],
-                              ULONG cObjectIDRangeLength[]) {
-  return S_OK;
-}
-
-HRESULT STDMETHODCALLTYPE
     Profiler::ObjectAllocated(ObjectID objectId, ClassID classId) {
+
+  ICorProfilerInfo *info;
+  HRESULT hr = g_pICorProfilerInfoUnknown->QueryInterface(IID_ICorProfilerInfo,
+                                                          (void **)&info);
+  if (hr != S_OK) {
+    assert(false && "Failed to retreive ICorProfilerInfo");
+  }
+
+  ULONG objectSize;
+
+  HRESULT hr2 = info->GetObjectSize(objectId, &objectSize);
+
+  if (hr2 != S_OK) {
+    assert (false && "Failed to get object size");
+  }
+
+  heaptrack_objectallocate((void *) objectId, objectSize);
+
   return S_OK;
 }
 
@@ -562,6 +577,40 @@ HRESULT STDMETHODCALLTYPE
     Profiler::GarbageCollectionStarted(int cGenerations,
                                        BOOL generationCollected[],
                                        COR_PRF_GC_REASON reason) {
+    ICorProfilerInfo2 *info;
+    HRESULT hr = g_pICorProfilerInfoUnknown->QueryInterface(IID_ICorProfilerInfo2,
+                                                            (void **)&info);
+    if (hr != S_OK) {
+      assert(false && "failed to retreive icorprofilerinfo2");
+    }
+
+    heaptrack_startgc();
+
+    ULONG numRanges;
+
+    HRESULT hr2 = info->GetGenerationBounds(0, &numRanges, NULL);
+    if (hr2 != S_OK) {
+      assert(false && "Failed to retreive number of ranges for a generation");
+    }
+
+    COR_PRF_GC_GENERATION_RANGE *ranges = new COR_PRF_GC_GENERATION_RANGE[numRanges];
+
+    ULONG numRanges2;
+    hr2 = info->GetGenerationBounds(numRanges, &numRanges2, ranges);
+
+    if (hr2 != S_OK) {
+      assert(false && "Failed to retreive ranges for a generation");
+    }
+
+    assert(numRanges == numRanges2);
+
+    for (ULONG i = 0; i < numRanges; i++) {
+      if (generationCollected[ranges[i].generation])
+        continue;
+
+      heaptrack_gcmarksurvived((void *) ranges[i].rangeStart, (unsigned long) ranges[i].rangeLength, NULL);
+    }
+
   return S_OK;
 }
 
@@ -569,10 +618,32 @@ HRESULT STDMETHODCALLTYPE
     Profiler::SurvivingReferences(ULONG cSurvivingObjectIDRanges,
                                   ObjectID objectIDRangeStart[],
                                   ULONG cObjectIDRangeLength[]) {
+
+    for(ULONG i = 0; i < cSurvivingObjectIDRanges; i++) {
+      heaptrack_gcmarksurvived((void *) objectIDRangeStart[i], (unsigned long) cObjectIDRangeLength[i], NULL);
+    }
+
+  return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE
+    Profiler::MovedReferences(ULONG cMovedObjectIDRanges,
+                              ObjectID oldObjectIDRangeStart[],
+                              ObjectID newObjectIDRangeStart[],
+                              ULONG cObjectIDRangeLength[]) {
+
+    for(ULONG i = 0; i < cMovedObjectIDRanges; i++) {
+      void *rangeMovedTo = (newObjectIDRangeStart[i] != oldObjectIDRangeStart[i]) ? (void *) newObjectIDRangeStart[i] : NULL;
+
+      heaptrack_gcmarksurvived((void *) oldObjectIDRangeStart[i], (unsigned long) cObjectIDRangeLength[i], rangeMovedTo);
+    }
+
   return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE Profiler::GarbageCollectionFinished(void) {
+  heaptrack_finishgc();
+
   return S_OK;
 }
 

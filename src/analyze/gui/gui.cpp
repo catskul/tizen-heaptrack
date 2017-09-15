@@ -57,11 +57,13 @@ int main(int argc, char** argv)
     parser.addPositionalArgument(QStringLiteral("files"), i18n("Files to load"), i18n("[FILE...]"));
 
     QCommandLineOption showMallocOption(QStringLiteral("malloc"), QStringLiteral("Show malloc-allocated memory consumption"));
+    QCommandLineOption showManagedOption(QStringLiteral("managed"), QStringLiteral("Show managed memory consumption"));
     QCommandLineOption showPrivateDirtyOption(QStringLiteral("private_dirty"), QStringLiteral("Show Private_Dirty part of memory consumption"));
     QCommandLineOption showPrivateCleanOption(QStringLiteral("private_clean"), QStringLiteral("Show Private_Clean part of memory consumption"));
     QCommandLineOption showSharedOption(QStringLiteral("shared"), QStringLiteral("Show Shared_Clean + Shared_Dirty part of memory consumption"));
 
     parser.addOption(showMallocOption);
+    parser.addOption(showManagedOption);
     parser.addOption(showPrivateDirtyOption);
     parser.addOption(showPrivateCleanOption);
     parser.addOption(showSharedOption);
@@ -73,22 +75,27 @@ int main(int argc, char** argv)
     aboutData.processCommandLine(&parser);
 
     bool isShowMalloc = parser.isSet(showMallocOption);
+    bool isShowManaged = parser.isSet(showManagedOption);
     bool isShowPrivateDirty = parser.isSet(showPrivateDirtyOption);
     bool isShowPrivateClean = parser.isSet(showPrivateCleanOption);
     bool isShowShared = parser.isSet(showSharedOption);
     bool isHideUnmanagedStackParts = parser.isSet(hideUnmanagedStackPartsOption);
 
     if ((isShowMalloc ? 1 : 0)
+        + (isShowManaged ? 1 : 0)
         + (isShowPrivateDirty ? 1 : 0)
         + (isShowPrivateClean ? 1 : 0)
         + (isShowShared ? 1 : 0) != 1) {
 
-        qFatal("One of --malloc, --private_dirty, --private_clean or --shared options is necessary. Please, use exactly only one of the options for each start of GUI.");
+        qFatal("One of --malloc, --managed, --private_dirty, --private_clean or --shared options is necessary. Please, use exactly only one of the options for each start of GUI.");
 
         return 1;
     } else if (isShowMalloc)
     {
         AllocationData::display = AllocationData::DisplayId::malloc;
+    } else if (isShowManaged)
+    {
+        AllocationData::display = AllocationData::DisplayId::managed;
     } else if (isShowPrivateDirty) {
         AllocationData::display = AllocationData::DisplayId::privateDirty;
     } else if (isShowPrivateClean) {

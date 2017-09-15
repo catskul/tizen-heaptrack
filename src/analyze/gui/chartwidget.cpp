@@ -109,6 +109,9 @@ void ChartWidget::setModel(ChartModel* model, bool minimalMode)
     case ChartModel::Consumed:
         setToolTip(i18n("<qt>Shows the heap memory consumption over time.</qt>"));
         break;
+    case ChartModel::Instances:
+        setToolTip(i18n("<qt>Shows the number of instances allocated from specific functions over time.</qt>"));
+        break;
     case ChartModel::Allocated:
         setToolTip(i18n("<qt>Displays total memory allocated over time. "
                         "This value ignores deallocations and just measures heap "
@@ -154,7 +157,9 @@ void ChartWidget::setModel(ChartModel* model, bool minimalMode)
         bottomAxis->setPosition(CartesianAxis::Bottom);
         totalPlotter->addAxis(bottomAxis);
 
-        CartesianAxis* rightAxis = model->type() == ChartModel::Allocations || model->type() == ChartModel::Temporary
+        CartesianAxis* rightAxis = (model->type() == ChartModel::Allocations
+                                    || model->type() == ChartModel::Instances
+                                    || model->type() == ChartModel::Temporary)
             ? new CartesianAxis(totalPlotter)
             : new SizeAxis(totalPlotter);
         rightAxis->setTextAttributes(axisTextAttributes);

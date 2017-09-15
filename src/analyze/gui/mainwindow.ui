@@ -342,6 +342,45 @@
                    </item>
                   </layout>
                  </widget>
+                 <widget class="QWidget" name="widget_12" native="true">
+                  <layout class="QVBoxLayout" name="verticalLayout_14">
+                   <item>
+                    <widget class="QLabel" name="topPeakInstancesLabel">
+                     <property name="font">
+                      <font>
+                       <weight>75</weight>
+                       <bold>true</bold>
+                      </font>
+                     </property>
+                     <property name="toolTip">
+                      <string>List of functions that allocated the most instances (allocated and not freed up to at a given time).</string>
+                     </property>
+                     <property name="text">
+                      <string>Peak Instances Number Contributions</string>
+                     </property>
+                     <property name="alignment">
+                      <set>Qt::AlignCenter</set>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QTreeView" name="topPeakInstances">
+                     <property name="toolTip">
+                      <string>List of functions that allocated the most instances (allocated and not freed up to at a given time).</string>
+                     </property>
+                     <property name="alternatingRowColors">
+                      <bool>true</bool>
+                     </property>
+                     <property name="rootIsDecorated">
+                      <bool>false</bool>
+                     </property>
+                     <property name="uniformRowHeights">
+                      <bool>true</bool>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </widget>
                  <widget class="QWidget" name="widget_6" native="true">
                   <layout class="QVBoxLayout" name="verticalLayout_9">
                    <item>

@@ -477,7 +477,62 @@ public:
         if (fprintf(s_data->out, "/ %zx %" PRIxPTR "\n", alignedLength, reinterpret_cast<uintptr_t>(ptr)) < 0) {
             writeError();
             return;
+	}
+    }
+
+    void handleObjectAllocation(void *objectId, unsigned long objectSize, const Trace &trace)
+    {
+        if (!s_data || !s_data->out) {
+            return;
         }
+
+        updateModuleCache();
+        const auto index = s_data->traceTree.index(trace, s_data->out);
+
+        if (fprintf(s_data->out,
+                    "^ %x %lx %" PRIxPTR "\n",
+                    index, objectSize, reinterpret_cast<uintptr_t>(objectId)) < 0) {
+            writeError();
+            return;
+	}
+    }
+
+    void handleStartGC()
+    {
+        if (!s_data || !s_data->out) {
+            return;
+        }
+
+        if (fprintf(s_data->out, "G 1\n") < 0) {
+            writeError();
+            return;
+	}
+    }
+
+    void handleGCSurvivedRange(void *rangeStart, unsigned long rangeLength, void *rangeMovedTo)
+    {
+        if (!s_data || !s_data->out) {
+            return;
+        }
+
+        if (fprintf(s_data->out,
+                    "L %lx %" PRIxPTR " %" PRIxPTR "\n",
+                    rangeLength, reinterpret_cast<uintptr_t>(rangeStart), reinterpret_cast<uintptr_t>(rangeMovedTo)) < 0) {
+            writeError();
+            return;
+	}
+    }
+
+    void handleFinishGC()
+    {
+        if (!s_data || !s_data->out) {
+            return;
+        }
+
+        if (fprintf(s_data->out, "G 0\n") < 0) {
+            writeError();
+            return;
+	}
     }
 
 private:
@@ -884,6 +939,49 @@ void heaptrack_munmap(void* ptr, size_t length)
         HeapTrack heaptrack(guard);
         heaptrack.handleMunmap(ptr, length);
     }
+}
+
+void heaptrack_objectallocate(void *objectId, unsigned long objectSize) {
+    assert(!RecursionGuard::isActive);
+    RecursionGuard guard;
+
+    debugLog<VeryVerboseOutput>("handleObjectAllocation: %p %lu", objectId, objectSize);
+
+    Trace trace;
+    trace.fill(2);
+
+    HeapTrack heaptrack(guard);
+    heaptrack.handleObjectAllocation(objectId, objectSize, trace);
+}
+
+void heaptrack_startgc() {
+    assert(!RecursionGuard::isActive);
+    RecursionGuard guard;
+
+    debugLog<VerboseOutput>("handleStartGC");
+
+    HeapTrack heaptrack(guard);
+    heaptrack.handleStartGC();
+}
+
+void heaptrack_gcmarksurvived(void *rangeStart, unsigned long rangeLength, void *rangeMovedTo) {
+    assert(!RecursionGuard::isActive);
+    RecursionGuard guard;
+
+    debugLog<VerboseOutput>("handleGCSurvivedRange: %p %lu -> %p", rangeStart, rangeLength, rangeMovedTo);
+
+    HeapTrack heaptrack(guard);
+    heaptrack.handleGCSurvivedRange(rangeStart, rangeLength, rangeMovedTo);
+}
+
+void heaptrack_finishgc() {
+    assert(!RecursionGuard::isActive);
+    RecursionGuard guard;
+
+    debugLog<VerboseOutput>("handleFinishGC");
+
+    HeapTrack heaptrack(guard);
+    heaptrack.handleFinishGC();
 }
 
 void heaptrack_invalidate_module_cache()

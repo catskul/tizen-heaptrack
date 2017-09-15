@@ -47,6 +47,7 @@ enum CostType
     Allocations,
     Temporary,
     Peak,
+    PeakInstances,
     Leaked,
     Allocated
 };
@@ -229,6 +230,13 @@ QString FrameGraphicsItem::description() const
                   "%1 (%2%) contribution to peak consumption in %3 and below.",
                   format.formatByteSize(m_cost, 1, KFormat::MetricBinaryDialect), fraction, function);
         break;
+    case PeakInstances:
+        tooltip =
+            i18nc("%1: peak number of instances, %2: relative number, %3: "
+                  "function label",
+                  "%1 (%2%) contribution to peak number of instances in %3 and below.",
+                  m_cost, fraction, function);
+        break;
     case Leaked:
         tooltip = i18nc("%1: leaked bytes, %2: relative number, %3: function label", "%1 (%2%) leaked in %3 and below.",
                         format.formatByteSize(m_cost, 1, KFormat::MetricBinaryDialect), fraction, function);
@@ -344,6 +352,8 @@ int64_t AllocationData::Stats::*memberForType(CostType type)
         return &AllocationData::Stats::temporary;
     case Peak:
         return &AllocationData::Stats::peak;
+    case PeakInstances:
+        return &AllocationData::Stats::peak_instances;
     case Leaked:
         return &AllocationData::Stats::leaked;
     case Allocated:
@@ -376,6 +386,9 @@ FrameGraphicsItem* parseData(const QVector<RowData>& topDownData, CostType type,
         break;
     case Peak:
         label = i18n("%1 contribution to peak consumption", format.formatByteSize(totalCost, 1, KFormat::MetricBinaryDialect));
+        break;
+    case PeakInstances:
+        label = i18n("%1 contribution to peak number of instances", totalCost);
         break;
     case Leaked:
         label = i18n("%1 leaked in total", format.formatByteSize(totalCost, 1, KFormat::MetricBinaryDialect));
@@ -443,23 +456,32 @@ FlameGraph::FlameGraph(QWidget* parent, Qt::WindowFlags flags)
     m_costSource->setItemData(1, i18n("Show a flame graph over the leaked heap memory of your application. "
                                       "Memory is considered to be leaked when it never got deallocated. "),
                               Qt::ToolTipRole);
-    if(AllocationData::display == AllocationData::DisplayId::malloc)
+    if(AllocationData::display == AllocationData::DisplayId::malloc
+       || AllocationData::display == AllocationData::DisplayId::managed)
     {
         m_costSource->addItem(i18n("Allocations"), QVariant::fromValue(Allocations));
         m_costSource->setItemData(2, i18n("Show a flame graph over the number of allocations triggered by "
                                           "functions in your code."),
-                                  Qt::ToolTipRole);
-        m_costSource->addItem(i18n("Temporary Allocations"), QVariant::fromValue(Temporary));
-        m_costSource->setItemData(3, i18n("Show a flame graph over the number of temporary allocations "
-                                          "triggered by functions in your code. "
-                                          "Allocations are marked as temporary when they are immediately "
-                                          "followed by their deallocation."),
                                   Qt::ToolTipRole);
         m_costSource->addItem(i18n("Allocated"), QVariant::fromValue(Allocated));
         m_costSource->setItemData(4, i18n("Show a flame graph over the total memory allocated by functions in "
                                           "your code. "
                                           "This aggregates all memory allocations and ignores deallocations."),
                                   Qt::ToolTipRole);
+        m_costSource->addItem(i18n("Peak number of instances"), QVariant::fromValue(PeakInstances));
+        m_costSource->setItemData(0, i18n("Show a flame graph over the contributions to number of instances "
+                                          "allocated from specific functions of your application."),
+                                  Qt::ToolTipRole);
+
+        if(AllocationData::display == AllocationData::DisplayId::malloc)
+        {
+            m_costSource->addItem(i18n("Temporary Allocations"), QVariant::fromValue(Temporary));
+            m_costSource->setItemData(3, i18n("Show a flame graph over the number of temporary allocations "
+                                              "triggered by functions in your code. "
+                                              "Allocations are marked as temporary when they are immediately "
+                                              "followed by their deallocation."),
+                                      Qt::ToolTipRole);
+        }
     }
     connect(m_costSource, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this,
             &FlameGraph::showData);
@@ -746,6 +768,7 @@ void FlameGraph::setSearchValue(const QString& value)
         switch (m_costSource->currentData().value<CostType>()) {
         case Allocations:
         case Temporary:
+        case PeakInstances:
             label = i18n("%1 (%2% of total of %3) allocations matched by search.",
                          match.directCost, costFraction, m_rootItem->cost());
             break;

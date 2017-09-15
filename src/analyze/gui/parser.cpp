@@ -129,6 +129,7 @@ struct ChartMergeData
     IpIndex ip;
     bool isUntrackedLocation;
     qint64 consumed;
+    qint64 instances;
     qint64 allocations;
     qint64 allocated;
     qint64 temporary;
@@ -157,22 +158,26 @@ struct ParserData final : public AccumulatedTraceData
             return;
         }
         consumedChartData.rows.reserve(MAX_CHART_DATAPOINTS);
+        instancesChartData.rows.reserve(MAX_CHART_DATAPOINTS);
         allocatedChartData.rows.reserve(MAX_CHART_DATAPOINTS);
         allocationsChartData.rows.reserve(MAX_CHART_DATAPOINTS);
         temporaryChartData.rows.reserve(MAX_CHART_DATAPOINTS);
         // start off with null data at the origin
         consumedChartData.rows.push_back({});
+        instancesChartData.rows.push_back({});
         allocatedChartData.rows.push_back({});
         allocationsChartData.rows.push_back({});
         temporaryChartData.rows.push_back({});
         // index 0 indicates the total row
         consumedChartData.labels[0] = i18n("total");
+        instancesChartData.labels[0] = i18n("total");
         allocatedChartData.labels[0] = i18n("total");
         allocationsChartData.labels[0] = i18n("total");
         temporaryChartData.labels[0] = i18n("total");
 
         buildCharts = true;
         maxConsumedSinceLastTimeStamp = 0;
+        maxInstancesSinceLastTimeStamp = 0;
         vector<ChartMergeData> merged;
         merged.reserve(instructionPointers.size());
         // merge the allocation cost by instruction pointer
@@ -184,9 +189,10 @@ struct ParserData final : public AccumulatedTraceData
             bool isUntrackedLocation = (!alloc.traceIndex);
             auto it = lower_bound(merged.begin(), merged.end(), ip);
             if (it == merged.end() || it->ip != ip) {
-                it = merged.insert(it, {ip, isUntrackedLocation, 0, 0, 0, 0});
+                it = merged.insert(it, {ip, isUntrackedLocation, 0, 0, 0, 0, 0});
             }
             it->consumed += alloc.getDisplay()->peak; // we want to track the top peaks in the chart
+            it->instances += alloc.getDisplay()->allocations - alloc.getDisplay()->deallocations;
             it->allocated += alloc.getDisplay()->allocated;
             it->allocations += alloc.getDisplay()->allocations;
             it->temporary += alloc.getDisplay()->temporary;
@@ -209,6 +215,7 @@ struct ParserData final : public AccumulatedTraceData
             }
         };
         findTopChartEntries(&ChartMergeData::consumed, &LabelIds::consumed, &consumedChartData);
+        findTopChartEntries(&ChartMergeData::instances, &LabelIds::instances, &instancesChartData);
         findTopChartEntries(&ChartMergeData::allocated, &LabelIds::allocated, &allocatedChartData);
         findTopChartEntries(&ChartMergeData::allocations, &LabelIds::allocations, &allocationsChartData);
         findTopChartEntries(&ChartMergeData::temporary, &LabelIds::temporary, &temporaryChartData);
@@ -220,12 +227,17 @@ struct ParserData final : public AccumulatedTraceData
             return;
         }
         maxConsumedSinceLastTimeStamp = max(maxConsumedSinceLastTimeStamp, totalCost.getDisplay()->leaked);
+        maxInstancesSinceLastTimeStamp = max(maxInstancesSinceLastTimeStamp, totalCost.getDisplay()->allocations - totalCost.getDisplay()->deallocations);
         const int64_t diffBetweenTimeStamps = totalTime / MAX_CHART_DATAPOINTS;
         if (newStamp != totalTime && newStamp - lastTimeStamp < diffBetweenTimeStamps) {
             return;
         }
         const auto nowConsumed = maxConsumedSinceLastTimeStamp;
         maxConsumedSinceLastTimeStamp = 0;
+
+        const auto nowInstances = maxInstancesSinceLastTimeStamp;
+        maxInstancesSinceLastTimeStamp = 0;
+
         lastTimeStamp = newStamp;
 
         // create the rows
@@ -236,6 +248,7 @@ struct ParserData final : public AccumulatedTraceData
             return row;
         };
         auto consumed = createRow(newStamp, nowConsumed);
+        auto instances = createRow(newStamp, nowInstances);
         auto allocated = createRow(newStamp, totalCost.getDisplay()->allocated);
         auto allocs = createRow(newStamp, totalCost.getDisplay()->allocations);
         auto temporary = createRow(newStamp, totalCost.getDisplay()->temporary);
@@ -257,12 +270,14 @@ struct ParserData final : public AccumulatedTraceData
             }
             const auto& labelIds = *it;
             addDataToRow(alloc.getDisplay()->leaked, labelIds.consumed, &consumed);
+            addDataToRow(alloc.getDisplay()->allocations - alloc.getDisplay()->deallocations, labelIds.instances, &instances);
             addDataToRow(alloc.getDisplay()->allocated, labelIds.allocated, &allocated);
             addDataToRow(alloc.getDisplay()->allocations, labelIds.allocations, &allocs);
             addDataToRow(alloc.getDisplay()->temporary, labelIds.temporary, &temporary);
         }
         // add the rows for this time stamp
         consumedChartData.rows << consumed;
+        instancesChartData.rows << instances;
         allocatedChartData.rows << allocated;
         allocationsChartData.rows << allocs;
         temporaryChartData.rows << temporary;
@@ -271,6 +286,7 @@ struct ParserData final : public AccumulatedTraceData
     void handleTotalCostUpdate()
     {
         maxConsumedSinceLastTimeStamp = max(maxConsumedSinceLastTimeStamp, totalCost.getDisplay()->leaked);
+        maxInstancesSinceLastTimeStamp = max(maxInstancesSinceLastTimeStamp, totalCost.getDisplay()->allocations - totalCost.getDisplay()->deallocations);
     }
 
     void handleAllocation(const AllocationInfo& info, const AllocationIndex index)
@@ -301,6 +317,7 @@ struct ParserData final : public AccumulatedTraceData
     vector<CountedAllocationInfo> allocationInfoCounter;
 
     ChartData consumedChartData;
+    ChartData instancesChartData;
     ChartData allocationsChartData;
     ChartData allocatedChartData;
     ChartData temporaryChartData;
@@ -311,12 +328,14 @@ struct ParserData final : public AccumulatedTraceData
     struct LabelIds
     {
         int consumed = -1;
+        int instances = -1;
         int allocations = -1;
         int allocated = -1;
         int temporary = -1;
     };
     QHash<IpIndex, LabelIds> labelIds;
     int64_t maxConsumedSinceLastTimeStamp = 0;
+    int64_t maxInstancesSinceLastTimeStamp = 0;
     int64_t lastTimeStamp = 0;
 
     StringCache stringCache;
@@ -612,8 +631,11 @@ void Parser::parse(const QString& path, const QString& diffBase)
         const auto mergedAllocations = mergeAllocations(*data, true);
         emit bottomUpDataAvailable(mergedAllocations);
 
-        const auto mergedAllocationsFilterOutLeaves = mergeAllocations(*data, false);
-        emit bottomUpFilterOutLeavesDataAvailable(mergedAllocationsFilterOutLeaves);
+        if (!AccumulatedTraceData::isHideUnmanagedStackParts) {
+            emit bottomUpFilterOutLeavesDataAvailable(mergeAllocations(*data, false));
+        } else {
+            emit bottomUpFilterOutLeavesDataAvailable(mergedAllocations);
+        }
 
         // also calculate the size histogram
         emit progressMessageAvailable(i18n("building size histogram..."));
@@ -639,6 +661,7 @@ void Parser::parse(const QString& path, const QString& diffBase)
                 data->prepareBuildCharts();
                 data->read(stdPath);
                 emit consumedChartDataAvailable(data->consumedChartData);
+                emit instancesChartDataAvailable(data->instancesChartData);
                 emit allocationsChartDataAvailable(data->allocationsChartData);
                 emit allocatedChartDataAvailable(data->allocatedChartData);
                 emit temporaryChartDataAvailable(data->temporaryChartData);
