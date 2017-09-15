@@ -207,8 +207,30 @@ static HRESULT GetMethodNameFromFunctionId (ICorProfilerInfo *info, FunctionID f
 static HRESULT GetClassNameFromClassId(ICorProfilerInfo *info, ClassID classId, LPWSTR wszClass) {
   ModuleID moduleId;
   mdTypeDef mdClass;
+  HRESULT hr;
 
-  HRESULT hr = info->GetClassIDInfo(classId, &moduleId, &mdClass);
+  {
+    CorElementType baseElementType;
+    ClassID baseClassId;
+    ULONG cRank;
+
+    if (info->IsArrayClass(classId, &baseElementType, &baseClassId, &cRank) == S_OK) {
+
+      hr = GetClassNameFromClassId(info, baseClassId, wszClass);
+      if (hr != S_OK)
+        return hr;
+
+      size_t namelen = wcslen(wszClass);
+      if (namelen >= MAX_NAME_LENGTH - 2)
+        return S_FALSE;
+
+      StringCchCopyW(wszClass + namelen, 3, W("[]"));
+
+      return S_OK;
+    }
+  }
+
+  hr = info->GetClassIDInfo(classId, &moduleId, &mdClass);
 
   if (hr != S_OK)
     return hr;
@@ -220,6 +242,7 @@ static HRESULT GetClassNameFromClassId(ICorProfilerInfo *info, ClassID classId, 
     return hr; 
 
   hr = GetClassNameFromTypeDefAndMetadata(mdClass, pIMetaDataImport, wszClass);
+
   if (hr != S_OK)
     return hr;
 
