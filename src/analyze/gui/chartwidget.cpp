@@ -69,7 +69,7 @@ public:
     const QString customizedLabel(const QString& label) const override
     {
         KFormat format(QLocale::system());
-        return format.formatByteSize(label.toDouble(), 1, KFormat::MetricBinaryDialect);
+        return format.formatByteSize(label.toDouble(), 1, KFormat::JEDECBinaryDialect);
     }
 };
 }

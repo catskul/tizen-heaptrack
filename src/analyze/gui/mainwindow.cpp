@@ -288,7 +288,7 @@ MainWindow::MainWindow(QWidget* parent)
                    // xgettext:no-c-format
                    << i18n("<dt><b>total runtime</b>:</dt><dd>%1s</dd>", totalTimeS)
                    << i18n("<dt><b>total system memory</b>:</dt><dd>%1</dd>",
-                           format.formatByteSize(data.totalSystemMemory, 1, KFormat::MetricBinaryDialect))
+                           format.formatByteSize(data.totalSystemMemory, 1, KFormat::JEDECBinaryDialect))
                    << "</dl></qt>";
         }
 
@@ -306,8 +306,8 @@ MainWindow::MainWindow(QWidget* parent)
                            qint64(data.cost.temporary / totalTimeS))
                    << i18n("<dt><b>bytes allocated in total</b> (ignoring "
                            "deallocations):</dt><dd>%1 (%2/s)</dd>",
-                           format.formatByteSize(data.cost.allocated, 2, KFormat::MetricBinaryDialect),
-                           format.formatByteSize(data.cost.allocated / totalTimeS, 1, KFormat::MetricBinaryDialect))
+                           format.formatByteSize(data.cost.allocated, 2, KFormat::JEDECBinaryDialect),
+                           format.formatByteSize(data.cost.allocated / totalTimeS, 1, KFormat::JEDECBinaryDialect))
                    << "</dl></qt>";
         }
         if (AccumulatedTraceData::isShowCoreCLRPartOption)
@@ -364,13 +364,13 @@ MainWindow::MainWindow(QWidget* parent)
             QTextStream stream(&textRight);
             stream << "<qt><dl>" << i18n("<dt><b>peak heap memory consumption</b>:</dt><dd>%1 "
                                          "after %2s</dd>",
-                                         format.formatByteSize(data.cost.peak, 1, KFormat::MetricBinaryDialect),
+                                         format.formatByteSize(data.cost.peak, 1, KFormat::JEDECBinaryDialect),
                                          peakTimeS)
                    << i18n("<dt><b>peak RSS</b> (including heaptrack "
                            "overhead):</dt><dd>%1</dd>",
-                           format.formatByteSize(data.peakRSS, 1, KFormat::MetricBinaryDialect))
+                           format.formatByteSize(data.peakRSS, 1, KFormat::JEDECBinaryDialect))
                    << i18n("<dt><b>total memory leaked</b>:</dt><dd>%1</dd>",
-                           format.formatByteSize(data.cost.leaked, 1, KFormat::MetricBinaryDialect))
+                           format.formatByteSize(data.cost.leaked, 1, KFormat::JEDECBinaryDialect))
                    << "</dl></qt>";
         }
 
