@@ -427,9 +427,15 @@ int main(int /*argc*/, char** /*argv*/)
     PointerMap ptrToIndex;
     uint64_t lastPtr = 0;
     AllocationInfoSet allocationInfos;
+    std::set<uint64_t> managedPointersSet;
+    std::set<uint64_t> gcManagedPointersSet;
+
+    bool isGCInProcess = false;
 
     uint64_t allocations = 0;
     uint64_t leakedAllocations = 0;
+    uint64_t managedAllocations = 0;
+    uint64_t leakedManagedAllocations = 0;
     uint64_t temporaryAllocations = 0;
 
     while (reader.getLine(cin)) {
@@ -475,6 +481,151 @@ int main(int /*argc*/, char** /*argv*/)
             const auto ipId = data.addIp(instructionPointer, is_managed);
             // trace point, map current output index to parent index
             fprintf(stdout, "t %zx %zx\n", ipId, parentIndex);
+        } else if (reader.mode() == '^') {
+            if (isGCInProcess) {
+                cerr << "wrong trace format (allocation during GC - according to Book of the Runtime, concurrent GC is turned off in case profiling is enabled)" << endl;
+                continue;
+            }
+
+            ++managedAllocations;
+            ++leakedManagedAllocations;
+            uint64_t size = 0;
+            TraceIndex traceId;
+            uint64_t ptr = 0;
+            if (!(reader >> traceId.index) || !(reader >> size) || !(reader >> ptr)) {
+                cerr << "failed to parse line: " << reader.line() << endl;
+                continue;
+            }
+
+            AllocationIndex index;
+            if (allocationInfos.add(size, traceId, &index, 1)) {
+                fprintf(stdout, "a %" PRIx64 " %x 1\n", size, traceId.index);
+            }
+            ptrToIndex.addPointer(ptr, index);
+            managedPointersSet.insert(ptr);
+            lastPtr = ptr;
+            fprintf(stdout, "^ %x\n", index.index);
+        } else if (reader.mode() == 'G') {
+            int isStart;
+
+            if (!(reader >> isStart) || !(isStart == 1 || isStart == 0)) {
+                cerr << "failed to parse line: " << reader.line() << endl;
+                continue;
+            }
+
+            if (isStart)
+            {
+                // GC chunk start
+                if (isGCInProcess) {
+                    cerr << "wrong trace format (nested GC chunks)" << endl;
+                    continue;
+                }
+
+                isGCInProcess = true;
+
+                assert (gcManagedPointersSet.size() == 0);
+            }
+            else
+            {
+                assert (!isStart);
+
+                // GC chunk end
+                if (!isGCInProcess) {
+                    cerr << "wrong trace format (nested GC chunks?)" << endl;
+                    continue;
+                }
+
+                isGCInProcess = false;
+
+                for (auto managedPtr : managedPointersSet) {
+                    auto allocation = ptrToIndex.takePointer(managedPtr);
+
+                    if (!allocation.second) {
+                        cerr << "wrong trace format (unknown managed pointer) 0x" << std::hex << managedPtr << std::dec << endl;
+                        continue;
+                    }
+
+                    fprintf(stdout, "~ %x\n", allocation.first.index);
+
+                    --leakedManagedAllocations;
+                }
+
+                managedPointersSet = std::move(gcManagedPointersSet);
+
+                assert (gcManagedPointersSet.size() == 0);
+            }
+        } else if (reader.mode() == 'L') {
+            if (!isGCInProcess) {
+                cerr << "wrong trace format (range survival event when no GC is running)" << endl;
+                continue;
+            }
+
+            uint64_t rangeLength, rangeStart, rangeMovedTo;
+
+            if (!(reader >> rangeLength) || !(reader >> rangeStart) || !(reader >> rangeMovedTo)) {
+                cerr << "failed to parse line: " << reader.line() << endl;
+                continue;
+            }
+
+            uint64_t targetRangeStart = (rangeMovedTo != 0 ? rangeMovedTo : rangeStart);
+            uint64_t targetRangeEnd   = targetRangeStart + rangeLength;
+
+            {
+                auto it = gcManagedPointersSet.lower_bound(targetRangeStart);
+
+                if (it != gcManagedPointersSet.end() && *it < targetRangeEnd) {
+                    cerr << "wrong trace format (survival ranges are intersecting during a GC session)" << endl;
+                    continue;
+                }
+            }
+
+            auto itFromBegin = managedPointersSet.lower_bound(rangeStart);
+            auto itFromEnd   = managedPointersSet.lower_bound(rangeStart + rangeLength);
+
+            if (targetRangeStart == rangeStart) {
+                gcManagedPointersSet.insert(itFromBegin, itFromEnd);
+            } else {
+                for (auto itFrom = itFromBegin; itFrom != itFromEnd; ++itFrom) {
+                    uint64_t source = *itFrom;
+                    uint64_t target = targetRangeStart + (source - rangeStart);
+
+                    assert(gcManagedPointersSet.find(target) == gcManagedPointersSet.end());
+
+                    auto allocationAtTarget = ptrToIndex.takePointer(target);
+
+                    if (allocationAtTarget.second) {
+                        assert(managedPointersSet.find(target) != managedPointersSet.end());
+                        assert(target < rangeStart || target >= rangeStart + rangeLength);
+
+                        managedPointersSet.erase(target);
+
+                        fprintf(stdout, "~ %x\n", allocationAtTarget.first.index);
+
+                        --leakedManagedAllocations;
+                    }
+
+                    gcManagedPointersSet.insert(target);
+
+                    auto allocation = ptrToIndex.takePointer(source);
+
+                    assert(allocation.second);
+
+                    ptrToIndex.addPointer(target, allocation.first);
+                }
+            }
+
+            managedPointersSet.erase(itFromBegin, itFromEnd);
+
+            for (auto ptr : managedPointersSet) {
+                if(gcManagedPointersSet.find(ptr) != gcManagedPointersSet.end()) {
+                    assert(false);
+                }
+            }
+            for (auto ptr : gcManagedPointersSet) {
+                if(managedPointersSet.find(ptr) != managedPointersSet.end()) {
+                    assert(false);
+                }
+            }
         } else if (reader.mode() == '+') {
             ++allocations;
             ++leakedAllocations;
@@ -487,8 +638,8 @@ int main(int /*argc*/, char** /*argv*/)
             }
 
             AllocationIndex index;
-            if (allocationInfos.add(size, traceId, &index)) {
-                fprintf(stdout, "a %" PRIx64 " %x\n", size, traceId.index);
+            if (allocationInfos.add(size, traceId, &index, 0)) {
+                fprintf(stdout, "a %" PRIx64 " %x 0\n", size, traceId.index);
             }
             ptrToIndex.addPointer(ptr, index);
             lastPtr = ptr;
@@ -518,7 +669,7 @@ int main(int /*argc*/, char** /*argv*/)
             }
 
             if (managed_name_ids.find(methodName) == managed_name_ids.end()) {
-		managed_name_ids.insert(std::make_pair(methodName, 1));
+                managed_name_ids.insert(std::make_pair(methodName, 1));
             } else {
                 int id = ++managed_name_ids[methodName];
 
@@ -536,8 +687,10 @@ int main(int /*argc*/, char** /*argv*/)
     fprintf(stderr, "heaptrack stats:\n"
                     "\tallocations:          \t%" PRIu64 "\n"
                     "\tleaked allocations:   \t%" PRIu64 "\n"
+                    "\tmanaged allocations:          \t%" PRIu64 "\n"
+                    "\tmanaged leaked allocations:   \t%" PRIu64 "\n"
                     "\ttemporary allocations:\t%" PRIu64 "\n",
-            allocations, leakedAllocations, temporaryAllocations);
+            allocations, leakedAllocations, managedAllocations, leakedManagedAllocations, temporaryAllocations);
 
     return 0;
 }

@@ -514,6 +514,8 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
                     continue;
                 }
                 info = allocationInfos[allocationIndex.index];
+                assert(!info.isManaged);
+
                 lastAllocationPtr = allocationIndex.index;
             } else { // backwards compatibility
                 uint64_t ptr = 0;
@@ -521,7 +523,7 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
                     cerr << "failed to parse line: " << reader.line() << endl;
                     continue;
                 }
-                if (allocationInfoSet.add(info.size, info.traceIndex, &allocationIndex)) {
+                if (allocationInfoSet.add(info.size, info.traceIndex, &allocationIndex, 0)) {
                     allocationInfos.push_back(info);
                 }
                 pointers.addPointer(ptr, allocationIndex);
@@ -583,6 +585,8 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             lastAllocationPtr = 0;
 
             const auto& info = allocationInfos[allocationInfoIndex.index];
+            assert(!info.isManaged);
+
             totalCost.malloc.leaked -= info.size;
             if (temporary) {
                 ++totalCost.malloc.temporary;
@@ -600,7 +604,7 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
                 continue;
             }
             AllocationInfo info;
-            if (!(reader >> info.size) || !(reader >> info.traceIndex)) {
+            if (!(reader >> info.size) || !(reader >> info.traceIndex) || !(reader >> info.isManaged)) {
                 cerr << "failed to parse line: " << reader.line() << endl;
                 continue;
             }

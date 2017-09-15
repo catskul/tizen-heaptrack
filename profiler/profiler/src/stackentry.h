@@ -16,4 +16,9 @@ public:
   StackEntry *m_next;
 };
 
+extern "C" void heaptrack_objectallocate(void *objectId, unsigned long objectSize);
+extern "C" void heaptrack_startgc();
+extern "C" void heaptrack_gcmarksurvived(void *rangeStart, unsigned long rangeLength, void *rangeMovedTo);
+extern "C" void heaptrack_finishgc();
+
 #endif // STACKENTRY_H

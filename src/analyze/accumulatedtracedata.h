@@ -93,9 +93,10 @@ struct AllocationInfo
 {
     uint64_t size = 0;
     TraceIndex traceIndex;
+    int isManaged;
     bool operator==(const AllocationInfo& rhs) const
     {
-        return rhs.traceIndex == traceIndex && rhs.size == size;
+        return rhs.traceIndex == traceIndex && rhs.size == size && rhs.isManaged == isManaged;
     }
 };
 

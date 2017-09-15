@@ -39,9 +39,10 @@ struct IndexedAllocationInfo
     uint64_t size;
     TraceIndex traceIndex;
     AllocationIndex allocationIndex;
+    int isManaged;
     bool operator==(const IndexedAllocationInfo& rhs) const
     {
-        return rhs.traceIndex == traceIndex && rhs.size == size;
+        return rhs.traceIndex == traceIndex && rhs.size == size && rhs.isManaged == isManaged;
         // allocationInfoIndex not compared to allow to look it up
     }
 };
@@ -55,6 +56,7 @@ struct hash<IndexedAllocationInfo>
         size_t seed = 0;
         boost::hash_combine(seed, info.size);
         boost::hash_combine(seed, info.traceIndex.index);
+        boost::hash_combine(seed, info.isManaged);
         // allocationInfoIndex not hashed to allow to look it up
         return seed;
     }
@@ -68,10 +70,10 @@ struct AllocationInfoSet
         set.reserve(625000);
     }
 
-    bool add(uint64_t size, TraceIndex traceIndex, AllocationIndex* allocationIndex)
+    bool add(uint64_t size, TraceIndex traceIndex, AllocationIndex* allocationIndex, int isManaged)
     {
         allocationIndex->index = set.size();
-        IndexedAllocationInfo info = {size, traceIndex, *allocationIndex};
+        IndexedAllocationInfo info = {size, traceIndex, *allocationIndex, isManaged};
         auto it = set.find(info);
         if (it != set.end()) {
             *allocationIndex = it->allocationIndex;
