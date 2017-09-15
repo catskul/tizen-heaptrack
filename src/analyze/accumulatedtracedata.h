@@ -78,6 +78,7 @@ struct TraceNode
 {
     IpIndex ipIndex;
     TraceIndex parentIndex;
+    AllocationData::CoreCLRType coreclrType;
 };
 
 struct Allocation : public AllocationData
@@ -106,7 +107,7 @@ struct AllocationInfo
 struct AddressRangeInfo
 {
     AddressRangeInfo(uint64_t vStart, uint64_t vSize)
-        : start(vStart), size(vSize), isProtSet(false), isPhysicalMemoryConsumptionSet(false), isFdSet(false)
+        : start(vStart), size(vSize), isProtSet(false), isPhysicalMemoryConsumptionSet(false), isFdSet(false), isCoreCLRSet (false)
     {
         assert(!traceIndex);
     }
@@ -123,10 +124,12 @@ struct AddressRangeInfo
 
     mutable int prot;
     mutable int fd;
+    mutable int isCoreCLR;
 
     mutable bool isProtSet;
     mutable bool isPhysicalMemoryConsumptionSet;
     mutable bool isFdSet;
+    mutable bool isCoreCLRSet;
 
     uint64_t getPrivateClean() const
     {
@@ -224,6 +227,12 @@ struct AddressRangeInfo
     {
         fd = v;
         isFdSet = true;
+    }
+
+    void setIsCoreCLR(int flag)
+    {
+        isCoreCLR = flag;
+        isCoreCLRSet = true;
     }
 
     void setPhysicalMemoryConsumption(uint64_t smapsRangeSize,
@@ -330,6 +339,12 @@ struct AccumulatedTraceData
     void mapRemoveRanges(const uint64_t start, const uint64_t size);
     void combineContiguousSimilarRanges();
 
+    AllocationData::CoreCLRType checkCallStackIsCoreCLR(TraceIndex traceIndex);
+    bool isValidTrace(const TraceIndex traceIndex) const;
+    AllocationData::CoreCLRType checkIsNodeCoreCLR(IpIndex ipindex);
+    AllocationData::CoreCLRType combineTwoTypes(AllocationData::CoreCLRType a, AllocationData::CoreCLRType b);
+    void calculatePeak(AllocationData::DisplayId type);
+
     // indices of functions that should stop the backtrace, e.g. main or static
     // initialization
     std::vector<StringIndex> stopIndices;
@@ -343,6 +358,17 @@ struct AccumulatedTraceData
     AddressRangesMap addressRangeInfos;
 
     static bool isHideUnmanagedStackParts;
+    static bool isShowCoreCLRPartOption;
+
+    AllocationData::Stats partCoreclr;
+    AllocationData::Stats partNonCoreclr;
+    AllocationData::Stats partUnknown;
+    AllocationData::Stats partUntracked;
+
+    AllocationData::Stats partCoreclrMMAP;
+    AllocationData::Stats partNonCoreclrMMAP;
+    AllocationData::Stats partUnknownMMAP;
+    AllocationData::Stats partUntrackedMMAP;
 };
 
 #endif // ACCUMULATEDTRACEDATA_H

@@ -33,6 +33,14 @@ struct AllocationData
         shared
     };
 
+    enum class CoreCLRType
+    {
+        unknown,
+        CoreCLR,
+        nonCoreCLR,
+        untracked
+    };
+
     AllocationData()
         : malloc(),
           managed(),

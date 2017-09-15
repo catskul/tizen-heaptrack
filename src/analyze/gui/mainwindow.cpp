@@ -310,6 +310,56 @@ MainWindow::MainWindow(QWidget* parent)
                            format.formatByteSize(data.cost.allocated / totalTimeS, 1, KFormat::MetricBinaryDialect))
                    << "</dl></qt>";
         }
+        if (AccumulatedTraceData::isShowCoreCLRPartOption)
+        {
+            QTextStream stream(&textRight);
+
+            if (AllocationData::display == AllocationData::DisplayId::malloc)
+            {
+                stream << "<qt><dl>" << i18n("<dt><b>peak heap memory consumption</b>:</dt><dd>%1 "
+                                             "after %2s</dd>"
+                                             "</dt><dd>%3 (CoreCLR), %4 (non-CoreCLR), %5 (unknown)</dd>",
+                                             format.formatByteSize(data.cost.peak, 1, KFormat::JEDECBinaryDialect),
+                                             peakTimeS,
+                                             format.formatByteSize(data.CoreCLRPart.peak, 1, KFormat::JEDECBinaryDialect),
+                                             format.formatByteSize(data.nonCoreCLRPart.peak, 1, KFormat::JEDECBinaryDialect),
+                                             format.formatByteSize(data.unknownPart.peak, 1, KFormat::JEDECBinaryDialect))
+                       << i18n("<dt><b>peak RSS</b> (including heaptrack "
+                               "overhead):</dt><dd>%1</dd>",
+                               format.formatByteSize(data.peakRSS, 1, KFormat::JEDECBinaryDialect))
+                       << i18n("<dt><b>total memory leaked</b>:</dt><dd>%1</dd>"
+                               "</dt><dd>%2 (CoreCLR), %3 (non-CoreCLR), %4 (unknown)</dd>",
+                               format.formatByteSize(data.cost.leaked, 1, KFormat::JEDECBinaryDialect),
+                               format.formatByteSize(data.CoreCLRPart.leaked, 1, KFormat::JEDECBinaryDialect),
+                               format.formatByteSize(data.nonCoreCLRPart.leaked, 1, KFormat::JEDECBinaryDialect),
+                               format.formatByteSize(data.unknownPart.leaked, 1, KFormat::JEDECBinaryDialect))
+                       << "</dl></qt>";
+            }
+            else
+            {
+                stream << "<qt><dl>" << i18n("<dt><b>peak heap memory consumption</b>:</dt><dd>%1 "
+                                             "after %2s</dd>"
+                                             "</dt><dd>%3 (CoreCLR), %4 (non-CoreCLR), %5 (sbrk heap), %6 (unknown)</dd>",
+                                             format.formatByteSize(data.cost.peak, 1, KFormat::JEDECBinaryDialect),
+                                             peakTimeS,
+                                             format.formatByteSize(data.CoreCLRPart.peak, 1, KFormat::JEDECBinaryDialect),
+                                             format.formatByteSize(data.nonCoreCLRPart.peak, 1, KFormat::JEDECBinaryDialect),
+                                             format.formatByteSize(data.untrackedPart.peak, 1, KFormat::JEDECBinaryDialect),
+                                             format.formatByteSize(data.unknownPart.peak, 1, KFormat::JEDECBinaryDialect))
+                       << i18n("<dt><b>peak RSS</b> (including heaptrack "
+                               "overhead):</dt><dd>%1</dd>",
+                               format.formatByteSize(data.peakRSS, 1, KFormat::JEDECBinaryDialect))
+                       << i18n("<dt><b>total memory leaked</b>:</dt><dd>%1</dd>"
+                               "</dt><dd>%2 (CoreCLR), %3 (non-CoreCLR), %4 (sbrk heap), %5 (unknown)</dd>",
+                               format.formatByteSize(data.cost.leaked, 1, KFormat::JEDECBinaryDialect),
+                               format.formatByteSize(data.CoreCLRPart.leaked, 1, KFormat::JEDECBinaryDialect),
+                               format.formatByteSize(data.nonCoreCLRPart.leaked, 1, KFormat::JEDECBinaryDialect),
+                               format.formatByteSize(data.untrackedPart.leaked, 1, KFormat::JEDECBinaryDialect),
+                               format.formatByteSize(data.unknownPart.leaked, 1, KFormat::JEDECBinaryDialect))
+                       << "</dl></qt>";
+            }
+        }
+        else
         {
             QTextStream stream(&textRight);
             stream << "<qt><dl>" << i18n("<dt><b>peak heap memory consumption</b>:</dt><dd>%1 "

@@ -71,6 +71,9 @@ int main(int argc, char** argv)
     QCommandLineOption hideUnmanagedStackPartsOption(QStringLiteral("hide-unmanaged-stacks"), QStringLiteral("Hide unmanaged parts of call stacks"));
     parser.addOption(hideUnmanagedStackPartsOption);
 
+    QCommandLineOption showCoreCLRPartOption(QStringLiteral("show-coreclr"), QStringLiteral("Show CoreCLR/non-CoreCLR memory distribution"));
+    parser.addOption(showCoreCLRPartOption);
+
     parser.process(app);
     aboutData.processCommandLine(&parser);
 
@@ -80,6 +83,7 @@ int main(int argc, char** argv)
     bool isShowPrivateClean = parser.isSet(showPrivateCleanOption);
     bool isShowShared = parser.isSet(showSharedOption);
     bool isHideUnmanagedStackParts = parser.isSet(hideUnmanagedStackPartsOption);
+    bool isShowCoreCLRPartOption = parser.isSet(showCoreCLRPartOption);
 
     if ((isShowMalloc ? 1 : 0)
         + (isShowManaged ? 1 : 0)
@@ -108,6 +112,10 @@ int main(int argc, char** argv)
 
     if (isHideUnmanagedStackParts) {
         AccumulatedTraceData::isHideUnmanagedStackParts = true;
+    }
+
+    if (isShowCoreCLRPartOption) {
+        AccumulatedTraceData::isShowCoreCLRPartOption = true;
     }
 
     auto createWindow = []() -> MainWindow* {

@@ -50,16 +50,58 @@ namespace __gnu_cxx {
 __attribute__((weak)) extern void __freeres();
 }
 
+static int isCoreCLR(const char *filename)
+{
+    const char *localFilename = strrchr(filename,'/');
+    if (!localFilename)
+    {
+        localFilename = filename;
+    }
+    else
+    {
+        ++localFilename;
+    }
+
+    if (strcmp(localFilename, "libclrjit.so") == 0
+        || strcmp(localFilename, "libcoreclr.so") == 0
+        || strcmp(localFilename, "libcoreclrtraceptprovider.so") == 0
+        || strcmp(localFilename, "libdbgshim.so") == 0
+        || strcmp(localFilename, "libmscordaccore.so") == 0
+        || strcmp(localFilename, "libmscordbi.so") == 0
+        || strcmp(localFilename, "libprotojit.so") == 0
+        || strcmp(localFilename, "libsosplugin.so") == 0
+        || strcmp(localFilename, "libsos.so") == 0
+        || strcmp(localFilename, "libsuperpmi-shim-collector.so") == 0
+        || strcmp(localFilename, "libsuperpmi-shim-counter.so") == 0
+        || strcmp(localFilename, "libsuperpmi-shim-simple.so") == 0
+        || strcmp(localFilename, "System.Globalization.Native.so") == 0
+        || strcmp(localFilename, "System.IO.Compression.Native.so") == 0
+        || strcmp(localFilename, "System.Native.so") == 0
+        || strcmp(localFilename, "System.Net.Http.Native.so") == 0
+        || strcmp(localFilename, "System.Net.Security.Native.so") == 0
+        || strcmp(localFilename, "System.Security.Cryptography.Native.OpenSsl.so") == 0
+        || strcmp(localFilename, "System.Security.Cryptography.Native.so") == 0)
+    {
+        return 1;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
 static bool isExiting = false;
 
 static int dl_iterate_phdr_get_maps(struct dl_phdr_info* info, size_t /*size*/, void* data)
 {
-    auto maps = (map<void *, pair<size_t, int>> *) data;
+    auto maps = (map<void *, tuple<size_t, int, int>> *) data;
 
     const char* fileName = info->dlpi_name;
     if (!fileName || !fileName[0]) {
         fileName = "x";
     }
+
+    int isCoreclr = isCoreCLR(fileName);
 
     debugLog<VerboseOutput>("dl_iterate_phdr_get_maps: %s %zx", fileName, info->dlpi_addr);
 
@@ -85,7 +127,7 @@ static int dl_iterate_phdr_get_maps(struct dl_phdr_info* info, size_t /*size*/, 
                 prot |= PROT_EXEC;
 
             if (maps->find(addr) == maps->end()) {
-                maps->insert(make_pair(addr, make_pair(size, prot)));
+                maps->insert(make_pair(addr, make_tuple(size, prot, isCoreclr)));
             } else {
                 debugLog<VerboseOutput>("dl_iterate_phdr_get_maps: repeated section address %s %zx", fileName, info->dlpi_addr);
             }
@@ -221,11 +263,11 @@ void init()
                    nullptr, nullptr);
 
     {
-        map<void *, pair<size_t, int>> map;
+        map<void *, tuple<size_t, int, int>> map;
 
         dl_iterate_phdr(&dl_iterate_phdr_get_maps, &map);
 
-        vector<pair<void *, pair<size_t, int>>> newMmaps;
+        vector<pair<void *, tuple<size_t, int, int>>> newMmaps;
 
         for (const auto & section : map) {
             newMmaps.push_back(section);
@@ -425,7 +467,7 @@ void* dlopen(const char* filename, int flag) noexcept
         hooks::init();
     }
 
-    map<void *, pair<size_t, int>> map_before, map_after;
+    map<void *, tuple<size_t, int, int>> map_before, map_after;
 
     if (!RecursionGuard::isActive) {
         RecursionGuard guard;
@@ -445,7 +487,7 @@ void* dlopen(const char* filename, int flag) noexcept
         if(map_after.size() < map_before.size()) {
             debugLog<VerboseOutput>("dlopen: count of sections after dlopen is less than before: %p %s %x", ret, filename, flag);
         } else if (map_after.size() != map_before.size()) {
-            vector<pair<void *, pair<size_t, int>>> newMmaps;
+            vector<pair<void *, tuple<size_t, int, int>>> newMmaps;
 
             if (!RecursionGuard::isActive) {
                 RecursionGuard guard;
@@ -476,7 +518,7 @@ int dlclose(void* handle) noexcept
         hooks::init();
     }
 
-    map<void *, pair<size_t, int>> map_before, map_after;
+    map<void *, tuple<size_t, int, int>> map_before, map_after;
 
     if (!isExiting) {
         if (!RecursionGuard::isActive) {
@@ -506,7 +548,7 @@ int dlclose(void* handle) noexcept
 
                     for (const auto & section_before : map_before) {
                         if (map_after.find(section_before.first) == map_after.end()) {
-                            munmaps.push_back(make_pair(section_before.first, section_before.second.first));
+                            munmaps.push_back(make_pair(section_before.first, get<0>(section_before.second)));
                         }
                     }
                 }

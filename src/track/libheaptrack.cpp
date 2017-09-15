@@ -371,7 +371,7 @@ public:
                     Trace trace;
                     trace.fill((void *) sbrk);
 
-                    heaptrack.handleMmap((void *) begin, end - begin, PROT_READ | PROT_WRITE, -1, trace);
+                    heaptrack.handleMmap((void *) begin, end - begin, PROT_READ | PROT_WRITE, 2, -1, trace);
                 }
 
                 isHeap = false;
@@ -447,6 +447,7 @@ public:
     void handleMmap(void* ptr,
                     size_t length,
                     int prot,
+                    int isCoreclr,
                     int fd,
                     const Trace& trace)
     {
@@ -458,8 +459,8 @@ public:
 
         size_t alignedLength = ((length + k_pageSize - 1) / k_pageSize) * k_pageSize;
 
-        if (fprintf(s_data->out, "* %zx %x %x %x %" PRIxPTR "\n",
-                    alignedLength, prot, fd, index, reinterpret_cast<uintptr_t>(ptr)) < 0) {
+        if (fprintf(s_data->out, "* %zx %x %x %x %x %" PRIxPTR "\n",
+                    alignedLength, prot, isCoreclr, fd, index, reinterpret_cast<uintptr_t>(ptr)) < 0) {
             writeError();
             return;
         }
@@ -826,7 +827,7 @@ void heaptrack_stop()
 }
 
 __attribute__((noinline))
-void heaptrack_dlopen(const vector<pair<void *, pair<size_t, int>>> &newMmaps, bool isPreloaded, void *dlopenOriginal)
+void heaptrack_dlopen(const vector<pair<void *, tuple<size_t, int, int>>> &newMmaps, bool isPreloaded, void *dlopenOriginal)
 {
     if (!RecursionGuard::isActive) {
         RecursionGuard guard;
@@ -845,7 +846,7 @@ void heaptrack_dlopen(const vector<pair<void *, pair<size_t, int>>> &newMmaps, b
         HeapTrack heaptrack(guard);
 
         for (const auto &mmapRecord : newMmaps) {
-            heaptrack.handleMmap(mmapRecord.first, mmapRecord.second.first, mmapRecord.second.second, -2 /* FIXME: */, trace);
+            heaptrack.handleMmap(mmapRecord.first, get<0>(mmapRecord.second), get<1>(mmapRecord.second), get<2>(mmapRecord.second), -2 /* FIXME: */, trace);
         }
     }
 }
@@ -924,7 +925,7 @@ void heaptrack_mmap(void* ptr, size_t length, int prot, int flags, int fd, off64
         trace.fill(2);
 
         HeapTrack heaptrack(guard);
-        heaptrack.handleMmap(ptr, length, prot, fd, trace);
+        heaptrack.handleMmap(ptr, length, prot, 0, fd, trace);
     }
 }
 
