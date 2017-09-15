@@ -90,8 +90,8 @@ public:
         StackEntry *stackIter = g_shadowStack;
 
         if (stackIter != nullptr) {
-	    void* managedStack[Trace::MAX_SIZE];
-	    int managedStackSize = 0;
+            void* managedStack[Trace::MAX_SIZE];
+            int managedStackSize = 0;
 
             handleIP((void *) (uintptr_t) -1, false);
 
@@ -99,16 +99,24 @@ public:
                 void *ip = reinterpret_cast<void *>(stackIter->m_funcId);
 
                 if (knownNames.find(ip) == knownNames.end()) {
-                    std::string managed_name = stackIter->m_className;
-                    managed_name.append(".");
-                    managed_name.append(stackIter->m_methodName);
-
+                    std::string managed_name;
+                    if (stackIter->m_isType)
+                    {
+                        managed_name.append("[");
+                        managed_name.append(stackIter->m_className);
+                        managed_name.append("]");
+                    }
+                    else
+                    {
+                        managed_name.append(stackIter->m_className);
+                        managed_name.append(".");
+                        managed_name.append(stackIter->m_methodName);
+                    }
                     fprintf(out, "n %" PRIxPTR " %s\n", reinterpret_cast<uintptr_t>(ip), managed_name.c_str());
-
-		    knownNames.insert(ip);
+                    knownNames.insert(ip);
                 }
 
-		managedStack[managedStackSize++] = ip;
+                managedStack[managedStackSize++] = ip;
 
                 stackIter = stackIter->m_next;
             }

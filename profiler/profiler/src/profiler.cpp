@@ -90,8 +90,9 @@ __thread StackEntry* g_freeStackEntryListItems = nullptr;
 StackEntry::StackEntry(unsigned int funcId,
                        char* className,
                        char* methodName,
+                       bool isType,
                        StackEntry *next)
-  : m_funcId(funcId), m_next(next)
+  : m_funcId(funcId), m_isType(isType), m_next(next)
 {
     strncpy(m_className, className, sizeof (m_className));
     strncpy(m_methodName, methodName, sizeof (m_methodName));
@@ -106,9 +107,26 @@ void PushShadowStack(FunctionID functionId, char* className, char* methodName)
 
     g_freeStackEntryListItems = g_freeStackEntryListItems->m_next;
 
-    new (se) StackEntry(functionId, className, methodName, g_shadowStack);
+    new (se) StackEntry(functionId, className, methodName, false, g_shadowStack);
   } else {
-    se = new StackEntry(functionId, className, methodName, g_shadowStack);
+    se = new StackEntry(functionId, className, methodName, false, g_shadowStack);
+  }
+
+  g_shadowStack = se;
+}
+
+void PushShadowStack(ClassID classId, char* className)
+{
+  StackEntry *se;
+
+  if (g_freeStackEntryListItems != nullptr) {
+    se = g_freeStackEntryListItems;
+
+    g_freeStackEntryListItems = g_freeStackEntryListItems->m_next;
+
+    new (se) StackEntry(classId, className, "", true, g_shadowStack);
+  } else {
+    se = new StackEntry(classId, className, "", true, g_shadowStack);
   }
 
   g_shadowStack = se;
@@ -501,7 +519,7 @@ HRESULT STDMETHODCALLTYPE
   {
     char className[MAX_NAME_LENGTH + 1];
     encodeWChar(szClassName, className);
-    PushShadowStack((FunctionID)classId, className, className);
+    PushShadowStack(classId, className);
   }
 
   ULONG objectSize;
