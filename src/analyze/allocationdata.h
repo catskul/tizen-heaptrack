@@ -52,6 +52,15 @@ struct AllocationData
         int64_t leaked = 0;
         // largest amount of bytes allocated
         int64_t peak = 0;
+
+        bool isEmpty() const
+        {
+            return (allocations == 0
+                    && temporary == 0
+                    && allocated == 0
+                    && leaked == 0
+                    && peak == 0);
+        }
     };
 
     Stats malloc, privateClean, privateDirty, shared;

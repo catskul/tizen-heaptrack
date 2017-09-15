@@ -330,6 +330,12 @@ TreeData mergeAllocations(const ParserData& data, bool bIncludeLeaves)
     };
     // merge allocations, leave parent pointers invalid (their location may change)
     for (const auto& allocation : data.allocations) {
+        const AllocationData::Stats *stats = allocation.getDisplay();
+
+        if (stats->isEmpty()) {
+            continue;
+        }
+
         auto traceIndex = allocation.traceIndex;
 
         if (!bIncludeLeaves) {
@@ -340,11 +346,11 @@ TreeData mergeAllocations(const ParserData& data, bool bIncludeLeaves)
         while (traceIndex) {
             const auto& trace = data.findTrace(traceIndex);
             const auto& ip = data.findIp(trace.ipIndex);
-            auto location = data.stringCache.location(trace.ipIndex, ip);
-            rows = addRow(rows, location, *allocation.getDisplay());
+            auto location = data.stringCache.location(trace.ipIndex, ip, isUntrackedLocation);
+            rows = addRow(rows, location, *stats);
             for (const auto& inlined : ip.inlined) {
-                auto inlinedLocation = data.stringCache.frameLocation(inlined, ip.moduleIndex);
-                rows = addRow(rows, inlinedLocation, *allocation.getDisplay());
+                auto inlinedLocation = data.stringCache.frameLocation(inlined, ip.moduleIndex, isUntrackedLocation);
+                rows = addRow(rows, inlinedLocation, *stats);
             }
             if (data.isStopIndex(ip.frame.functionIndex)) {
                 break;
