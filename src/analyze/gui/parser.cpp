@@ -57,7 +57,16 @@ struct StringCache
 
     QString module(const InstructionPointer& ip) const
     {
-        return stringify(ip.moduleIndex);
+        QString moduleName = stringify(ip.moduleIndex);
+
+        if (ip.moduleOffset != 0) {
+            QString offset;
+            offset.setNum(ip.moduleOffset, 16);
+
+            moduleName = moduleName + QLatin1String("+0x") + offset + QLatin1String("");
+        }
+
+        return moduleName;
     }
 
     QString stringify(const StringIndex index) const
@@ -74,17 +83,17 @@ struct StringCache
         // first try a fast index-based lookup
         auto& location = m_locationsMap[index];
         if (!location) {
-            location = frameLocation(ip.frame, ip.moduleIndex);
+            location = frameLocation(ip.frame, ip);
         }
         return location;
     }
 
-    LocationData::Ptr frameLocation(const Frame& frame, const ModuleIndex& moduleIndex) const
+    LocationData::Ptr frameLocation(const Frame& frame, const InstructionPointer& ip) const
     {
         LocationData::Ptr location;
         // slow-path, look for interned location
         // note that we can get the same location for different IPs
-        LocationData data = {func(frame), file(frame), stringify(moduleIndex), frame.line};
+        LocationData data = {func(frame), file(frame), module(ip), frame.line};
         auto it = lower_bound(m_locations.begin(), m_locations.end(), data);
         if (it != m_locations.end() && **it == data) {
             // we got the location already from a different ip, cache it
@@ -346,10 +355,10 @@ TreeData mergeAllocations(const ParserData& data, bool bIncludeLeaves)
         while (traceIndex) {
             const auto& trace = data.findTrace(traceIndex);
             const auto& ip = data.findIp(trace.ipIndex);
-            auto location = data.stringCache.location(trace.ipIndex, ip, isUntrackedLocation);
+            auto location = data.stringCache.location(trace.ipIndex, ip);
             rows = addRow(rows, location, *stats);
             for (const auto& inlined : ip.inlined) {
-                auto inlinedLocation = data.stringCache.frameLocation(inlined, ip.moduleIndex, isUntrackedLocation);
+                auto inlinedLocation = data.stringCache.frameLocation(inlined, ip);
                 rows = addRow(rows, inlinedLocation, *stats);
             }
             if (data.isStopIndex(ip.frame.functionIndex)) {

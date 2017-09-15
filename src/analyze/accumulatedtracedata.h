@@ -56,6 +56,7 @@ struct InstructionPointer
 {
     uint64_t instructionPointer = 0;
     ModuleIndex moduleIndex;
+    uint64_t moduleOffset = 0;
     Frame frame;
     std::vector<Frame> inlined;
 
