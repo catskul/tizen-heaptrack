@@ -24,6 +24,8 @@
 
 #include "libheaptrack.h"
 
+#include <limits.h>
+
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
