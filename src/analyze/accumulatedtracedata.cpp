@@ -68,6 +68,8 @@ AccumulatedTraceData::AccumulatedTraceData()
     allocations.reserve(16384);
     stopIndices.reserve(4);
     opNewIpIndices.reserve(16);
+    classInfos.reserve(4096);
+    objectTreeNodes.reserve(16384);
 }
 
 const string& AccumulatedTraceData::stringify(const StringIndex stringId) const
@@ -778,6 +780,25 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
         } else if (reader.mode() == 'I') { // system information
             reader >> systemInfo.pageSize;
             reader >> systemInfo.pages;
+        } else if (reader.mode() == 'e') { // object dependency
+            if (pass != FirstPass) {
+                continue;
+            }
+            ObjectTreeNode node;
+            reader >> node.gcNum;
+            reader >> node.numChildren;
+            reader >> node.objectPtr;
+            reader >> node.classIndex;
+            reader >> node.allocIndex;
+            objectTreeNodes.push_back(node);
+        } else if (reader.mode() == 'C') { // class info
+            if (pass != FirstPass) {
+                continue;
+            }
+            ClassInfo classInfo;
+            reader >> classInfo.classIndex;
+            reader >> classInfo.size;
+            classInfos.push_back(classInfo);
         } else {
             cerr << "failed to parse line: " << reader.line() << endl;
         }

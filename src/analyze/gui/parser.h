@@ -25,6 +25,7 @@
 #include "chartmodel.h"
 #include "histogrammodel.h"
 #include "treemodel.h"
+#include "objecttreemodel.h"
 
 class Parser : public QObject
 {
@@ -49,6 +50,8 @@ signals:
     void allocatedChartDataAvailable(const ChartData& data);
     void temporaryChartDataAvailable(const ChartData& data);
     void sizeHistogramDataAvailable(const HistogramData& data);
+    void objectTreeTopDownDataAvailable(const ObjectTreeData& data);
+    void objectTreeBottomUpDataAvailable(const ObjectTreeData& data);
     void finished();
     void failedToOpen(const QString& path);
 };

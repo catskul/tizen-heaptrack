@@ -41,7 +41,9 @@
 #include "stacksmodel.h"
 #include "topproxy.h"
 #include "treemodel.h"
+#include "objecttreemodel.h"
 #include "treeproxy.h"
+#include "objecttreeproxy.h"
 
 #include "gui_config.h"
 
@@ -156,6 +158,18 @@ void setupTreeModel(TreeModel* model, QTreeView* view, CostDelegate* costDelegat
     addContextMenu(view, TreeModel::LocationRole);
 }
 
+void setupObjectTreeModel(ObjectTreeModel* model, QTreeView* view, QLineEdit* filterClass, QComboBox* filterGC) {
+    auto proxy = new ObjectTreeProxy(ObjectTreeModel::ClassNameColumn, ObjectTreeModel::GCNumColumn, model);
+    proxy->setSourceModel(model);
+    proxy->setSortRole(ObjectTreeModel::SortRole);
+
+    view->setModel(proxy);
+    view->hideColumn(ObjectTreeModel::GCNumColumn);
+    QObject::connect(filterClass, &QLineEdit::textChanged, proxy, &ObjectTreeProxy::setNameFilter);
+    QObject::connect(filterGC, static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+                     proxy, &ObjectTreeProxy::setGCFilter);
+}
+
 void setupCallerCalle(CallerCalleeModel* model, QTreeView* view, CostDelegate* costDelegate, QLineEdit* filterFunction,
                       QLineEdit* filterFile, QLineEdit* filterModule)
 {
@@ -228,15 +242,17 @@ MainWindow::MainWindow(QWidget* parent)
     auto bottomUpModelFilterOutLeaves = new TreeModel(this);
     auto topDownModel = new TreeModel(this);
     auto callerCalleeModel = new CallerCalleeModel(this);
+    auto objectTreeModel = new ObjectTreeModel(this);
     connect(this, &MainWindow::clearData, bottomUpModelFilterOutLeaves, &TreeModel::clearData);
     connect(this, &MainWindow::clearData, topDownModel, &TreeModel::clearData);
     connect(this, &MainWindow::clearData, callerCalleeModel, &CallerCalleeModel::clearData);
     connect(this, &MainWindow::clearData, m_ui->flameGraphTab, &FlameGraph::clearData);
+    connect(this, &MainWindow::clearData, objectTreeModel, &ObjectTreeModel::clearData);
 
     m_ui->tabWidget->setTabEnabled(m_ui->tabWidget->indexOf(m_ui->callerCalleeTab), false);
     m_ui->tabWidget->setTabEnabled(m_ui->tabWidget->indexOf(m_ui->topDownTab), false);
     m_ui->tabWidget->setTabEnabled(m_ui->tabWidget->indexOf(m_ui->flameGraphTab), false);
-
+    m_ui->tabWidget->setTabEnabled(m_ui->tabWidget->indexOf(m_ui->heapTab), false);
     connect(m_parser, &Parser::bottomUpDataAvailable, this, [=](const TreeData& data) {
         if (!m_diffMode) {
             m_ui->flameGraphTab->setBottomUpData(data);
@@ -246,6 +262,18 @@ MainWindow::MainWindow(QWidget* parent)
         statusBar()->addWidget(m_ui->loadingProgress);
         m_ui->pages->setCurrentWidget(m_ui->resultsPage);
         m_ui->tabWidget->setTabEnabled(m_ui->tabWidget->indexOf(m_ui->bottomUpTab), true);
+    });
+    connect(m_parser, &Parser::objectTreeBottomUpDataAvailable, this, [=](const ObjectTreeData& data) {
+        int maxGC = 0;
+        for (const ObjectRowData& row: data) {
+            if (maxGC < row.gcNum)
+                maxGC = row.gcNum;
+        }
+        for (int gc = 0; gc < maxGC; gc++) {
+            m_ui->filterGC->addItem(QString::number(gc+1));
+        }
+        objectTreeModel->resetData(data);
+        m_ui->tabWidget->setTabEnabled(m_ui->tabWidget->indexOf(m_ui->heapTab), true);
     });
     connect(m_parser,
             (AccumulatedTraceData::isHideUnmanagedStackParts ?
@@ -445,6 +473,8 @@ MainWindow::MainWindow(QWidget* parent)
     setupCallerCalle(callerCalleeModel, m_ui->callerCalleeResults, costDelegate, m_ui->callerCalleeFilterFunction,
                      m_ui->callerCalleeFilterFile, m_ui->callerCalleeFilterModule);
 
+    setupObjectTreeModel(objectTreeModel, m_ui->objectTreeResults, m_ui->filterClass, m_ui->filterGC);
+
     auto validateInputFile = [this](const QString& path, bool allowEmpty) -> bool {
         if (path.isEmpty()) {
             return allowEmpty;
@@ -596,7 +626,7 @@ void MainWindow::setupStacks()
         if (!current.isValid()) {
             stacksModel->clear();
         } else {
-            auto proxy = qobject_cast<const TreeProxy*>(current.model());
+            auto proxy = qobject_cast<const QSortFilterProxyModel*>(current.model());
             Q_ASSERT(proxy);
             auto leaf = proxy->mapToSource(current);
             stacksModel->fillFromIndex(leaf);

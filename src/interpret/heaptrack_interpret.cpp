@@ -187,6 +187,7 @@ struct AccumulatedTraceData
         m_backtraceStates.reserve(64);
         m_internedData.reserve(4096);
         m_encounteredIps.reserve(32768);
+        m_encounteredClasses.reserve(4096);
     }
 
     ~AccumulatedTraceData()
@@ -321,6 +322,23 @@ struct AccumulatedTraceData
         return ipId;
     }
 
+    size_t addClass(const uintptr_t classPointer, const size_t classSize) {
+        if (!classPointer) {
+            return 0;
+        }
+
+        auto it = m_encounteredClasses.find(classPointer);
+        if (it != m_encounteredClasses.end()) {
+            return it->second;
+        }
+
+        size_t classIndex = intern(m_managedNames[classPointer]);
+        m_encounteredClasses.insert(it, make_pair(classPointer, classIndex));
+
+        fprintf(stdout, "C %zx %zx\n", classIndex, classSize);
+        return classIndex;
+    }
+
     bool fileIsReadable(const string& path) const
     {
         return access(path.c_str(), R_OK) == 0;
@@ -406,6 +424,7 @@ private:
     unordered_map<uintptr_t, string> m_managedNames;
     unordered_map<string, size_t> m_internedData;
     unordered_map<uintptr_t, size_t> m_encounteredIps;
+    unordered_map<uintptr_t, size_t> m_encounteredClasses;
 };
 }
 
@@ -540,6 +559,7 @@ int main(int /*argc*/, char** /*argv*/)
                 for (auto managedPtr : managedPointersSet) {
                     auto allocation = ptrToIndex.takePointer(managedPtr);
 
+
                     if (!allocation.second) {
                         cerr << "wrong trace format (unknown managed pointer) 0x" << std::hex << managedPtr << std::dec << endl;
                         continue;
@@ -663,21 +683,46 @@ int main(int /*argc*/, char** /*argv*/)
             --leakedAllocations;
         } else if (reader.mode() == 'n') {
             uint64_t ip;
-            string methodName;
-            if (!(reader >> ip) || !(reader >> methodName)) {
+            string name;
+            if (!(reader >> ip) || !(reader >> name)) {
                 cerr << "failed to parse line: " << reader.line() << endl;
             }
 
-            if (managed_name_ids.find(methodName) == managed_name_ids.end()) {
-                managed_name_ids.insert(std::make_pair(methodName, 1));
+            if (managed_name_ids.find(name) == managed_name_ids.end()) {
+                managed_name_ids.insert(std::make_pair(name, 1));
             } else {
-                int id = ++managed_name_ids[methodName];
+                int id = ++managed_name_ids[name];
 
-                methodName.append("~");
-                methodName.append(std::to_string(id));
+                name.append("~");
+                name.append(std::to_string(id));
             }
 
-            data.addManagedNameForIP(ip, methodName);
+            data.addManagedNameForIP(ip, name);
+        } else if (reader.mode() == 'e') {
+            size_t gcCounter = 0;
+            size_t numChildren = 0;
+            uintptr_t objectPointer = 0;
+            uintptr_t classPointer = 0;
+
+            if (!(reader >> gcCounter) || !(reader >> numChildren) || !(reader >> objectPointer) || !(reader >> classPointer)) {
+                cerr << "failed to parse line: " << reader.line() << endl;
+                continue;
+            }
+            // ensure class is encountered
+            const auto classId = data.addClass(classPointer, 0);
+            const auto objectId = ptrToIndex.peekPointer(objectPointer);
+            if (!objectId.second)
+                cerr << "unknown object id (" << objectPointer << ") here: " << reader.line() << endl;
+            // trace point, map current output index to parent index
+            fprintf(stdout, "e %zx %zx %zx %zx %zx\n", gcCounter, numChildren, objectPointer, classId, objectId.first.index);
+        } else if (reader.mode() == 'C') {
+            uintptr_t classPointer = 0;
+            size_t classSize = 0;
+            if (!(reader >> classPointer) || !(reader >> classSize)) {
+                cerr << "failed to parse line: " << reader.line() << endl;
+                continue;
+            }
+            data.addClass(classPointer, classSize);
         } else {
             fputs(reader.line().c_str(), stdout);
             fputc('\n', stdout);

@@ -87,6 +87,21 @@ struct Allocation : public AllocationData
     TraceIndex traceIndex;
 };
 
+struct ClassInfo
+{
+    ClassIndex classIndex;
+    uint64_t size = 0;
+};
+
+struct ObjectTreeNode
+{
+    uint64_t gcNum;
+    uint64_t numChildren;
+    uint64_t objectPtr;
+    ClassIndex classIndex;
+    AllocationIndex allocIndex;
+};
+
 /**
  * Information for a single call to an allocation function.
  */
@@ -352,8 +367,9 @@ struct AccumulatedTraceData
     std::vector<TraceNode> traces;
     std::vector<std::string> strings;
     std::vector<IpIndex> opNewIpIndices;
-
     std::vector<AllocationInfo> allocationInfos;
+    std::vector<ClassInfo> classInfos;
+    std::vector<ObjectTreeNode> objectTreeNodes;
 
     AddressRangesMap addressRangeInfos;
 

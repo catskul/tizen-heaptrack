@@ -21,7 +21,9 @@ set(SRCFILES
     gui.cpp
     mainwindow.cpp
     treemodel.cpp
+    objecttreemodel.cpp
     treeproxy.cpp
+    objecttreeproxy.cpp
     costdelegate.cpp
     parser.cpp
     flamegraph.cpp

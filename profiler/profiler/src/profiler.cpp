@@ -271,6 +271,43 @@ static HRESULT GetClassNameFromClassId(ICorProfilerInfo *info, ClassID classId, 
   return S_OK;
 }
 
+static HRESULT GetClassSizeFromClassId(ICorProfilerInfo2 *info, ClassID classId, ULONG *pulClassSize) {
+  ModuleID moduleId;
+  mdTypeDef mdClass;
+  ClassID parentClassId;
+
+  HRESULT hr = info->GetClassIDInfo2(classId, &moduleId, &mdClass, &parentClassId, 0, nullptr, nullptr);
+  if (parentClassId) {
+    ULONG parentClassSize = 0;
+    hr = GetClassSizeFromClassId(info, parentClassId, &parentClassSize);
+    *pulClassSize += parentClassSize;
+  }
+
+  if (hr != S_OK)
+    return hr;
+
+  IMetaDataImport * pIMetaDataImport;
+  hr = info->GetModuleMetaData(moduleId, CorOpenFlags::ofRead, IID_IMetaDataImport, 
+                                                              (LPUNKNOWN *)&pIMetaDataImport);
+  if (hr != S_OK)
+    return hr; 
+
+  DWORD packSize;
+  ULONG cMax = 128;
+  COR_FIELD_OFFSET rFieldOffset[cMax];
+  ULONG cFieldOffset;
+
+  ULONG classSize = 0;
+  hr = pIMetaDataImport->GetClassLayout(mdClass, &packSize, rFieldOffset, cMax, &cFieldOffset, &classSize);
+  *pulClassSize += classSize;
+  
+  if (hr != S_OK)
+    return hr;
+
+  pIMetaDataImport->Release();
+  return S_OK;
+}
+
 void encodeWChar(WCHAR *orig, char *encoded) {
   int i = 0;
   while (orig[i] != 0) {
@@ -310,6 +347,7 @@ void OnFunctionEnter(FunctionIDOrClientID functionID,
   encodeWChar(szMethodName, methodName);
 
   PushShadowStack(functionID.functionID, className, methodName);
+  info->Release();
 }
 
 void OnFunctionLeave(FunctionIDOrClientID functionID,
@@ -325,7 +363,7 @@ HRESULT STDMETHODCALLTYPE Profiler::Initialize(IUnknown *pICorProfilerInfoUnk) {
     info->SetEventMask(
         COR_PRF_MONITOR_ENTERLEAVE | COR_PRF_ENABLE_FUNCTION_ARGS |
         COR_PRF_ENABLE_FUNCTION_RETVAL | COR_PRF_ENABLE_FRAME_INFO |
-        COR_PRF_ENABLE_STACK_SNAPSHOT |
+        COR_PRF_ENABLE_STACK_SNAPSHOT | COR_PRF_MONITOR_CLASS_LOADS |
         COR_PRF_ENABLE_OBJECT_ALLOCATED | COR_PRF_MONITOR_OBJECT_ALLOCATED | COR_PRF_MONITOR_GC);
     info->SetEnterLeaveFunctionHooks3WithInfo(OnFunctionEnter, OnFunctionLeave,
                                               NULL);
@@ -411,6 +449,20 @@ HRESULT STDMETHODCALLTYPE Profiler::ClassLoadStarted(ClassID classId) {
 
 HRESULT STDMETHODCALLTYPE
     Profiler::ClassLoadFinished(ClassID classId, HRESULT hrStatus) {
+
+  if (hrStatus != S_OK)
+    return S_OK;
+  ICorProfilerInfo2 *info;
+  HRESULT hr = g_pICorProfilerInfoUnknown->QueryInterface(IID_ICorProfilerInfo2,
+                                                          (void **)&info);
+  WCHAR wszClassName[MAX_NAME_LENGTH + 1];
+  GetClassNameFromClassId(info, classId, wszClassName);
+  char className[MAX_NAME_LENGTH + 1];
+  encodeWChar(wszClassName, className);
+  uint32_t classSize = 0;
+  GetClassSizeFromClassId(info, classId, &classSize);
+  heaptrack_loadclass(reinterpret_cast<void*>(classId), classSize, className);
+  info->Release();
   return S_OK;
 }
 
@@ -579,6 +631,8 @@ HRESULT STDMETHODCALLTYPE
   if (hr == S_OK)
     PopShadowStack();
 
+  info->Release();
+
   return S_OK;
 }
 
@@ -591,11 +645,48 @@ HRESULT STDMETHODCALLTYPE Profiler::ObjectsAllocatedByClass(ULONG cClassCount,
 HRESULT STDMETHODCALLTYPE
     Profiler::ObjectReferences(ObjectID objectId, ClassID classId,
                                ULONG cObjectRefs, ObjectID objectRefIds[]) {
+  HRESULT hr;
+  ICorProfilerInfo *info;
+  hr = g_pICorProfilerInfoUnknown->QueryInterface(IID_ICorProfilerInfo,
+                                                            (void **)&info);
+  if (hr != S_OK)
+    return hr;
+
+  for (int i = 0; i < cObjectRefs; ++i) {    
+    ClassID subjClass;
+    hr = info->GetClassFromObject(objectRefIds[i], &subjClass);
+
+    // We still want the best estimate, even though something went wrong.
+    if (hr != S_OK)
+      continue;
+
+    heaptrack_add_object_dep((void*)objectId, (void*)classId, (void*)objectRefIds[i], (void*)subjClass);
+  }
+  info->Release();
   return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE
     Profiler::RootReferences(ULONG cRootRefs, ObjectID rootRefIds[]) {
+  HRESULT hr;
+  ICorProfilerInfo *info;
+  hr = g_pICorProfilerInfoUnknown->QueryInterface(IID_ICorProfilerInfo,
+                                                            (void **)&info);
+
+  if (hr != S_OK)
+    return hr;
+
+  for (int i = 0; i < cRootRefs; ++i) {    
+    ClassID rootClass;
+    hr = info->GetClassFromObject(rootRefIds[i], &rootClass);
+
+    // We still want the best estimate, even though something went wrong.
+    if (hr != S_OK)
+      continue;
+
+    heaptrack_gcroot((void *) rootRefIds[i], (void*)rootClass);
+  }
+  info->Release();
   return S_OK;
 }
 
@@ -723,7 +814,7 @@ HRESULT STDMETHODCALLTYPE
 
       heaptrack_gcmarksurvived((void *) ranges[i].rangeStart, (unsigned long) ranges[i].rangeLength, NULL);
     }
-
+  info->Release();
   return S_OK;
 }
 

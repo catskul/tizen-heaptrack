@@ -165,6 +165,24 @@ public:
         return {index, true};
     }
 
+    std::pair<AllocationIndex, bool> peekPointer(const uint64_t ptr)
+    {
+        const SplitPointer pointer(ptr);
+
+        auto mapIt = map.find(pointer.big);
+        if (mapIt == map.end()) {
+            return {{}, false};
+        }
+        auto& indices = mapIt->second;
+        auto pageIt = std::lower_bound(indices.smallPtrParts.begin(), indices.smallPtrParts.end(), pointer.small);
+        if (pageIt == indices.smallPtrParts.end() || *pageIt != pointer.small) {
+            return {{}, false};
+        }
+        auto allocationIt = indices.allocationIndices.begin() + distance(indices.smallPtrParts.begin(), pageIt);
+        auto index = *allocationIt;
+        return {index, true};
+    }
+
 private:
     struct Indices
     {

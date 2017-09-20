@@ -19,5 +19,8 @@ extern "C" void heaptrack_objectallocate(void *objectId, unsigned long objectSiz
 extern "C" void heaptrack_startgc();
 extern "C" void heaptrack_gcmarksurvived(void *rangeStart, unsigned long rangeLength, void *rangeMovedTo);
 extern "C" void heaptrack_finishgc();
+extern "C" void heaptrack_add_object_dep(void *keyObjectId, void *keyClassId, void *valObjectId, void *valClassId);
+extern "C" void heaptrack_loadclass(void *classId,  unsigned long classSize, char *className);
+extern "C" void heaptrack_gcroot(void *objectId, void *rootClass);
 
 #endif // STACKENTRY_H

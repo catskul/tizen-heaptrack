@@ -33,6 +33,130 @@ using namespace std;
 
 namespace {
 
+struct ObjectNode {
+    ObjectNode()
+    : m_children(), m_objectPtr(0), m_classIndex(), m_objectSize(0), gcNum(0)
+    {
+    }
+
+    std::vector<ObjectNode> m_children;
+    uint64_t m_objectPtr;
+    ClassIndex m_classIndex;
+    uint64_t m_objectSize;
+    uint32_t gcNum;
+};
+
+
+struct TypeTree {
+    TypeTree()
+    : m_classIndex(),
+      m_parents(),
+      m_uniqueObjects(),
+      m_totalSize(0),
+      m_referencedSize(0),
+      m_gcNum(0)
+    {
+    }
+
+    TypeTree(const TypeTree& rhs)
+    : m_classIndex(rhs.m_classIndex),
+      m_parents(),
+      m_uniqueObjects(rhs.m_uniqueObjects),
+      m_totalSize(rhs.m_totalSize),
+      m_referencedSize(rhs.m_referencedSize),
+      m_gcNum(rhs.m_gcNum)
+    {
+        for (auto& rParent: rhs.m_parents) {
+            auto parent = std::unique_ptr<TypeTree>(new TypeTree(*rParent));
+            m_parents.push_back(std::move(parent));
+        }
+    }
+
+    ~TypeTree() {
+    }
+
+    static std::unique_ptr<TypeTree> create(ObjectNode& node) {
+        auto TT = std::unique_ptr<TypeTree>(new TypeTree());
+        TT->m_classIndex = node.m_classIndex;
+        TT->m_gcNum = node.gcNum;
+        TT->m_uniqueObjects.insert(node.m_objectPtr);
+        TT->m_totalSize = node.m_objectSize;
+        TT->m_referencedSize = node.m_objectSize;
+        return TT;
+    }
+
+    static std::vector<std::unique_ptr<TypeTree>> createBottomUp(ObjectNode& node) {
+        std::vector<std::unique_ptr<TypeTree>> result;
+        if (node.m_classIndex.index == 0 && node.m_children.size() == 0)
+            return result;
+
+        if (node.m_children.size() == 0) {
+            result.push_back(std::move(create(node)));
+            return result;
+        }
+
+        for (ObjectNode& child: node.m_children) {
+            auto leaves = TypeTree::createBottomUp(child);
+            for (auto& leaf: leaves) {
+                auto parent = create(node);
+                parent->m_referencedSize = leaf->m_referencedSize;
+                TypeTree* childIt = leaf.get();
+                while (childIt->m_parents.size() > 0)
+                    childIt = childIt->m_parents[0].get();
+                childIt->m_parents.push_back(std::move(parent));
+                result.push_back(std::move(leaf));
+                auto parentCopy = create(node);
+                result.push_back(std::move(parentCopy));
+            }
+        }
+
+        return result;
+    }
+
+    void mergeSubtrees() {
+        std::unordered_map<uint64_t,
+                std::vector<TypeTree*>> classCounters;
+
+        for (auto& parent: m_parents) {
+            classCounters[parent->m_classIndex.index].push_back(parent.get());
+        }
+
+        std::vector<std::unique_ptr<TypeTree>> newParents;
+
+        for (auto it = classCounters.begin(),
+             end = classCounters.end(); it != end; ++it) {
+            auto combinedParent = std::unique_ptr<TypeTree>(new TypeTree());
+            combinedParent->m_classIndex.index = it->first;
+            auto& subtrees = it->second;
+            combinedParent->m_gcNum = m_gcNum;
+            for (auto& parent: subtrees) {
+                for (auto &parentsParent: parent->m_parents)
+                    combinedParent->m_parents.push_back(std::move(parentsParent));
+                combinedParent->m_referencedSize += parent->m_referencedSize;
+                for (auto& uo: parent->m_uniqueObjects) {
+                    auto pib = combinedParent->m_uniqueObjects.insert(uo);
+                    if (pib.second)
+                        combinedParent->m_totalSize += parent->m_totalSize;
+                }
+
+            }
+            combinedParent->mergeSubtrees();
+
+            newParents.push_back(std::move(combinedParent));
+        }
+
+        m_parents.erase(m_parents.begin(), m_parents.end());
+        m_parents = std::move(newParents);
+    }
+
+    ClassIndex m_classIndex;
+    std::vector<std::unique_ptr<TypeTree>> m_parents;
+    std::unordered_set<uint32_t> m_uniqueObjects;
+    uint64_t m_totalSize;
+    uint64_t m_referencedSize;
+    int m_gcNum;
+};
+
 // TODO: use QString directly
 struct StringCache
 {
@@ -585,6 +709,72 @@ HistogramData buildSizeHistogram(ParserData& data)
 }
 }
 
+void setObjectParents(QVector<ObjectRowData>& children, const ObjectRowData* parent)
+{
+    for (auto& row : children) {
+        row.parent = parent;
+        setObjectParents(row.children, &row);
+    }
+}
+
+ObjectRowData objectRowDataFromTypeTree(ParserData& data, TypeTree* tree) {
+    ObjectRowData rowData;
+    rowData.gcNum = tree->m_gcNum;
+    rowData.classIndex = tree->m_classIndex.index;
+    rowData.className = data.stringify(tree->m_classIndex);
+    rowData.allocations = tree->m_uniqueObjects.size();
+    rowData.allocated = tree->m_totalSize;
+    rowData.referenced = tree->m_referencedSize;
+    for (auto& parent: tree->m_parents)
+        rowData.children.push_back(objectRowDataFromTypeTree(data, parent.get()));
+    return rowData;
+}
+
+ObjectNode buildObjectGraph(ParserData& data, size_t &nodeIndex) {
+    ObjectNode node;
+    ObjectTreeNode &dataNode = data.objectTreeNodes[nodeIndex];
+    node.m_classIndex = dataNode.classIndex;
+    node.m_objectPtr = dataNode.objectPtr;
+    node.gcNum = dataNode.gcNum;
+    if (dataNode.allocIndex.index != 0)
+        node.m_objectSize = data.allocationInfos[dataNode.allocIndex.index].size;
+    else
+        node.m_objectSize = 0;
+    nodeIndex++;
+    for (size_t i = 0; i < dataNode.numChildren; ++i) {
+        if (node.gcNum != data.objectTreeNodes[nodeIndex].gcNum)
+            break;
+        node.m_children.push_back(buildObjectGraph(data, nodeIndex));
+    }
+    return node;
+}
+
+ObjectTreeData buildObjectTree(ParserData& data)
+{
+
+    ObjectTreeData ret;
+    size_t nodeIndex = 0;
+    std::vector<ObjectNode> nodes;
+    while (nodeIndex < data.objectTreeNodes.size()) {
+        nodes.push_back(buildObjectGraph(data, nodeIndex));
+    }
+
+    for (auto& node: nodes) {
+        TypeTree root;
+        root.m_gcNum = node.gcNum;
+        root.m_parents = TypeTree::createBottomUp(node);
+        root.mergeSubtrees();
+
+        for (auto& parent: root.m_parents) {
+            ret.push_back(objectRowDataFromTypeTree(data, parent.get()));
+        }
+
+    }
+    setObjectParents(ret, nullptr);
+
+    return ret;
+}
+
 Parser::Parser(QObject* parent)
     : QObject(parent)
 {
@@ -656,6 +846,11 @@ void Parser::parse(const QString& path, const QString& diffBase)
             emit bottomUpFilterOutLeavesDataAvailable(mergeAllocations(*data, false));
         } else {
             emit bottomUpFilterOutLeavesDataAvailable(mergedAllocations);
+        }
+
+        if (AllocationData::display == AllocationData::DisplayId::managed) {
+            const auto objectTreeBottomUpData = buildObjectTree(*data);
+            emit objectTreeBottomUpDataAvailable(objectTreeBottomUpData);
         }
 
         // also calculate the size histogram

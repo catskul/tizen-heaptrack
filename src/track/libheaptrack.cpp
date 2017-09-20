@@ -45,10 +45,12 @@
 #include <string>
 #include <thread>
 #include <unordered_set>
+#include <unordered_map>
 
 #include <boost/algorithm/string/replace.hpp>
 
 #include "tracetree.h"
+#include "objectgraph.h"
 #include "util/config.h"
 #include "util/libunwind_config.h"
 
@@ -62,6 +64,7 @@
 using namespace std;
 
 unordered_set<Trace::ip_t> TraceTree::knownNames;
+std::unordered_map<void*, ObjectNode> ObjectGraph::m_graph;
 
 thread_local bool RecursionGuard::isActive = false;
 
@@ -509,7 +512,10 @@ public:
         if (fprintf(s_data->out, "G 1\n") < 0) {
             writeError();
             return;
-	}
+    	}
+
+        ObjectGraph graph;
+        graph.clear();
     }
 
     void handleGCSurvivedRange(void *rangeStart, unsigned long rangeLength, void *rangeMovedTo)
@@ -528,6 +534,8 @@ public:
 
     void handleFinishGC()
     {
+        static int gc_counter = 0;
+        gc_counter++;
         if (!s_data || !s_data->out) {
             return;
         }
@@ -535,7 +543,20 @@ public:
         if (fprintf(s_data->out, "G 0\n") < 0) {
             writeError();
             return;
-	}
+	    }
+
+        ObjectGraph graph;
+        graph.print(gc_counter, s_data->out);
+    }
+
+    void handleLoadClass(void *classId, unsigned long classSize, char *className) {
+        std::string formattedName;
+        formattedName.append("[");
+        formattedName.append(className);
+        formattedName.append("]");
+        fprintf(s_data->out, "n %" PRIxPTR " %s\n", reinterpret_cast<uintptr_t>(classId), formattedName.c_str());
+        fprintf(s_data->out, "C %" PRIxPTR " %lx\n",  reinterpret_cast<uintptr_t>(classId), classSize);
+        TraceTree::knownNames.insert(classId);
     }
 
 private:
@@ -985,6 +1006,25 @@ void heaptrack_finishgc() {
 
     HeapTrack heaptrack(guard);
     heaptrack.handleFinishGC();
+}
+
+void heaptrack_add_object_dep(void *keyObjectId, void *keyClassId, void *valObjectId, void *valClassId) {
+    ObjectGraph graph;
+    graph.index(keyObjectId, keyClassId, valObjectId, valClassId);
+}
+
+void heaptrack_gcroot(void *objectId, void *classId) {
+    ObjectGraph graph;
+    graph.addRoot(objectId, classId);
+}
+
+__attribute__((noinline))
+void heaptrack_loadclass(void *classId, unsigned long classSize, char *className) {
+    assert(!RecursionGuard::isActive);
+    RecursionGuard guard;
+
+    HeapTrack heaptrack(guard);
+    heaptrack.handleLoadClass(classId, classSize, className);
 }
 
 void heaptrack_invalidate_module_cache()

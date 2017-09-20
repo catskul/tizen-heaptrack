@@ -89,6 +89,9 @@ struct ModuleIndex : public StringIndex
 struct FunctionIndex : public StringIndex
 {
 };
+struct ClassIndex : public StringIndex
+{
+};
 struct FileIndex : public StringIndex
 {
 };
