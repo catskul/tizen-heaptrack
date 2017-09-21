@@ -1,3 +1,7 @@
+## CoreCLR Memory Profiling
+
+(Original KDE Heaptrack's README can be found [here](HEAPTRACK_README.md) )
+
 ### Brief contents of the Guide
 
 #### VM [[Details]](#download-and-unpack-vm-disk-image-from-this-page)
