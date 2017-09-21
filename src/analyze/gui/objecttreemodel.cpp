@@ -119,9 +119,15 @@ QVariant ObjectTreeModel::data(const QModelIndex& index, int role) const
         case InstanceCountColumn:
             return static_cast<qint64>(row->allocations);
         case ShallowSizeColumn:
-            return static_cast<qint64>(row->allocated);
+            if (role == SortRole) {
+                return static_cast<qint64>(row->allocated);
+            }
+            return m_format.formatByteSize(row->allocated, 1, KFormat::JEDECBinaryDialect);
         case ReferencedSizeColumn:
-            return static_cast<qint64>(row->referenced);
+            if (role == SortRole) {
+                return static_cast<qint64>(row->referenced);
+            }
+            return m_format.formatByteSize(row->referenced, 1, KFormat::JEDECBinaryDialect);
         case GCNumColumn:
             return static_cast<quint64>(row->gcNum);
         case NUM_COLUMNS:

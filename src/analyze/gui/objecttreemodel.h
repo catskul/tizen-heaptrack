@@ -86,6 +86,7 @@ private:
     int rowOf(const ObjectRowData* row) const;
 
     ObjectTreeData m_data;
+    KFormat m_format;
 };
 
 #endif // OBJECTTREEMODEL_H
