@@ -307,6 +307,13 @@ The profiling tool can show memory consumption of **Managed**, **Malloc** and **
 *   functions that called allocators more than others for temporary allocations ("most temporary allocations") - temporary is the case when malloc and free are called almost one after other (with no allocations between them)
 *   functions that allocated most memory at sum ("most memory allocated") - just sum of allocations, without accounting freeing of memory
 *   "peak RSS" is currently experimental and so is not precise
+#### Managed heap inspection
+![managed-ReferenceTree.png](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/managed-ReferenceTree.png?api=v2)
+*   Objects are grouped by their type
+*   If type T2 is a child of type T1, it means that objects of type T2 reference objects of type T1
+*   Shallow Size is the total size of objects in the reference chain
+*   Referenced Size is the size of objects referenced by the parent object.
+For example, Xamarin.Forms.ResourceDictionary indirectly references 252 bytes of System.Strings in the screenshot
 #### mmap-allocated memory graphs
 Most of the graphs listed above are also available for mmap-allocated memory.
 * ![mmap-private-dirty-Plain-Statistics.png](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/mmap-private-dirty-Plain-Statistics.png?api=v2)
@@ -316,7 +323,7 @@ Most of the graphs listed above are also available for mmap-allocated memory.
     *   Private_Clean is process-local (not shared) memory that was loaded from disk and not modified by the process
     *   Shared_Clean is shared between processes memory, not modified by the process
     *   Shared_Clean is shared between processes memory, modified by the process
-    *   the groups are chosen by --private_dirty, --private_clean, --shared keys of heaptrack_gui (--malloc is for malloc memory consumption)
+    *   the groups are chosen by --private_dirty, --private_clean, --shared keys of heaptrack_gui (--malloc is for malloc memory consumption and --managed is for managed memory consumption)
 *   there are two additional groups, which are accounted indirectly
     *   dlopen (memory, used for loaded libraries)
     *   sbrk (memory, used for "[heap]") - this includes:
