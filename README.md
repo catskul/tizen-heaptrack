@@ -6,12 +6,23 @@
 
 To unpack it on Linux, please, download the ubuntu-17.04.vdi.tar.bz2-* files to separate directory and run the following command in the directory:
 
-<pre>cat ubuntu-17.04.vdi.tar.bz2-* | tar xjvf -</pre>
+```
+cat ubuntu-17.04.vdi.tar.bz2-* | tar xjvf -
+```
 
 
 
 For unpacking on Windows, please see [the details](#download-and-unpack-vm-disk-image-from-this-page).
 
+* [ubuntu-17.04.vdi.tar.bz2-31-08-17-aa](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/ubuntu-17.04.vdi.tar.bz2-31-08-17-aa?api=v2)
+* [ubuntu-17.04.vdi.tar.bz2-31-08-17-ab](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/ubuntu-17.04.vdi.tar.bz2-31-08-17-ab?api=v2)
+* [ubuntu-17.04.vdi.tar.bz2-31-08-17-ac](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/ubuntu-17.04.vdi.tar.bz2-31-08-17-ac?api=v2)
+* [ubuntu-17.04.vdi.tar.bz2-31-08-17-ad](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/ubuntu-17.04.vdi.tar.bz2-31-08-17-ad?api=v2)
+* [ubuntu-17.04.vdi.tar.bz2-31-08-17-ae](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/ubuntu-17.04.vdi.tar.bz2-31-08-17-ae?api=v2)
+* [ubuntu-17.04.vdi.tar.bz2-31-08-17-af](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/ubuntu-17.04.vdi.tar.bz2-31-08-17-af?api=v2)
+* [ubuntu-17.04.vdi.tar.bz2-31-08-17-ag](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/ubuntu-17.04.vdi.tar.bz2-31-08-17-ag?api=v2)
+* [ubuntu-17.04.vdi.tar.bz2-31-08-17-ah](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/ubuntu-17.04.vdi.tar.bz2-31-08-17-ah?api=v2)
+* [ubuntu-17.04.vdi.tar.bz2-31-08-17-ai](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/ubuntu-17.04.vdi.tar.bz2-31-08-17-ai?api=v2)
 
 [[SHA256 values for archive contents]](#checksums)
 
@@ -22,6 +33,8 @@ For unpacking on Windows, please see [the details](#download-and-unpack-vm-disk-
 
 3\. Run /home/ubuntu/heaptrack-scripts/prepare-device.sh on VM
 
+[Video tutorial](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/How-to-prepare-Tizen-device-for-measurements.mp4?api=v2)
+
 
 #### Build profiler module for your CoreCLR version [[Details]](#build-profiler-module-for-your-coreclr-version)
 
@@ -29,6 +42,8 @@ By default the libprofiler.so is already built for coreclr-2.0.0.11992-11.1.armv
 then you don't need to rebuild it.
 
 For details, see "Build profiler module" in full contents below (section 5)
+
+[Video tutorial](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/How-to-build-managed-profiling-module.mp4?api=v2)
 
 #### Measurements [[Details]](#run-measurements)
 
@@ -41,6 +56,7 @@ like the following:
 ./heaptrack-scripts/heaptrack.sh org.tizen.example.HelloWorld.Tizen /opt/usr/home/owner/apps_rw/HelloWorld.Tizen/bin/HelloWorld.Tizen.exe
 ```
 
+[Video tutorial](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/Profiling-memory-consumption.mp4?api=v2)
 
 10\. Wait until a moment, in which you want to figure out the memory consumption.
 
@@ -51,7 +67,7 @@ The GUI will start separately for **Malloc** part, **Managed** part, **mmap Priv
 
 [[Profiling results description]](#profiling-results)
 
-[[Some screenshots]](#profiling-results)
+[[Some screenshots]](#screenshots)
 
 [[Solutions for possible issues]](#troubleshooting)
 
@@ -259,23 +275,28 @@ The profiling tool can show memory consumption of **Managed**, **Malloc** and **
 ### Screenshots
 
 #### malloc'ed memory over time
+![malloc-Consumed-Graph.png](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/malloc-Consumed-Graph.png?api=v2)
 *   Each color shows different function (function name is shown when mouse is over a part of graph)
 *   The top part is sum of all malloc-allocated memory (for all allocating functions)
 *   The graph is useful to get overall picture of how memory consumption changed as program executed
 #### Functions and their statistics
+![malloc-Plain-Statistics.png](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/malloc-Plain-Statistics.png?api=v2)
 *   Peak is memory consumption of particular function at overall maximum of application consumption (this considers only currently shown memory - i.e. only malloc, or mmap Private_Dirty, or mmap Private_Clean, etc.)
 *   Leaked is memory consumption just at application exit (not actually, leak, as most application do not free memory at their exit - so, it is just information about memory consumption just before application exit)
 *   Allocated is sum of all allocated memory sizes (doesn't account that some memory was already freed - counts only allocations)
 *   "Incl." mark is for the function and all functions that it calls; "Self" mark is for the function only
 #### Call stacks and memory consumption at each point of call stack
+![malloc-FlameGraph-Details.png](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/malloc-FlameGraph-Details.png?api=v2)
 *   For example, "icu::Normalizer2Impl::ensureCanonIterData" calls "utrie2_enum" and "icu::CanonIterData::CanonIterData" and "utri2_freeze"
     *   The "utrie2_enum" and "icu::CanonIterData::CanonIterData" and "utri2_freeze" call other functions that in sum allocate 539, 283 and 80 kilobytes, correspondingly
     *   The consumption for "ensureCanonIterData" will be shown as 904 kB - it is sum of the three values
 *   In another places (another call stacks) the functions can also be called and that memory consumption will be accounted separately for these and those call stacks
 #### Reversed FlameGraph (if "Bottom-Down View" is checked)
+![malloc-FlameGraph-Reversed.png](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/malloc-FlameGraph-Reversed.png?api=v2)
 *   A useful form of FlameGraph to show the call stacks reversed
     *   So, the bottom line will show the allocator functions - like malloc, calloc, realloc, etc. and lines above will be the functions that call the allocator functions
 #### Top-N lists of functions:
+![malloc-Summary.png](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/malloc-Summary.png?api=v2)
 *   functions that consumed most when peak of malloc memory consumption occured ("peak contributions")
 *   functions that consumed most just before application exit ("largest memory leaks")
 *   functions that called allocators more than others ("most memory allocations")
@@ -283,6 +304,9 @@ The profiling tool can show memory consumption of **Managed**, **Malloc** and **
 *   functions that allocated most memory at sum ("most memory allocated") - just sum of allocations, without accounting freeing of memory
 *   "peak RSS" is currently experimental and so is not precise
 #### mmap-allocated memory graphs
+Most of the graphs listed above are also available for mmap-allocated memory.
+* ![mmap-private-dirty-Plain-Statistics.png](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/mmap-private-dirty-Plain-Statistics.png?api=v2)
+* ![mmap-private-dirty-Consumed-Graph.png](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/mmap-private-dirty-Consumed-Graph.png?api=v2)
 *   the mmap-allocated memory is divided into four groups (as in /proc/.../smaps): Private_Dirty, Private_Clean, Shared_Clean + Shared_Dirty
     *   Private_Dirty is process-local (not shared) memory that was modified by the process
     *   Private_Clean is process-local (not shared) memory that was loaded from disk and not modified by the process
@@ -296,7 +320,7 @@ The profiling tool can show memory consumption of **Managed**, **Malloc** and **
         *   overhead of profiler
         *   possibly, other allocators if they use `sbrk` (this is unusual)
 
-#### Checksums
+### Checksums
 
 SHA256SUM for unpacked VM image
 
