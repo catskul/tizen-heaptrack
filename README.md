@@ -1,4 +1,4 @@
-# CoreCLR Memory Profiling
+# Tizen .NET Memory Profiler
 
 (Original KDE Heaptrack's README can be found [here](docs/HEAPTRACK_README.md))
 
@@ -161,11 +161,11 @@ The profiling tool can show memory consumption of **Managed**, **Malloc** and **
 *   If type T2 is a child of type T1, it means that objects of type T2 reference objects of type T1
 *   Shallow Size is the total size of objects in the reference chain
 *   Referenced Size is the size of objects referenced by the parent object.
-For example, Xamarin.Forms.ResourceDictionary indirectly references 252 bytes of System.Strings in the screenshot
+For example, `System.AppDomainSetup` references 76 bytes of `System.String`s in the screenshot through `System.Object[]`->`System.String[]` chain and 32 bytes of `System.String`s directly.
 ### mmap-allocated memory graphs
 Most of the graphs listed above are also available for mmap-allocated memory.
-* ![mmap-private-dirty-Plain-Statistics.png](screenshots/mmap-private-dirty-Plain-Statistics.png)
-* ![mmap-private-dirty-Consumed-Graph.png](screenshots/mmap-private-dirty-Consumed-Graph.png)
+![mmap-private-dirty-Plain-Statistics.png](screenshots/mmap-private-dirty-Plain-Statistics.png)
+![mmap-private-dirty-Consumed-Graph.png](screenshots/mmap-private-dirty-Consumed-Graph.png)
 *   the mmap-allocated memory is divided into four groups (as in /proc/.../smaps): Private_Dirty, Private_Clean, Shared_Clean + Shared_Dirty
     *   Private_Dirty is process-local (not shared) memory that was modified by the process
     *   Private_Clean is process-local (not shared) memory that was loaded from disk and not modified by the process
