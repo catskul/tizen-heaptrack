@@ -559,7 +559,6 @@ int main(int /*argc*/, char** /*argv*/)
                 for (auto managedPtr : managedPointersSet) {
                     auto allocation = ptrToIndex.takePointer(managedPtr);
 
-
                     if (!allocation.second) {
                         cerr << "wrong trace format (unknown managed pointer) 0x" << std::hex << managedPtr << std::dec << endl;
                         continue;
@@ -708,8 +707,14 @@ int main(int /*argc*/, char** /*argv*/)
                 cerr << "failed to parse line: " << reader.line() << endl;
                 continue;
             }
+
             // ensure class is encountered
             const auto classId = data.addClass(classPointer, 0);
+            if (classId == 0) {
+                cerr << "Unknown class id (" << classPointer << ") here: " << reader.line() << endl;
+                continue;
+	        }
+
             const auto objectId = ptrToIndex.peekPointer(objectPointer);
             if (!objectId.second)
                 cerr << "unknown object id (" << objectPointer << ") here: " << reader.line() << endl;

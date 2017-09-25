@@ -292,13 +292,8 @@ static HRESULT GetClassSizeFromClassId(ICorProfilerInfo2 *info, ClassID classId,
   if (hr != S_OK)
     return hr; 
 
-  DWORD packSize;
-  ULONG cMax = 128;
-  COR_FIELD_OFFSET rFieldOffset[cMax];
-  ULONG cFieldOffset;
-
   ULONG classSize = 0;
-  hr = pIMetaDataImport->GetClassLayout(mdClass, &packSize, rFieldOffset, cMax, &cFieldOffset, &classSize);
+  hr = pIMetaDataImport->GetClassLayout(mdClass, nullptr, nullptr, 0, nullptr, &classSize);
   *pulClassSize += classSize;
   
   if (hr != S_OK)
@@ -455,12 +450,24 @@ HRESULT STDMETHODCALLTYPE
   ICorProfilerInfo2 *info;
   HRESULT hr = g_pICorProfilerInfoUnknown->QueryInterface(IID_ICorProfilerInfo2,
                                                           (void **)&info);
+  if (hr != S_OK)
+    return E_FAIL;
+
   WCHAR wszClassName[MAX_NAME_LENGTH + 1];
-  GetClassNameFromClassId(info, classId, wszClassName);
+  hr = GetClassNameFromClassId(info, classId, wszClassName);
+
+  if (hr != S_OK)
+    return E_FAIL;
+
   char className[MAX_NAME_LENGTH + 1];
   encodeWChar(wszClassName, className);
   uint32_t classSize = 0;
+
   GetClassSizeFromClassId(info, classId, &classSize);
+
+  if (hr != S_OK)
+    return E_FAIL;
+
   heaptrack_loadclass(reinterpret_cast<void*>(classId), classSize, className);
   info->Release();
   return S_OK;
