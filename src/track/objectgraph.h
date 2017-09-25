@@ -78,6 +78,12 @@ public:
         m_graph.clear();
     }
 
+    /* m_graph is in fact a flat collection of ObjectNodes. The graph structure
+       is provided by ObjectNode::children which point to ObjectNode instances
+       living inside m_graph. All instances of ObjectNode are residing
+       in m_graph, regardless of their position in the actual graph.
+       NULL key is somewhat special - the ObjectNode corresponding to it is a fake
+       ObjectNode whose children are GC roots. */
     static std::unordered_map<void*, ObjectNode> m_graph;
 };
 

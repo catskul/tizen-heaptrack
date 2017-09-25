@@ -22,6 +22,8 @@
 #include <ThreadWeaver/ThreadWeaver>
 
 #include <QDebug>
+#include <QMessageBox>
+#include <QString>
 
 #include "analyze/accumulatedtracedata.h"
 
@@ -730,8 +732,12 @@ ObjectRowData objectRowDataFromTypeTree(ParserData& data, TypeTree* tree) {
     return rowData;
 }
 
-ObjectNode buildObjectGraph(ParserData& data, size_t &nodeIndex) {
+ObjectNode buildObjectGraph(ParserData& data, size_t &nodeIndex, bool &success) {
     ObjectNode node;
+    if (nodeIndex >= data.objectTreeNodes.size()) {
+        success = false;
+        return node;
+    }
     ObjectTreeNode &dataNode = data.objectTreeNodes[nodeIndex];
     node.m_classIndex = dataNode.classIndex;
     node.m_objectPtr = dataNode.objectPtr;
@@ -742,9 +748,11 @@ ObjectNode buildObjectGraph(ParserData& data, size_t &nodeIndex) {
         node.m_objectSize = 0;
     nodeIndex++;
     for (size_t i = 0; i < dataNode.numChildren; ++i) {
-        if (node.gcNum != data.objectTreeNodes[nodeIndex].gcNum)
+        if (node.gcNum != data.objectTreeNodes[nodeIndex].gcNum) {
+            success = false;
             break;
-        node.m_children.push_back(buildObjectGraph(data, nodeIndex));
+        }
+        node.m_children.push_back(buildObjectGraph(data, nodeIndex, success));
     }
     return node;
 }
@@ -756,7 +764,14 @@ ObjectTreeData buildObjectTree(ParserData& data)
     size_t nodeIndex = 0;
     std::vector<ObjectNode> nodes;
     while (nodeIndex < data.objectTreeNodes.size()) {
-        nodes.push_back(buildObjectGraph(data, nodeIndex));
+        bool success = true;
+        ObjectNode node = buildObjectGraph(data, nodeIndex, success);
+        if (success)
+            nodes.push_back(node);
+        else {
+            QMessageBox::warning(nullptr, QString::fromStdString("Bad data"),
+                                 QString::fromStdString("Heap snapshot for GC #%1 is incomplete").arg(node.gcNum));
+        }
     }
 
     for (auto& node: nodes) {
