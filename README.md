@@ -1,198 +1,207 @@
-# heaptrack - a heap memory profiler for Linux
+# Tizen .NET Memory Profiler
 
-![heaptrack_gui summary page](screenshots/gui_summary.png?raw=true "heaptrack_gui summary page")
+(Original KDE Heaptrack's README can be found [here](docs/HEAPTRACK_README.md))
 
-Heaptrack traces all memory allocations and annotates these events with stack traces.
-Dedicated analysis tools then allow you to interpret the heap memory profile to:
+## Brief contents of the Guide
 
-- find hotspots that need to be optimized to reduce the **memory footprint** of your application
-- find **memory leaks**, i.e. locations that allocate memory which is never deallocated
-- find **allocation hotspots**, i.e. code locations that trigger a lot of memory allocation calls
-- find **temporary allocations**, which are allocations that are directly followed by their deallocation
+### VM [[Details]](docs/DETAILED.md#download-and-unpack-vm-disk-image-from-this-page)
 
-## Using heaptrack
+1\. Download and unpack VM image, start it in VirtualBox and connect with Tizen device
 
-The recommended way is to launch your application and start tracing from the beginning:
+To unpack it on Linux, please, download the ubuntu-17.04.vdi.tar.bz2-* files to separate directory and run the following command in the directory:
 
-    heaptrack <your application and its parameters>
+```
+cat ubuntu-17.04.vdi.tar.bz2-* | tar xjvf -
+```
 
-    heaptrack output will be written to "/tmp/heaptrack.APP.PID.gz"
-    starting application, this might take some time...
 
-    ...
 
-    heaptrack stats:
-        allocations:            65
-        leaked allocations:     60
-        temporary allocations:  1
+For unpacking on Windows, please see [the details](docs/DETAILED.md#download-and-unpack-vm-disk-image-from-this-page).
 
-    Heaptrack finished! Now run the following to investigate the data:
+* [ubuntu-17.04.vdi.tar.bz2-31-08-17-aa](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/ubuntu-17.04.vdi.tar.bz2-31-08-17-aa?api=v2)
+* [ubuntu-17.04.vdi.tar.bz2-31-08-17-ab](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/ubuntu-17.04.vdi.tar.bz2-31-08-17-ab?api=v2)
+* [ubuntu-17.04.vdi.tar.bz2-31-08-17-ac](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/ubuntu-17.04.vdi.tar.bz2-31-08-17-ac?api=v2)
+* [ubuntu-17.04.vdi.tar.bz2-31-08-17-ad](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/ubuntu-17.04.vdi.tar.bz2-31-08-17-ad?api=v2)
+* [ubuntu-17.04.vdi.tar.bz2-31-08-17-ae](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/ubuntu-17.04.vdi.tar.bz2-31-08-17-ae?api=v2)
+* [ubuntu-17.04.vdi.tar.bz2-31-08-17-af](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/ubuntu-17.04.vdi.tar.bz2-31-08-17-af?api=v2)
+* [ubuntu-17.04.vdi.tar.bz2-31-08-17-ag](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/ubuntu-17.04.vdi.tar.bz2-31-08-17-ag?api=v2)
+* [ubuntu-17.04.vdi.tar.bz2-31-08-17-ah](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/ubuntu-17.04.vdi.tar.bz2-31-08-17-ah?api=v2)
+* [ubuntu-17.04.vdi.tar.bz2-31-08-17-ai](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/ubuntu-17.04.vdi.tar.bz2-31-08-17-ai?api=v2)
 
-        heaptrack_gui "/tmp/heaptrack.APP.PID.gz"
+[[SHA256 values for archive contents]](#checksums)
 
-Alternatively, you can attach to an already running process:
+### Initialization of device for measurements [[Details]](docs/DETAILED.md#prepare-tizen-device-for-measurements)
 
-    heaptrack --pid $(pidof <your application>)
+2\. Put Tizen RPMs to VM's /home/ubuntu/device-rpms for:
+- debuginfo packages
 
-    heaptrack output will be written to "/tmp/heaptrack.APP.PID.gz"
-    injecting heaptrack into application via GDB, this might take some time...
-    injection finished
+3\. Run /home/ubuntu/heaptrack-scripts/prepare-device.sh on VM
 
-    ...
+[Video tutorial](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/How-to-prepare-Tizen-device-for-measurements.mp4?api=v2)
 
-    Heaptrack finished! Now run the following to investigate the data:
 
-        heaptrack_gui "/tmp/heaptrack.APP.PID.gz"
+### Build profiler module for your CoreCLR version [[Details]](docs/DETAILED.md#build-profiler-module-for-your-coreclr-version)
 
-## Building heaptrack
+By default the libprofiler.so is already built for coreclr-2.0.0.11992-11.1.armv7l, so if you use this version,
+then you don't need to rebuild it.
 
-Heaptrack is split into two parts: The data collector, i.e. `heaptrack` itself, and the
-analyzer GUI called `heaptrack_gui`. The following summarizes the dependencies for these
-two parts as they can be build independently. You will find corresponding development
-packages on all major distributions for these dependencies.
+For details, see "Build profiler module" in full contents below (section 5)
 
-On an embedded device or older Linux distribution, you will only want to build `heaptrack`.
-The data can then be analyzed on a different machine with a more modern Linux distribution
-that has access to the required GUI dependencies.
+[Video tutorial](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/How-to-build-managed-profiling-module.mp4?api=v2)
 
-If you need help with building, deploying or using heaptrack, you can contact KDAB for
-commercial support: https://www.kdab.com/software-services/workshops/profiling-workshops/
+### Measurements [[Details]](docs/DETAILED.md#run-measurements)
 
-### Shared dependencies
+8\. Make sure that "debuginfo" packages are installed for all libraries that you want to track by the profiler
 
-Both parts require the following tools and libraries:
+9\. Run application using /home/ubuntu/heaptrack-scripts/heaptrack.sh with `[application ID]` and `[path to executable]` arguments on VM,
+like the following:
 
-- cmake 2.8.9 or higher
-- a C\+\+11 enabled compiler like g\+\+ or clang\+\+
-- zlib
-- libdl
-- pthread
-- libc
+```
+./heaptrack-scripts/heaptrack.sh org.tizen.example.HelloWorld.Tizen /opt/usr/home/owner/apps_rw/HelloWorld.Tizen/bin/HelloWorld.Tizen.exe
+```
 
-### `heaptrack` dependencies
+[Video tutorial](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/Profiling-memory-consumption.mp4?api=v2)
 
-The heaptrack data collector and the simplistic `heaptrack_print` analyzer depend on the
-following libraries:
+10\. Wait until a moment, in which you want to figure out the memory consumption.
 
-- boost 1.41 or higher: iostreams, program_options
-- libunwind
-- elfutils: libdwarf
+Please, note that application runs significantly slower (30x to 100x slower) under profiling.
 
-For runtime-attaching, you will need `gdb` installed.
+11\. Press 'c' on VM, wait for GUI to start and analyze the results
+The GUI will start separately for **Malloc** part, **Managed** part, **mmap Private_Dirty** part, **mmap Private_Clean** part and **mmap Shared_Clean** part
 
-### `heaptrack_gui` dependencies
+[[Profiling results description]](#profiling-results)
 
-The graphical user interface to interpret and analyze the data collected by heaptrack
-depends on Qt 5 and some KDE libraries:
+[[Some screenshots]](#screenshots)
 
-- extra-cmake-modules
-- Qt 5.2 or higher: Core, Widgets
-- KDE Frameworks 5: CoreAddons, I18n, ItemModels, ThreadWeaver, ConfigWidgets, KIO
+[[Solutions for possible issues]](#troubleshooting)
 
-When any of these dependencies is missing, `heaptrack_gui` will not be build.
-Optionally, install the following dependencies to get additional features in
-the GUI:
+### Profiling results
 
-- KDiagram: KChart (for chart visualizations)
+The GUI viewer provides several views for the profiling results.
 
-### Compiling
+- If some functions are shown as `<unresolved function>` - most probably (with few exceptions, like libc internals) it means that "debuginfo" package for the corresponding library is missing or of wrong version.
 
-Run the following commands to compile heaptrack. Do pay attention to the output
-of the CMake command, as it will tell you about missing dependencies!
+- The functions, which are marked as `<untracked>` are the areas, for which locations is not known. This is a mark for areas, which were allocated before attaching profiler, or by ways, which are not trackable by current version of profiler (current profiler doesn't track allocations from ld-linux.so.3).
 
-    cd heaptrack # i.e. the source folder
-    mkdir build
-    cd build
-    cmake -DCMAKE_BUILD_TYPE=Release .. # look for messages about missing dependencies!
-    make -j$(nproc)
+- The "leaks" in the interface are most probably not actual leaks - it is label for memory that wasn't freed when application was terminating. However, it is usual behaviour for many libraries, including CoreCLR to not free memory upon application termination, as kernel anyway frees it. So, "leaks" labels should be considered as labels for memory, which was consumed just before memory profiling stopped.
 
-## Interpreting the heap profile
+#### Summary view
+Peak contributions shows top functions that consumed memory at moment of highest memory consumption.
+Peak instances shows top functions that has most memory items allocated and not freed at moment of highest count of the memory items.
+Largest memory leaks - top functions that allocated memory, which wasn't deallocated up to moment of memory profiling stop.
+Most memory allocations - top functions that call allocation most number of times.
+Most temporary allocations - the same for allocations, in which deallocation is called very close to allocation, like `p = malloc(...); simple code; free (p)`.
+Most memory allocated - top functions, which allocated most memory (this doesn't account deallocations, so is not very useful for analysis of memory consumption causes).
 
-Heaptrack generates data files that are impossible to analyze for a human. Instead, you need
-to use either `heaptrack_print` or `heaptrack_gui` to interpret the results.
+#### Bottom-Up/Top-Down view
+Memory consumption details for each detected call stack.
 
-### heaptrack_gui
+#### Caller / Callee view
+Memory consumption statistics for each function for itself, and also inclusive (i.e. including statistics of other functions, which it called).
 
-![heaptrack_gui flamegraph page](screenshots/gui_flamegraph.png?raw=true "heaptrack_gui flamegraph page")
-
-![heaptrack_gui allocations chart page](screenshots/gui_allocations_chart.png?raw=true "heaptrack_gui allocations chart page")
-
-The highly recommended way to analyze a heap profile is by using the `heaptrack_gui` tool.
-It depends on Qt 5 and KF 5 to graphically visualize the recorded data. It features:
-
-- a summary page of the data
-- bottom-up and top-down tree views of the code locations that allocated memory with
-  their aggregated cost and stack traces
-- flame graph visualization
-- graphs of allocation costs over time
-
-### heaptrack_print
-
-The `heaptrack_print` tool is a command line application with minimal dependencies. It takes
-the heap profile, analyzes it, and prints the results in ASCII format to the command line.
-
-In its most simple form, you can use it like this:
-
-    heaptrack_print heaptrack.APP.PID.gz | less
-
-By default, the report will contain three sections:
-
-    MOST CALLS TO ALLOCATION FUNCTIONS
-    PEAK MEMORY CONSUMERS
-    MOST TEMPORARY ALLOCATIONS
-
-Each section then lists the top ten hotspots, i.e. code locations that triggered e.g.
-the most memory allocations.
-
-Have a look at `heaptrack_print --help` for changing the output format and other options.
-
-Note that you can use this tool to convert a heaptrack data file to the Massif data format.
-You can generate a collapsed stack report for consumption by `flamegraph.pl`.
-
-## Comparison to Valgrind's massif
-
-The idea to build heaptrack was born out of the pain in working with Valgrind's massif.
-Valgrind comes with a huge overhead in both memory and time, which sometimes prevent you
-from running it on larger real-world applications. Most of what Valgrind does is not
-needed for a simple heap profiler.
-
-### Advantages of heaptrack over massif
-
-- *speed and memory overhead*
-
-  Multi-threaded applications are not serialized when you trace them with heaptrack and
-  even for single-threaded applications the overhead in both time and memory is significantly
-  lower. Most notably, you only pay a price when you allocate memory -- time-intensive CPU
-  calculations are not slowed down at all, contrary to what happens in Valgrind.
-
-- *more data*
-
-  Valgrind's massif aggregates data before writing the report. This step loses a lot of
-  useful information. Most notably, you are not longer able to find out how often memory
-  was allocated, or where temporary allocations are triggered. Heaptrack does not aggregate the
-  data until you interpret it, which allows for more useful insights into your allocation patterns.
-
-### Advantages of massif over heaptrack
-
-- *ability to profile page allocations as heap*
-
-  This allows you to heap-profile applications that use pool allocators that circumvent
-  malloc & friends. Heaptrack can in principle also profile such applications, but it
-  requires code changes to annotate the memory pool implementation.
-
-- *ability to profile stack allocations*
-
-  This is inherently impossible to implement efficiently in heaptrack as far as I know.
-
-## Contributing to heaptrack
-
-As a FOSS project, we welcome contributions of any form. You can help improve the project by:
-
-- submitting bug reports at https://bugs.kde.org/enter_bug.cgi?product=Heaptrack
-- contributing patches via https://phabricator.kde.org/dashboard/view/28/
-- translating the GUI with the help of https://l10n.kde.org/
-- writing documentation on https://userbase.kde.org/Heaptrack
-
-When submitting bug reports, you can anonymize your data with the `tools/anonymize` script:
-
-    tools/anonymize heaptrack.APP.PID.gz heaptrack.bug_report_data.gz
+#### Flame Graph view
+Also represents memory consumption per call-stack (either top-down or bottom-down mode)
+Combobox allows to choose between different statistics (like in Summary view).
+The "leaks" here also are not the memory leaks: it is memory that was consumed at moment of profiling stop.
+So, the "leaks" view seems to be the most useful to investigate memory consumption details.
+
+#### Other
+Next several views are graphs for different memory consumption statistics (also, like in Summary view), as they change in time of application execution.
+Here, the "consumed" is used instead of "leaks", which is more precise.
+The "consumed" view shows memory consumption graph for top memory consuming function (separately, as shown in color, and also total consumption - the topmost graph).
+
+## Troubleshooting
+
+1\. The heaptrack is built for one of latest Tizen Unified TM1 system.
+If it can't be started on your Tizen device, because of missing dependencies, please recompile it from sources (see /home/ubuntu/heaptrack-common/build-armel).
+Recompilation is simple, like "mkdir build_dir; cd build_dir; cmake ..; make -j4" and should be performed on an armel system with compatible libraries or in a corresponding chroot.
+
+2\. Managed memory consumption or managed call stacks data is missing
+
+See [[Build profiler module]](docs/DETAILED.md#build-profiler-module-for-your-coreclr-version)
+
+3\. Please, feel free to ask any questions, in case of the described or other issues ([https://github.sec.samsung.net/dotnet/profiler/issues/4](https://github.sec.samsung.net/dotnet/profiler/issues/4))
+
+The profiling tool can show memory consumption of **Managed**, **Malloc** and **Mmap**-allocated regions.
+
+## Screenshots
+
+### malloc'ed memory over time
+![malloc-Consumed-Graph.png](screenshots/malloc-Consumed-Graph.png)
+*   Each color shows different function (function name is shown when mouse is over a part of graph)
+*   The top part is sum of all malloc-allocated memory (for all allocating functions)
+*   The graph is useful to get overall picture of how memory consumption changed as program executed
+### Functions and their statistics
+![malloc-Plain-Statistics.png](screenshots/malloc-Plain-Statistics.png)
+*   Peak is memory consumption of particular function at overall maximum of application consumption (this considers only currently shown memory - i.e. only malloc, or mmap Private_Dirty, or mmap Private_Clean, etc.)
+*   Leaked is memory consumption just at application exit (not actually, leak, as most application do not free memory at their exit - so, it is just information about memory consumption just before application exit)
+*   Allocated is sum of all allocated memory sizes (doesn't account that some memory was already freed - counts only allocations)
+*   "Incl." mark is for the function and all functions that it calls; "Self" mark is for the function only
+### Call stacks and memory consumption at each point of call stack
+![malloc-FlameGraph-Details.png](screenshots/malloc-FlameGraph-Details.png)
+*   For example, "icu::Normalizer2Impl::ensureCanonIterData" calls "utrie2_enum" and "icu::CanonIterData::CanonIterData" and "utri2_freeze"
+    *   The "utrie2_enum" and "icu::CanonIterData::CanonIterData" and "utri2_freeze" call other functions that in sum allocate 539, 283 and 80 kilobytes, correspondingly
+    *   The consumption for "ensureCanonIterData" will be shown as 904 kB - it is sum of the three values
+*   In another places (another call stacks) the functions can also be called and that memory consumption will be accounted separately for these and those call stacks
+### Reversed FlameGraph (if "Bottom-Down View" is checked)
+![malloc-FlameGraph-Reversed.png](screenshots/malloc-FlameGraph-Reversed.png)
+*   A useful form of FlameGraph to show the call stacks reversed
+    *   So, the bottom line will show the allocator functions - like malloc, calloc, realloc, etc. and lines above will be the functions that call the allocator functions
+### Top-N lists of functions:
+![malloc-Summary.png](screenshots/malloc-Summary.png)
+*   functions that consumed most when peak of malloc memory consumption occured ("peak contributions")
+*   functions that consumed most just before application exit ("largest memory leaks")
+*   functions that called allocators more than others ("most memory allocations")
+*   functions that called allocators more than others for temporary allocations ("most temporary allocations") - temporary is the case when malloc and free are called almost one after other (with no allocations between them)
+*   functions that allocated most memory at sum ("most memory allocated") - just sum of allocations, without accounting freeing of memory
+*   "peak RSS" is currently experimental and so is not precise
+### Managed heap inspection
+![managed-ReferenceTree.png](screenshots/managed-ReferenceTree.png)
+*   Objects are grouped by their type
+*   If type T2 is a child of type T1, it means that objects of type T2 reference objects of type T1
+*   Shallow Size is the total size of objects in the reference chain
+*   Referenced Size is the size of objects referenced by the parent object.
+For example, `System.AppDomainSetup` references 76 bytes of `System.String`s in the screenshot through `System.Object[]`->`System.String[]` chain and 32 bytes of `System.String`s directly.
+### mmap-allocated memory graphs
+Most of the graphs listed above are also available for mmap-allocated memory.
+![mmap-private-dirty-Plain-Statistics.png](screenshots/mmap-private-dirty-Plain-Statistics.png)
+![mmap-private-dirty-Consumed-Graph.png](screenshots/mmap-private-dirty-Consumed-Graph.png)
+*   the mmap-allocated memory is divided into four groups (as in /proc/.../smaps): Private_Dirty, Private_Clean, Shared_Clean + Shared_Dirty
+    *   Private_Dirty is process-local (not shared) memory that was modified by the process
+    *   Private_Clean is process-local (not shared) memory that was loaded from disk and not modified by the process
+    *   Shared_Clean is shared between processes memory, not modified by the process
+    *   Shared_Clean is shared between processes memory, modified by the process
+    *   the groups are chosen by --private_dirty, --private_clean, --shared keys of heaptrack_gui (--malloc is for malloc memory consumption and --managed is for managed memory consumption)
+*   there are two additional groups, which are accounted indirectly
+    *   dlopen (memory, used for loaded libraries)
+    *   sbrk (memory, used for "[heap]") - this includes:
+        *   libc allocator (malloc-allocated memory, can be investigated through `heaptrack_gui --malloc` run)
+        *   overhead of profiler
+        *   possibly, other allocators if they use `sbrk` (this is unusual)
+
+## Checksums
+
+SHA256SUM for unpacked VM image
+
+```
+1afcea540149f76fae6e243839b6a21666725cc1409b4c259be82533e2a21a24  ubuntu-17.04.vdi
+```
+
+SHA256SUM for archive
+
+```
+e8de003daa38880e37d847af462b86145ccf859f0af127e9a18dcc7c7cc04deb  ubuntu-17.04.vdi.tar.bz2
+```
+
+SHA256SUM for archive parts
+```
+7da95143eb387f94d09c1a34a952bcdc05844cbf064ba971884b6107f2665e55  ubuntu-17.04.vdi.tar.bz2-31-08-17-aa
+34bec202f4521fc3857fa57c7acb07910f02df788add8a01dc03b09bc732895f  ubuntu-17.04.vdi.tar.bz2-31-08-17-ab
+a03cd105647fd225fcbc85310490032f96c23c9e55289fe88341daf8db560236  ubuntu-17.04.vdi.tar.bz2-31-08-17-ac
+788790f51a237273eff96e102a6ad39fdd0008dcfcbbe537d80a1ab543cbcd7c  ubuntu-17.04.vdi.tar.bz2-31-08-17-ad
+a165a9642e8d58536b4c944e12fe23bd666d77cd74b3fce1b050c01308a4b887  ubuntu-17.04.vdi.tar.bz2-31-08-17-ae
+7bf1495ae705a6a32577c4b1982c18230338eaa4b7cd5079b87a376d99b77b48  ubuntu-17.04.vdi.tar.bz2-31-08-17-af
+6fea617bf0833bb841317c56674e6b34c09a145fc5a95f4ce1ea202dc6f4b56a  ubuntu-17.04.vdi.tar.bz2-31-08-17-ag
+21389420ce2dcc0cd86d1b2c0872cb116e18ce226e1bab111e00536ed5be17f1  ubuntu-17.04.vdi.tar.bz2-31-08-17-ah
+58a3950e44c37f9b825d13ff738e75544a3a2e0bca8f5a74ce877cbbee7a141b  ubuntu-17.04.vdi.tar.bz2-31-08-17-ai
+```
