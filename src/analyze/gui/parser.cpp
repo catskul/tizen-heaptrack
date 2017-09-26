@@ -22,8 +22,6 @@
 #include <ThreadWeaver/ThreadWeaver>
 
 #include <QDebug>
-#include <QMessageBox>
-#include <QString>
 
 #include "analyze/accumulatedtracedata.h"
 
@@ -103,8 +101,10 @@ struct TypeTree {
                 auto parent = create(node);
                 parent->m_referencedSize = leaf->m_referencedSize;
                 TypeTree* childIt = leaf.get();
-                while (childIt->m_parents.size() > 0)
+                while (childIt->m_parents.size() > 0) {
+                    assert(childIt->m_parents.size() == 1 && "Invalid number of m_parents");
                     childIt = childIt->m_parents[0].get();
+                }
                 childIt->m_parents.push_back(std::move(parent));
                 result.push_back(std::move(leaf));
                 auto parentCopy = create(node);
@@ -748,6 +748,10 @@ ObjectNode buildObjectGraph(ParserData& data, size_t &nodeIndex, bool &success) 
         node.m_objectSize = 0;
     nodeIndex++;
     for (size_t i = 0; i < dataNode.numChildren; ++i) {
+
+        // FIXME: this check will not be needed once we can ensure the
+        // integrity of the trace.
+        // https://github.sec.samsung.net/dotnet/profiler/issues/24
         if (node.gcNum != data.objectTreeNodes[nodeIndex].gcNum) {
             success = false;
             break;
@@ -766,11 +770,14 @@ ObjectTreeData buildObjectTree(ParserData& data)
     while (nodeIndex < data.objectTreeNodes.size()) {
         bool success = true;
         ObjectNode node = buildObjectGraph(data, nodeIndex, success);
+
+        // FIXME: this check will not be needed once we can ensure the
+        // integrity of the trace.
+        // https://github.sec.samsung.net/dotnet/profiler/issues/24
         if (success)
             nodes.push_back(node);
         else {
-            QMessageBox::warning(nullptr, QString::fromStdString("Bad data"),
-                                 QString::fromStdString("Heap snapshot for GC #%1 is incomplete").arg(node.gcNum));
+            qFatal("Heap snapshot data is incomplete");
         }
     }
 
