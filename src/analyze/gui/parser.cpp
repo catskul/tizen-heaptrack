@@ -91,7 +91,7 @@ struct TypeTree {
             return result;
 
         if (node.m_children.size() == 0) {
-            result.push_back(std::move(create(node)));
+            result.push_back(create(node));
             return result;
         }
 
@@ -107,8 +107,8 @@ struct TypeTree {
                 }
                 childIt->m_parents.push_back(std::move(parent));
                 result.push_back(std::move(leaf));
-                auto parentCopy = create(node);
-                result.push_back(std::move(parentCopy));
+                // Add a copy of the parent to the top level
+                result.push_back(create(node));
             }
         }
 

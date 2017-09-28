@@ -72,6 +72,7 @@ public:
         ObjectNode *node = &(it->second);
         eliminateLoops(node);
         node->print(gcCounter, out);
+        clear();
     }
 
     void clear() {
