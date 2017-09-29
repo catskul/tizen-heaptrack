@@ -1,0 +1,110 @@
+#!/bin/bash -x
+
+SDB=$1
+
+DEVICE_HEAPTRACK_PATH=$2
+DEVICE_ARCH=$3
+HEAPTRACK_DATA_DIR=$4
+DOCKER_CONTAINER_HASH=$5
+SCRIPTS_PATH=$6
+RES_FILE=$7
+APP_ID=$8
+APP_PATH=$9
+LAUNCH_GUI=${10}
+
+IS_FOUND_APP=$($SDB shell "app_launcher -l | cut -d \"'\" -f 4 | grep -q '^${APP_ID}$'; echo \$?" | tr -d "[:space:]")
+if [ "$IS_FOUND_APP" != "0" ]; then
+	echo "'${APP_ID}' application not found at device"
+	exit 1
+fi
+
+IS_FOUND_APP_PATH=$($SDB shell "ls ${APP_PATH} >& /dev/null; echo \$?" | tr -d "[:space:]")
+if [ "$IS_FOUND_APP_PATH" != "0" ]; then
+	echo "'${APP_PATH}' application path not found at device"
+	exit 1
+fi
+
+rm -rf $HEAPTRACK_DATA_DIR
+mkdir -p $HEAPTRACK_DATA_DIR
+rm -f $RES_FILE
+
+$SDB shell "mkdir -p $DEVICE_HEAPTRACK_PATH/build/bin;
+            mkdir -p $DEVICE_HEAPTRACK_PATH/build/lib/heaptrack
+            mkdir -p $DEVICE_HEAPTRACK_PATH/build/lib/heaptrack/libexec" &>/dev/null
+docker cp $DOCKER_CONTAINER_HASH:/heaptrack-common/$DEVICE_ARCH $HEAPTRACK_DATA_DIR/$DEVICE_ARCH
+$SDB push $HEAPTRACK_DATA_DIR/$DEVICE_ARCH/bin/* $DEVICE_HEAPTRACK_PATH/build/bin/ &>/dev/null
+$SDB push $HEAPTRACK_DATA_DIR/$DEVICE_ARCH/lib/heaptrack/*.so $DEVICE_HEAPTRACK_PATH/build/lib/heaptrack/ &>/dev/null
+$SDB push $HEAPTRACK_DATA_DIR/$DEVICE_ARCH/lib/heaptrack/libexec/* $DEVICE_HEAPTRACK_PATH/build/lib/heaptrack/libexec/ &>/dev/null
+$SDB push $HEAPTRACK_DATA_DIR/$DEVICE_ARCH/libprofiler.so $DEVICE_HEAPTRACK_PATH/build/bin/ &>/dev/null
+$SDB push $SCRIPTS_PATH/../* $DEVICE_HEAPTRACK_PATH/build/bin/ &>/dev/null
+$SDB shell "cd $DEVICE_HEAPTRACK_PATH/build/bin
+            ./heaptrack-pid.sh $DEVICE_HEAPTRACK_PATH/build/bin $DEVICE_HEAPTRACK_PATH/build/bin/res.gz ${APP_ID} ${APP_PATH}"
+
+$SDB pull $DEVICE_HEAPTRACK_PATH/build/bin/res.gz $RES_FILE &>/dev/null
+
+if [ "$LAUNCH_GUI" == "true" ]; then
+  XSOCK=/tmp/.X11-unix
+  XAUTH=/tmp/.docker.xauth
+  touch $XAUTH
+  xauth nlist $DISPLAY | sed -e 's/^..../ffff/' | xauth -f $XAUTH nmerge -
+
+  echo "Showing malloc consumption"
+  docker run -it \
+        --volume=$XSOCK:$XSOCK:rw \
+        --volume=$XAUTH:$XAUTH:rw \
+        --volume=$RES_FILE:/res.gz:ro \
+        --env="XAUTHORITY=${XAUTH}" \
+        --env="DISPLAY" \
+        --user="docker-user" \
+        heaptrack \
+        /heaptrack/build-x64/bin/heaptrack_gui --malloc /res.gz 2>gui_malloc.srderr
+  echo
+
+  echo "Showing managed consumption"
+  docker run -it \
+        --volume=$XSOCK:$XSOCK:rw \
+        --volume=$XAUTH:$XAUTH:rw \
+        --volume=$RES_FILE:/res.gz:ro \
+        --env="XAUTHORITY=${XAUTH}" \
+        --env="DISPLAY" \
+        --user="docker-user" \
+        heaptrack \
+        /heaptrack/build-x64/bin/heaptrack_gui --managed --hide-unmanaged-stacks /res.gz 2>gui_malloc.srderr
+  echo
+
+  echo "Showing mmap (Private_Dirty part) consumption"
+  docker run -it \
+        --volume=$XSOCK:$XSOCK:rw \
+        --volume=$XAUTH:$XAUTH:rw \
+        --volume=$RES_FILE:/res.gz:ro \
+        --env="XAUTHORITY=${XAUTH}" \
+        --env="DISPLAY" \
+        --user="docker-user" \
+        heaptrack \
+        /heaptrack/build-x64/bin/heaptrack_gui --private_dirty /res.gz 2>gui_malloc.srderr
+  echo
+
+  echo "Showing mmap (Private_Clean part) consumption"
+  docker run -it \
+        --volume=$XSOCK:$XSOCK:rw \
+        --volume=$XAUTH:$XAUTH:rw \
+        --volume=$RES_FILE:/res.gz:ro \
+        --env="XAUTHORITY=${XAUTH}" \
+        --env="DISPLAY" \
+        --user="docker-user" \
+        heaptrack \
+        /heaptrack/build-x64/bin/heaptrack_gui --private_clean /res.gz 2>gui_malloc.srderr
+  echo
+
+  echo "Showing mmap (Shared_Clean + Shared_Dirty part) consumption"
+  docker run -it \
+        --volume=$XSOCK:$XSOCK:rw \
+        --volume=$XAUTH:$XAUTH:rw \
+        --volume=$RES_FILE:/res.gz:ro \
+        --env="XAUTHORITY=${XAUTH}" \
+        --env="DISPLAY" \
+        --user="docker-user" \
+        heaptrack \
+        /heaptrack/build-x64/bin/heaptrack_gui --shared /res.gz 2>gui_malloc.srderr
+  echo
+fi

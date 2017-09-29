@@ -12,7 +12,9 @@ target_link_libraries(sharedprint LINK_PUBLIC
     ${ZLIB_LIBRARIES}
 )
 
-add_subdirectory(print)
+if (HEAPTRACK_BUILD_GUI)
+    add_subdirectory(print)
+endif()
 
 if (KF5_FOUND)
     add_subdirectory(gui)

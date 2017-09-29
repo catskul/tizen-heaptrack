@@ -88,6 +88,6 @@ file(RELATIVE_PATH LIB_REL_PATH
 
 add_subdirectory(3rdparty)
 add_subdirectory(src)
-add_subdirectory(tests)
+#add_subdirectory(tests)
 
 feature_summary(WHAT ALL FATAL_ON_MISSING_REQUIRED_PACKAGES)
