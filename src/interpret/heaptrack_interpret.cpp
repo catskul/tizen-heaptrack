@@ -710,7 +710,7 @@ int main(int /*argc*/, char** /*argv*/)
 
             // ensure class is encountered
             const auto classId = data.addClass(classPointer, 0);
-            if (classId == 0) {
+            if (classId == 0 && classPointer != 0) {
                 cerr << "Unknown class id (" << classPointer << ") here: " << reader.line() << endl;
                 continue;
 	        }
