@@ -27,6 +27,16 @@
 
 struct ObjectRowData
 {
+    ObjectRowData()
+    :classIndex(0),
+     className(),
+     gcNum(0),
+     allocations(0),
+     allocated(0),
+     referenced(0),
+     parent(nullptr),
+     children()
+    {}
     uint64_t classIndex;
     std::string className;
     quint32 gcNum;

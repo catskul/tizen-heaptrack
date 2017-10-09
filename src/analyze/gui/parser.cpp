@@ -28,136 +28,11 @@
 #include <future>
 #include <tuple>
 #include <vector>
+#include <functional>
 
 using namespace std;
 
 namespace {
-
-struct ObjectNode {
-    ObjectNode()
-    : m_children(), m_objectPtr(0), m_classIndex(), m_objectSize(0), gcNum(0)
-    {
-    }
-
-    std::vector<ObjectNode> m_children;
-    uint64_t m_objectPtr;
-    ClassIndex m_classIndex;
-    uint64_t m_objectSize;
-    uint32_t gcNum;
-};
-
-
-struct TypeTree {
-    TypeTree()
-    : m_classIndex(),
-      m_parents(),
-      m_uniqueObjects(),
-      m_totalSize(0),
-      m_referencedSize(0),
-      m_gcNum(0)
-    {
-    }
-
-    TypeTree(const TypeTree& rhs)
-    : m_classIndex(rhs.m_classIndex),
-      m_parents(),
-      m_uniqueObjects(rhs.m_uniqueObjects),
-      m_totalSize(rhs.m_totalSize),
-      m_referencedSize(rhs.m_referencedSize),
-      m_gcNum(rhs.m_gcNum)
-    {
-        for (auto& rParent: rhs.m_parents) {
-            auto parent = std::unique_ptr<TypeTree>(new TypeTree(*rParent));
-            m_parents.push_back(std::move(parent));
-        }
-    }
-
-    ~TypeTree() {
-    }
-
-    static std::unique_ptr<TypeTree> create(ObjectNode& node) {
-        auto TT = std::unique_ptr<TypeTree>(new TypeTree());
-        TT->m_classIndex = node.m_classIndex;
-        TT->m_gcNum = node.gcNum;
-        TT->m_uniqueObjects.insert(node.m_objectPtr);
-        TT->m_totalSize = node.m_objectSize;
-        TT->m_referencedSize = node.m_objectSize;
-        return TT;
-    }
-
-    static std::vector<std::unique_ptr<TypeTree>> createBottomUp(ObjectNode& node) {
-        std::vector<std::unique_ptr<TypeTree>> result;
-        if (node.m_classIndex.index == 0 && node.m_children.size() == 0)
-            return result;
-
-        if (node.m_children.size() == 0) {
-            result.push_back(create(node));
-            return result;
-        }
-
-        for (ObjectNode& child: node.m_children) {
-            auto leaves = TypeTree::createBottomUp(child);
-            for (auto& leaf: leaves) {
-                auto parent = create(node);
-                parent->m_referencedSize = leaf->m_referencedSize;
-                TypeTree* childIt = leaf.get();
-                while (childIt->m_parents.size() > 0) {
-                    assert(childIt->m_parents.size() == 1 && "Invalid number of m_parents");
-                    childIt = childIt->m_parents[0].get();
-                }
-                childIt->m_parents.push_back(std::move(parent));
-                result.push_back(std::move(leaf));
-                // Add a copy of the parent to the top level
-                result.push_back(create(node));
-            }
-        }
-
-        return result;
-    }
-
-    void mergeSubtrees() {
-        std::unordered_map<uint64_t,
-                std::vector<TypeTree*>> classCounters;
-
-        for (auto& parent: m_parents) {
-            classCounters[parent->m_classIndex.index].push_back(parent.get());
-        }
-
-        std::vector<std::unique_ptr<TypeTree>> newParents;
-
-        for (auto it = classCounters.begin(),
-             end = classCounters.end(); it != end; ++it) {
-            auto combinedParent = std::unique_ptr<TypeTree>(new TypeTree());
-            combinedParent->m_classIndex.index = it->first;
-            auto& subtrees = it->second;
-            combinedParent->m_gcNum = m_gcNum;
-            for (auto& parent: subtrees) {
-                for (auto &parentsParent: parent->m_parents)
-                    combinedParent->m_parents.push_back(std::move(parentsParent));
-                combinedParent->m_referencedSize += parent->m_referencedSize;
-                for (auto& uo: parent->m_uniqueObjects) {
-                    auto pib = combinedParent->m_uniqueObjects.insert(uo);
-                    if (pib.second)
-                        combinedParent->m_totalSize += parent->m_totalSize;
-                }
-
-            }
-            combinedParent->mergeSubtrees();
-
-            newParents.push_back(std::move(combinedParent));
-        }
-
-        m_parents.erase(m_parents.begin(), m_parents.end());
-        m_parents = std::move(newParents);
-    }
-
-    ClassIndex m_classIndex;
-    std::vector<std::unique_ptr<TypeTree>> m_parents;
-    std::unordered_set<uint32_t> m_uniqueObjects;
-    uint64_t m_totalSize;
-    uint64_t m_referencedSize;
-    int m_gcNum;
-};
 
 // TODO: use QString directly
 struct StringCache
@@ -469,6 +344,177 @@ struct ParserData final : public AccumulatedTraceData
     bool buildCharts = false;
 };
 
+struct ObjectNode {
+    ObjectNode()
+    : m_children(), index(0), visited(false)
+    {
+    }
+
+    std::vector<ObjectNode*> m_children;
+    size_t index;
+    bool visited;
+
+    static std::unordered_map<uint64_t, std::unique_ptr<ObjectNode>> nodes;
+};
+
+std::unordered_map<uint64_t, std::unique_ptr<ObjectNode>> ObjectNode::nodes;
+
+struct TypeTree {
+    TypeTree()
+    : m_classIndex(),
+      m_parents(),
+      m_uniqueObjects(),
+      m_referencedSize(0),
+      m_gcNum(0)
+    {
+    }
+
+    TypeTree(const TypeTree& rhs)
+    : m_classIndex(rhs.m_classIndex),
+      m_parents(),
+      m_uniqueObjects(rhs.m_uniqueObjects),
+      m_referencedSize(rhs.m_referencedSize),
+      m_gcNum(rhs.m_gcNum)
+    {
+        for (auto& rParent: rhs.m_parents) {
+            m_parents.push_back(std::unique_ptr<TypeTree>(new TypeTree(*rParent)));
+        }
+    }
+
+    ~TypeTree() {
+        m_parents.clear();
+        m_uniqueObjects.clear();
+    }
+
+    static std::unique_ptr<TypeTree> create(ParserData& data, ObjectNode* node) {
+        auto TT = std::unique_ptr<TypeTree>(new TypeTree());
+        TT->m_classIndex = data.objectTreeNodes[node->index].classIndex;
+        TT->m_gcNum = data.objectTreeNodes[node->index].gcNum;
+        TT->m_uniqueObjects[node->index] = 1;
+        return TT;
+    }
+
+    static std::vector<std::unique_ptr<TypeTree>> createBottomUp(ParserData& data, ObjectNode* node) {
+        node->visited = true;
+        std::vector<std::unique_ptr<TypeTree>> result;
+        if (data.objectTreeNodes[node->index].classIndex.index == 0 && node->m_children.size() == 0) {
+            node->visited = false;
+            return result;
+        }
+
+        if (node->m_children.size() == 0) {
+            result.push_back(create(data, node));
+            node->visited = false;
+            return result;
+        }
+
+        for (ObjectNode* child: node->m_children) {
+            if (child->visited)
+                continue;
+            auto leaves = TypeTree::createBottomUp(data, child);
+            for (auto& leaf: leaves) {
+                auto parent = create(data, node);
+                TypeTree* childIt = leaf.get();
+                while (childIt->m_parents.size() > 0) {
+                    assert(childIt->m_parents.size() == 1 && "Invalid number of m_parents");
+                    childIt = childIt->m_parents[0].get();
+                }
+                childIt->m_parents.push_back(std::move(parent));
+                result.push_back(std::move(leaf));
+            }
+        }
+        node->visited = false;
+        return result;
+    }
+
+    void merge(TypeTree *other) {
+        for (auto &grandparent: other->m_parents)
+            m_parents.push_back(std::move(grandparent));
+        for (auto& uo: other->m_uniqueObjects) {
+            m_uniqueObjects[uo.first]++;
+        }
+    }
+
+    void mergeSubtrees() {
+        std::unordered_map<uint64_t,
+                std::vector<std::unique_ptr<TypeTree>>> classCounters;
+
+        for (auto& parent: m_parents) {
+            classCounters[parent->m_classIndex.index].push_back(std::move(parent));
+        }
+        m_parents.erase(m_parents.begin(), m_parents.end());
+
+        std::vector<std::unique_ptr<TypeTree>> newParents;
+
+        for (auto it = classCounters.begin(),
+             end = classCounters.end(); it != end; ++it) {
+            auto combinedParent = std::unique_ptr<TypeTree>(new TypeTree());
+            combinedParent->m_classIndex.index = it->first;
+            auto& subtrees = it->second;
+            combinedParent->m_gcNum = m_gcNum;
+            for (auto& parent: subtrees) {
+                combinedParent->merge(parent.get());
+            }
+            combinedParent->mergeSubtrees();
+
+            newParents.push_back(std::move(combinedParent));
+        }
+
+        m_parents = std::move(newParents);
+    }
+
+    void unroll() {
+        std::function<std::vector<unique_ptr<TypeTree>>(TypeTree *tt)> gp;
+        gp = [&gp](TypeTree *tt) -> std::vector<unique_ptr<TypeTree>> {
+            std::vector<std::unique_ptr<TypeTree>> parents;
+            for (auto& parent: tt->m_parents) {
+                parents.push_back(std::unique_ptr<TypeTree>(new TypeTree(*parent)));
+            }
+
+            std::vector<std::unique_ptr<TypeTree>> grandparents;
+            for (auto& parent: parents) {
+                auto gps = gp(parent.get());
+                for (auto& p: gps) {
+                    grandparents.push_back(std::move(p));
+                }
+            }
+            for (auto& p: grandparents) {
+                parents.push_back(std::move(p));
+            }
+
+            return parents;
+        };
+
+        m_parents = gp(this);
+        mergeSubtrees();
+    }
+
+    size_t addRefSize(ParserData& data, size_t objectIndex, size_t leafSize) {
+        int result = 0;
+        for (auto& uo: m_uniqueObjects) {
+            size_t uoIndex = uo.first;
+            auto& uoChildren = ObjectNode::nodes[data.objectTreeNodes[uoIndex].objectPtr]->m_children;
+            for (auto &uoChild: uoChildren) {
+                if (uoChild->index == objectIndex) {
+                    if (m_parents.size() == 0) {
+                        result += 1;
+                    }
+                    for (auto& parent: m_parents)
+                        result += parent->addRefSize(data, uoIndex, leafSize);
+                }
+            }
+        }
+        m_referencedSize += result * leafSize;
+        return result;
+    }
+
+    ClassIndex m_classIndex;
+    std::vector<std::unique_ptr<TypeTree>> m_parents;
+    std::unordered_map<size_t, uint64_t> m_uniqueObjects;
+    uint64_t m_referencedSize;
+    int m_gcNum;
+};
+
 void setParents(QVector<RowData>& children, const RowData* parent)
 {
     for (auto& row : children) {
@@ -725,38 +771,37 @@ ObjectRowData objectRowDataFromTypeTree(ParserData& data, TypeTree* tree) {
     rowData.classIndex = tree->m_classIndex.index;
     rowData.className = data.stringify(tree->m_classIndex);
     rowData.allocations = tree->m_uniqueObjects.size();
-    rowData.allocated = tree->m_totalSize;
     rowData.referenced = tree->m_referencedSize;
+    for (auto &uo: tree->m_uniqueObjects) {
+        rowData.allocated += data.allocationInfos[data.objectTreeNodes[uo.first].allocIndex.index].size;
+    }
     for (auto& parent: tree->m_parents)
         rowData.children.push_back(objectRowDataFromTypeTree(data, parent.get()));
     return rowData;
 }
 
-ObjectNode buildObjectGraph(ParserData& data, size_t &nodeIndex, bool &success) {
-    ObjectNode node;
-    if (nodeIndex >= data.objectTreeNodes.size()) {
-        success = false;
-        return node;
-    }
+std::unique_ptr<ObjectNode> buildObjectGraph(ParserData& data, size_t &nodeIndex) {
+    auto node = std::unique_ptr<ObjectNode>(new ObjectNode());
+    Q_ASSERT(nodeIndex < data.objectTreeNodes.size() && "Heap snapshot data is incomplete");
     ObjectTreeNode &dataNode = data.objectTreeNodes[nodeIndex];
-    node.m_classIndex = dataNode.classIndex;
-    node.m_objectPtr = dataNode.objectPtr;
-    node.gcNum = dataNode.gcNum;
-    if (dataNode.allocIndex.index != 0)
-        node.m_objectSize = data.allocationInfos[dataNode.allocIndex.index].size;
-    else
-        node.m_objectSize = 0;
+    node->index = nodeIndex;
     nodeIndex++;
     for (size_t i = 0; i < dataNode.numChildren; ++i) {
-
         // FIXME: this check will not be needed once we can ensure the
         // integrity of the trace.
         // https://github.sec.samsung.net/dotnet/profiler/issues/24
-        if (node.gcNum != data.objectTreeNodes[nodeIndex].gcNum) {
-            success = false;
-            break;
+        Q_ASSERT(dataNode.gcNum == data.objectTreeNodes[nodeIndex].gcNum && "Heap snapshot data is incomplete");
+
+        uint64_t childPtr = data.objectTreeNodes[nodeIndex].objectPtr;
+        if (ObjectNode::nodes.find(childPtr) == ObjectNode::nodes.end()) {
+            ObjectNode::nodes.insert(std::pair<uint64_t, std::unique_ptr<ObjectNode>>(
+                                         childPtr, std::move(buildObjectGraph(data, nodeIndex))));
+        } else {
+            Q_ASSERT(data.objectTreeNodes[nodeIndex].numChildren == 0 && "Incorrect number of children");
+            ++nodeIndex;
         }
-        node.m_children.push_back(buildObjectGraph(data, nodeIndex, success));
+        ObjectNode *child = ObjectNode::nodes[childPtr].get();
+        node->m_children.push_back(child);
     }
     return node;
 }
@@ -766,32 +811,30 @@ ObjectTreeData buildObjectTree(ParserData& data)
 
     ObjectTreeData ret;
     size_t nodeIndex = 0;
-    std::vector<ObjectNode> nodes;
     while (nodeIndex < data.objectTreeNodes.size()) {
-        bool success = true;
-        ObjectNode node = buildObjectGraph(data, nodeIndex, success);
-
-        // FIXME: this check will not be needed once we can ensure the
-        // integrity of the trace.
-        // https://github.sec.samsung.net/dotnet/profiler/issues/24
-        if (success)
-            nodes.push_back(node);
-        else {
-            qFatal("Heap snapshot data is incomplete");
-        }
-    }
-
-    for (auto& node: nodes) {
+        std::unique_ptr<ObjectNode> node = std::move(buildObjectGraph(data, nodeIndex));
+        auto nodePtr = node.get();
+        ObjectNode::nodes.insert(std::pair<uint64_t, std::unique_ptr<ObjectNode>>(
+                                     0, std::move(node)));
         TypeTree root;
-        root.m_gcNum = node.gcNum;
-        root.m_parents = TypeTree::createBottomUp(node);
+        root.m_gcNum = data.objectTreeNodes[nodePtr->index].gcNum;
+        root.m_parents = std::move(TypeTree::createBottomUp(data, nodePtr));
         root.mergeSubtrees();
-
+        root.unroll();
         for (auto& parent: root.m_parents) {
+            for (auto &uo: parent->m_uniqueObjects) {
+                for (auto &grandparent: parent->m_parents) {
+                    size_t leafSize = data.allocationInfos[data.objectTreeNodes[uo.first].allocIndex.index].size;
+                    size_t chains = grandparent->addRefSize(data, uo.first, leafSize);
+                    parent->m_referencedSize += chains * leafSize;
+                }
+            }
             ret.push_back(objectRowDataFromTypeTree(data, parent.get()));
         }
 
+        ObjectNode::nodes.clear();
     }
+
     setObjectParents(ret, nullptr);
 
     return ret;

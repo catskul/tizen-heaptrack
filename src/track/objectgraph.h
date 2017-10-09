@@ -17,7 +17,18 @@ public:
     bool visited;
 
     void print(size_t gcCounter, FILE *out) {
-        fprintf(out, "e %zx %zx %zx %zx\n", gcCounter, children.size(), reinterpret_cast<uintptr_t>(objectId),  reinterpret_cast<uintptr_t>(classId));
+        // To make things more compact, if the node was already visited, don't
+        // traverse its children. It's enough to note that it is there.
+        if (visited) {
+            fprintf(out, "e %zx %zx %zx %zx\n", gcCounter, 0,
+                reinterpret_cast<uintptr_t>(objectId),
+                reinterpret_cast<uintptr_t>(classId));
+            return;
+        }
+        visited = true;
+        fprintf(out, "e %zx %zx %zx %zx\n", gcCounter, children.size(),
+            reinterpret_cast<uintptr_t>(objectId),
+            reinterpret_cast<uintptr_t>(classId));
         for (ObjectNode* child: children) {
             child->print(gcCounter, out);
         }
@@ -52,17 +63,6 @@ public:
         keyIt->second.children.push_back(&(valIt->second));
     }
 
-    void eliminateLoops(ObjectNode *node) {
-        node->visited = true;
-        node->children.erase(remove_if(node->children.begin(), node->children.end(), [](const ObjectNode* child) -> bool {
-            return child->visited;
-        }), node->children.end());
-
-        for (size_t i = 0; i < node->children.size(); ++i) {
-            eliminateLoops(node->children[i]);
-        }
-    }
-
     void print(size_t gcCounter, FILE* out) {
         auto it = m_graph.find(nullptr);
         if (it == m_graph.end()) {
@@ -70,7 +70,6 @@ public:
         }
 
         ObjectNode *node = &(it->second);
-        eliminateLoops(node);
         node->print(gcCounter, out);
         clear();
     }
