@@ -42,69 +42,30 @@ $SDB shell "cd $DEVICE_HEAPTRACK_PATH/build/bin
 
 $SDB pull $DEVICE_HEAPTRACK_PATH/build/bin/res.gz $RES_FILE &>/dev/null
 
+if [ ! -f $RES_FILE ]; then
+  echo "error collecting the trace, see the log for details"
+  exit 1
+fi
+
 if [ "$LAUNCH_GUI" == "true" ]; then
-  XSOCK=/tmp/.X11-unix
-  XAUTH=/tmp/.docker.xauth
-  touch $XAUTH
-  xauth nlist $DISPLAY | sed -e 's/^..../ffff/' | xauth -f $XAUTH nmerge -
 
   echo "Showing malloc consumption"
-  docker run -it \
-        --volume=$XSOCK:$XSOCK:rw \
-        --volume=$XAUTH:$XAUTH:rw \
-        --volume=$RES_FILE:/res.gz:ro \
-        --env="XAUTHORITY=${XAUTH}" \
-        --env="DISPLAY" \
-        --user="docker-user" \
-        heaptrack \
-        /heaptrack/build-x64/bin/heaptrack_gui --malloc /res.gz 2>gui_malloc.srderr
+  $SCRIPTS_PATH/heaptrack-gui.sh $RES_FILE --malloc
   echo
 
   echo "Showing managed consumption"
-  docker run -it \
-        --volume=$XSOCK:$XSOCK:rw \
-        --volume=$XAUTH:$XAUTH:rw \
-        --volume=$RES_FILE:/res.gz:ro \
-        --env="XAUTHORITY=${XAUTH}" \
-        --env="DISPLAY" \
-        --user="docker-user" \
-        heaptrack \
-        /heaptrack/build-x64/bin/heaptrack_gui --managed --hide-unmanaged-stacks /res.gz 2>gui_malloc.srderr
+  $SCRIPTS_PATH/heaptrack-gui.sh $RES_FILE --managed --hide-unmanaged-stacks
   echo
 
   echo "Showing mmap (Private_Dirty part) consumption"
-  docker run -it \
-        --volume=$XSOCK:$XSOCK:rw \
-        --volume=$XAUTH:$XAUTH:rw \
-        --volume=$RES_FILE:/res.gz:ro \
-        --env="XAUTHORITY=${XAUTH}" \
-        --env="DISPLAY" \
-        --user="docker-user" \
-        heaptrack \
-        /heaptrack/build-x64/bin/heaptrack_gui --private_dirty /res.gz 2>gui_malloc.srderr
+  $SCRIPTS_PATH/heaptrack-gui.sh $RES_FILE --private_dirty
   echo
 
   echo "Showing mmap (Private_Clean part) consumption"
-  docker run -it \
-        --volume=$XSOCK:$XSOCK:rw \
-        --volume=$XAUTH:$XAUTH:rw \
-        --volume=$RES_FILE:/res.gz:ro \
-        --env="XAUTHORITY=${XAUTH}" \
-        --env="DISPLAY" \
-        --user="docker-user" \
-        heaptrack \
-        /heaptrack/build-x64/bin/heaptrack_gui --private_clean /res.gz 2>gui_malloc.srderr
+  $SCRIPTS_PATH/heaptrack-gui.sh $RES_FILE --private_clean
   echo
 
   echo "Showing mmap (Shared_Clean + Shared_Dirty part) consumption"
-  docker run -it \
-        --volume=$XSOCK:$XSOCK:rw \
-        --volume=$XAUTH:$XAUTH:rw \
-        --volume=$RES_FILE:/res.gz:ro \
-        --env="XAUTHORITY=${XAUTH}" \
-        --env="DISPLAY" \
-        --user="docker-user" \
-        heaptrack \
-        /heaptrack/build-x64/bin/heaptrack_gui --shared /res.gz 2>gui_malloc.srderr
+  $SCRIPTS_PATH/heaptrack-gui.sh $RES_FILE --shared
   echo
 fi
