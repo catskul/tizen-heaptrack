@@ -44,7 +44,7 @@ fi
 $SDB push $HEAPTRACK_DATA_DIR/$DEVICE_ARCH/bin/* $DEVICE_HEAPTRACK_PATH/build/bin/ &>/dev/null
 $SDB push $HEAPTRACK_DATA_DIR/$DEVICE_ARCH/lib/heaptrack/*.so $DEVICE_HEAPTRACK_PATH/build/lib/heaptrack/ &>/dev/null
 $SDB push $HEAPTRACK_DATA_DIR/$DEVICE_ARCH/lib/heaptrack/libexec/* $DEVICE_HEAPTRACK_PATH/build/lib/heaptrack/libexec/ &>/dev/null
-$SDB push $HEAPTRACK_DATA_DIR/$DEVICE_ARCH/libprofiler.so $DEVICE_HEAPTRACK_PATH/build/bin/ &>/dev/null
+$SDB push $HEAPTRACK_DATA_DIR/$DEVICE_ARCH/$CORECLR_VERSION/libprofiler.so $DEVICE_HEAPTRACK_PATH/build/bin/ &>/dev/null
 $SDB push $SCRIPTS_PATH/../* $DEVICE_HEAPTRACK_PATH/build/bin/ &>/dev/null
 $SDB shell "cd $DEVICE_HEAPTRACK_PATH/build/bin
             ./heaptrack-pid.sh $DEVICE_HEAPTRACK_PATH/build/bin $DEVICE_HEAPTRACK_PATH/build/bin/res.gz ${APP_ID} ${APP_PATH}"

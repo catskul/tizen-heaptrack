@@ -30,6 +30,8 @@ For unpacking on Windows, please see [the details](docs/DETAILED.md#download-and
 
 [[SHA256 values for archive contents]](#checksums)
 
+You can also build and run the profiler entirely in Docker. For instructions, please see [Docker Instructions](#docker-instructions)
+
 ### Initialization of device for measurements [[Details]](docs/DETAILED.md#prepare-tizen-device-for-measurements)
 
 2\. Put Tizen RPMs to VM's /home/ubuntu/device-rpms for:
@@ -109,6 +111,17 @@ So, the "leaks" view seems to be the most useful to investigate memory consumpti
 Next several views are graphs for different memory consumption statistics (also, like in Summary view), as they change in time of application execution.
 Here, the "consumed" is used instead of "leaks", which is more precise.
 The "consumed" view shows memory consumption graph for top memory consuming function (separately, as shown in color, and also total consumption - the topmost graph).
+
+
+
+## Docker Instructions
+
+1. When building in Docker, first thing you need to do is to create a `coreclr-devel` directory and put coreclr-devel rpms for the CoreCLR versions you use on your devices in this folder. You can find out which version of CoreCLR is installed on your device using `rpm -qa` command. Alternatively, you can let docker download the latest `coreclr-devel` package from download.tizen.org. If you choose this option, leave the `coreclr-devel` folder empty and proceed to step 2, but please make sure that the device also has the latest coreclr package installed.
+2. Run 
+```
+./scripts/docker/heaptrack.sh org.tizen.example.HelloWorld.Tizen /opt/usr/home/owner/apps_rw/HelloWorld.Tizen/bin/HelloWorld.Tizen.exe
+```
+to build the profiler and launch profiling of HelloWorld application. The rest of the steps are the same as in the Measurements section of this document.
 
 ## Troubleshooting
 
