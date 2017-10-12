@@ -8,6 +8,7 @@ SCRIPTS_PATH=$(dirname $BASH_SOURCE)
 RES_FILE=$HEAPTRACK_DATA_DIR/res.gz
 APP_ID=$1
 APP_PATH=$2
+DOWNLOAD_CORECLR_DEVEL=""
 
 test_sdb_version() {
     if [ ! -f $SDB ]; then
@@ -23,21 +24,35 @@ test_sdb_version() {
 }
 
 test_coreclr_devel() {
-    coreclr_rpms=$(ls ${SCRIPTS_PATH}/../../coreclr-devel-*.rpm 2>/dev/null)
+    coreclr_rpms=$(ls ${SCRIPTS_PATH}/../../coreclr-devel/coreclr-devel-*.rpm 2>/dev/null)
     if [ -z "$coreclr_rpms" ]; then
-        echo "coreclr-devel rpms not found in ${SCRIPTS_PATH}/../.. . Please copy the rpms matching the CoreCLR version on your device there."
-        exit 1
-    fi
+        echo "coreclr-devel rpms not found in ${SCRIPTS_PATH}/../../coreclr-devel ."
+        while [ "$DOWNLOAD_CORECLR_DEVEL" != "y" ] && [ "$DOWNLOAD_CORECLR_DEVEL" != "n" ]; do
+            read -p "Do you want to download the latest coreclr-devel package? [Y/n] " DOWNLOAD_CORECLR_DEVEL
+            if [ -z "$DOWNLOAD_CORECLR_DEVEL" ]; then
+                DOWNLOAD_CORECLR_DEVEL="y"
+            fi
+            DOWNLOAD_CORECLR_DEVEL=$(echo $DOWNLOAD_CORECLR_DEVEL | awk '{ print(tolower($0)) }')
+        done
 
-    for coreclr_rpm in $coreclr_rpms; do
-        echo "Found $(basename $coreclr_rpm)"
-    done
+        if [ "$DOWNLOAD_CORECLR_DEVEL" == "n" ]; then
+            exit 1
+        fi
+    else
+        for coreclr_rpm in $coreclr_rpms; do
+            echo "Found $(basename $coreclr_rpm)"
+        done
+    fi
 }
 
 test_sdb_version
 test_coreclr_devel
 
 docker build -t heaptrack:latest $SCRIPTS_PATH/../..
+if [ ! "$?" -eq "0" ]; then
+    echo "build errors; see the log for details"
+    exit 1
+fi
 DOCKER_CONTAINER_HASH=$(docker create heaptrack:latest)
 
 $SDB root on

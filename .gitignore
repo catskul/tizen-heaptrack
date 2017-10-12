@@ -15,6 +15,7 @@ perf.data
 perf.data.*
 callgrind.out.*
 .*kate-swp
+*.rpm
 
 # from kdiff3
 *.BACKUP.*

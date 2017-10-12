@@ -24,6 +24,8 @@ if [ "$IS_FOUND_APP_PATH" != "0" ]; then
 	exit 1
 fi
 
+CORECLR_VERSION=$($SDB shell rpm -qa | grep -E coreclr-[0-9] | sort | tail -n1 | sed -E 's/.*([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+-[0-9]+\.[0-9]+.*)/\1/g' | tr -d '[:space:]')
+
 rm -rf $HEAPTRACK_DATA_DIR
 mkdir -p $HEAPTRACK_DATA_DIR
 rm -f $RES_FILE
@@ -32,6 +34,13 @@ $SDB shell "mkdir -p $DEVICE_HEAPTRACK_PATH/build/bin;
             mkdir -p $DEVICE_HEAPTRACK_PATH/build/lib/heaptrack
             mkdir -p $DEVICE_HEAPTRACK_PATH/build/lib/heaptrack/libexec" &>/dev/null
 docker cp $DOCKER_CONTAINER_HASH:/heaptrack-common/$DEVICE_ARCH $HEAPTRACK_DATA_DIR/$DEVICE_ARCH
+
+if [ ! -d "$HEAPTRACK_DATA_DIR/$DEVICE_ARCH/$CORECLR_VERSION" ]; then
+  echo "CoreCLR version on device $CORECLR_VERSION does not match any of the provided coreclr-devel package versions. Please \
+update coreclr on device, or put the correct coreclr-devel rpm in coreclr-devel folder."
+  exit 1
+fi
+
 $SDB push $HEAPTRACK_DATA_DIR/$DEVICE_ARCH/bin/* $DEVICE_HEAPTRACK_PATH/build/bin/ &>/dev/null
 $SDB push $HEAPTRACK_DATA_DIR/$DEVICE_ARCH/lib/heaptrack/*.so $DEVICE_HEAPTRACK_PATH/build/lib/heaptrack/ &>/dev/null
 $SDB push $HEAPTRACK_DATA_DIR/$DEVICE_ARCH/lib/heaptrack/libexec/* $DEVICE_HEAPTRACK_PATH/build/lib/heaptrack/libexec/ &>/dev/null
