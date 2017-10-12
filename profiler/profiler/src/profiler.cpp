@@ -664,8 +664,10 @@ HRESULT STDMETHODCALLTYPE
     hr = info->GetClassFromObject(objectRefIds[i], &subjClass);
 
     // We still want the best estimate, even though something went wrong.
-    if (hr != S_OK)
+    if (hr != S_OK) {
+      fprintf(stderr, "Unknown type for object %zx", objectRefIds[i]);
       continue;
+    }
 
     heaptrack_add_object_dep((void*)objectId, (void*)classId, (void*)objectRefIds[i], (void*)subjClass);
   }
@@ -688,8 +690,12 @@ HRESULT STDMETHODCALLTYPE
     hr = info->GetClassFromObject(rootRefIds[i], &rootClass);
 
     // We still want the best estimate, even though something went wrong.
-    if (hr != S_OK)
+    if (hr != S_OK) {
+      // Silently ignore null objects - we're not interested in these
+      if (rootRefIds[0] != 0)
+          fprintf(stderr, "Unknown type for object %zx", rootRefIds[i]);
       continue;
+    }
 
     heaptrack_gcroot((void *) rootRefIds[i], (void*)rootClass);
   }
