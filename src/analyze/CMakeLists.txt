@@ -12,7 +12,7 @@ target_link_libraries(sharedprint LINK_PUBLIC
     ${ZLIB_LIBRARIES}
 )
 
-if (HEAPTRACK_BUILD_GUI)
+if (HAVE_FUTURE_SUPPORT)
     add_subdirectory(print)
 endif()
 

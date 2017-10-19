@@ -73,6 +73,12 @@ if (NOT HAVE_LINUX_HEADERS)
     message(FATAL_ERROR "You are missing some Linux headers required to compile heaptrack.")
 endif()
 
+check_cxx_source_compiles(
+    "#include <future>
+    std::future<int> f;
+    int main() { return 0; }"
+    HAVE_FUTURE_SUPPORT)
+
 set(BIN_INSTALL_DIR "bin")
 set(LIB_SUFFIX "" CACHE STRING "Define suffix of directory name (32/64)")
 set(LIB_INSTALL_DIR "lib${LIB_SUFFIX}")
@@ -88,6 +94,6 @@ file(RELATIVE_PATH LIB_REL_PATH
 
 add_subdirectory(3rdparty)
 add_subdirectory(src)
-#add_subdirectory(tests)
+add_subdirectory(tests)
 
 feature_summary(WHAT ALL FATAL_ON_MISSING_REQUIRED_PACKAGES)
