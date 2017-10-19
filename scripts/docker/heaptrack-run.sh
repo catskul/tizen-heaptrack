@@ -11,6 +11,8 @@ RES_FILE=$7
 APP_ID=$8
 APP_PATH=$9
 LAUNCH_GUI=${10}
+CORECLR_BIN_DIR=${11}
+DEVICE_CORECLR_PATH="/usr/share/dotnet/"
 
 IS_FOUND_APP=$($SDB shell "app_launcher -l | cut -d \"'\" -f 4 | grep -q '^${APP_ID}$'; echo \$?" | tr -d "[:space:]")
 if [ "$IS_FOUND_APP" != "0" ]; then
@@ -35,10 +37,20 @@ $SDB shell "mkdir -p $DEVICE_HEAPTRACK_PATH/build/bin;
             mkdir -p $DEVICE_HEAPTRACK_PATH/build/lib/heaptrack/libexec" &>/dev/null
 docker cp $DOCKER_CONTAINER_HASH:/heaptrack-common/$DEVICE_ARCH $HEAPTRACK_DATA_DIR/$DEVICE_ARCH
 
-if [ ! -d "$HEAPTRACK_DATA_DIR/$DEVICE_ARCH/$CORECLR_VERSION" ]; then
-  echo "CoreCLR version on device $CORECLR_VERSION does not match any of the provided coreclr-devel package versions. Please \
-update coreclr on device, or put the correct coreclr-devel rpm in coreclr-devel folder."
-  exit 1
+if [ -d "$CORECLR_BIN_DIR" ]; then
+  device_hash=$($SDB shell "find -L $DEVICE_CORECLR_PATH -name libcoreclr.so -exec sha1sum {} \;" | awk '{ print($1) }')
+  host_hash=$(sha1sum $CORECLR_BIN_DIR/libcoreclr.so | awk '{ print($1) }')
+  CORECLR_VERSION="unknown"
+  if [ "$device_hash" != "$host_hash" ]; then
+    echo "CoreCLR version on device is different from the one in '$CORECLR_BIN_DIR'. Exiting."
+    exit 1
+  fi
+else
+  if [ ! -d "$HEAPTRACK_DATA_DIR/$DEVICE_ARCH/$CORECLR_VERSION" ]; then
+    echo "CoreCLR version on device $CORECLR_VERSION does not match any of the provided coreclr-devel package versions. Please \
+  update coreclr on device, or put the correct coreclr-devel rpm in coreclr-devel folder."
+    exit 1
+  fi
 fi
 
 $SDB push $HEAPTRACK_DATA_DIR/$DEVICE_ARCH/bin/* $DEVICE_HEAPTRACK_PATH/build/bin/ &>/dev/null

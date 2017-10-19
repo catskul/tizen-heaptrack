@@ -59,6 +59,9 @@ RUN cd /heaptrack/build-armel && \
     CC=arm-linux-gnueabi-gcc CXX=arm-linux-gnueabi-g++ CPLUS_INCLUDE_PATH=/rootfs/usr/lib/gcc/armv7l-tizen-linux-gnueabi/6.2.1/include/c++:/rootfs/usr/lib/gcc/armv7l-tizen-linux-gnueabi/6.2.1/include/c++/armv7l-tizen-linux-gnueabi cmake .. -DHEAPTRACK_BUILD_GUI=OFF -DCMAKE_TOOLCHAIN_FILE=/heaptrack/profiler/profiler/cross/armel/toolchain.cmake && \
     make -j4 && cp -r bin lib /heaptrack-common/armel
 #build managed profiler module
-RUN cd /heaptrack/scripts/docker && ./build_profiler.sh /heaptrack-common/armel
+ARG ARCH=""
+ARG BUILD_TYPE=""
+ARG CORECLR_SOURCE=""
+RUN cd /heaptrack/scripts/docker && CORECLR_SOURCE=$CORECLR_SOURCE BUILD_TYPE=$BUILD_TYPE ARCH=$ARCH ./build_profiler.sh /heaptrack-common/armel
 
 VOLUME /heaptrack-common
