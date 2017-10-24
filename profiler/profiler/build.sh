@@ -37,7 +37,7 @@ determine_cmake_arch() {
 				fi
 			done
 
-			echo "Unsupported architecture '$ARCH'. Must be one of $supported_cmake_archs."
+			echo "Unsupported architecture '$ARCH'. Must be one of ${supported_cmake_archs[@]}."
 		fi
 	elif [ "$coreclr_source" == "rpm" ]; then
 		# determine architecture from RPM package
@@ -50,7 +50,7 @@ determine_cmake_arch() {
 			fi
 			let arch_index=arch_index+1
 		done
-		echo "Unsupported architecture '$rpm_arch'. Must be one of $supported_rpm_archs."
+		echo "Unsupported architecture '$rpm_arch'. Must be one of ${supported_rpm_archs[@]}."
 		exit 1
 	else
 		usage

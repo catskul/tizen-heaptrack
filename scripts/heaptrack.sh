@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SDB=/home/ubuntu/tizen-studio/tools/sdb
-DEVICE_HEAPTRACK_PATH=/opt/heaptrack
+DEVICE_HEAPTRACK_PATH=/opt/usr/heaptrack
 HEAPTRACK_FOR_DEVICE_HOST_PATH=/home/ubuntu/heaptrack-arm
 HEAPTRACK_FOR_HOST_PATH=/home/ubuntu/heaptrack
 SCRIPTS_PATH=/home/ubuntu/heaptrack-scripts

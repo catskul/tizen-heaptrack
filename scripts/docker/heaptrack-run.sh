@@ -14,6 +14,12 @@ LAUNCH_GUI=${10}
 CORECLR_BIN_DIR=${11}
 DEVICE_CORECLR_PATH="/usr/share/dotnet/"
 
+$SCRIPTS_PATH/../prepare-device.sh
+if [ "$?" != "0" ]; then
+  "Errors; please see the log for details"
+  exit 1
+fi
+
 IS_FOUND_APP=$($SDB shell "app_launcher -l | cut -d \"'\" -f 4 | grep -q '^${APP_ID}$'; echo \$?" | tr -d "[:space:]")
 if [ "$IS_FOUND_APP" != "0" ]; then
 	echo "'${APP_ID}' application not found at device"

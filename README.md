@@ -4,6 +4,26 @@
 
 ## Brief contents of the Guide
 
+### Building and launching profiler in Docker
+
+Prerequisites:
+* [Tizen SDK](https://developer.tizen.org/development/tizen-studio/download) is required to run the profiler.
+* Your host machine should have Docker installed. For Ubuntu instructions, please see [the manual](https://docs.docker.com/engine/installation/linux/docker-ce/ubuntu/).
+
+Please, keep in mind:
+
+> If you would like to use Docker as a non-root user, you should now consider
+> adding your user to the "docker" group with something like:
+> 
+> `sudo usermod -aG docker your-user`
+
+1. When building in Docker, the first thing you need to do is to create a `coreclr-devel` directory and put coreclr-devel rpms for the CoreCLR versions you use on your devices in this folder. You can find out which version of CoreCLR is installed on your device using `rpm -qa` command. Alternatively, you can let docker download the latest `coreclr-devel` package from download.tizen.org, or, if you are building CoreCLR yourself, point the build script to the compiled CoreCLR source folder. If you choose one of these two options, leave the `coreclr-devel` folder empty and proceed to step 2.
+2. Run 
+```
+sudo ./launch.sh org.tizen.example.HelloWorld.Tizen /opt/usr/home/owner/apps_rw/HelloWorld.Tizen/bin/HelloWorld.Tizen.exe
+```
+to build the profiler and launch profiling of HelloWorld application. If you are running the profiler for the first time, you will be asked permission to move files around on the device in order to free up some disk space. You will also be asked to point the script to the location of "debuginfo" RPMs for the native libraries in which you want to see stack traces.
+
 ### VM [[Details]](docs/DETAILED.md#download-and-unpack-vm-disk-image-from-this-page)
 
 1\. Download and unpack VM image, start it in VirtualBox and connect with Tizen device
@@ -29,8 +49,6 @@ For unpacking on Windows, please see [the details](docs/DETAILED.md#download-and
 * [ubuntu-17.04.vdi.tar.bz2-31-08-17-ai](http://suprem.sec.samsung.net/confluence/download/attachments/81831470/ubuntu-17.04.vdi.tar.bz2-31-08-17-ai?api=v2)
 
 [[SHA256 values for archive contents]](#checksums)
-
-You can also build and run the profiler entirely in Docker. For instructions, please see [Docker Instructions](#docker-instructions)
 
 ### Initialization of device for measurements [[Details]](docs/DETAILED.md#prepare-tizen-device-for-measurements)
 
@@ -111,17 +129,6 @@ So, the "leaks" view seems to be the most useful to investigate memory consumpti
 Next several views are graphs for different memory consumption statistics (also, like in Summary view), as they change in time of application execution.
 Here, the "consumed" is used instead of "leaks", which is more precise.
 The "consumed" view shows memory consumption graph for top memory consuming function (separately, as shown in color, and also total consumption - the topmost graph).
-
-
-
-## Docker Instructions
-
-1. When building in Docker, first thing you need to do is to create a `coreclr-devel` directory and put coreclr-devel rpms for the CoreCLR versions you use on your devices in this folder. You can find out which version of CoreCLR is installed on your device using `rpm -qa` command. Alternatively, you can let docker download the latest `coreclr-devel` package from download.tizen.org. If you choose this option, leave the `coreclr-devel` folder empty and proceed to step 2, but please make sure that the device also has the latest coreclr package installed.
-2. Run 
-```
-./scripts/docker/heaptrack.sh org.tizen.example.HelloWorld.Tizen /opt/usr/home/owner/apps_rw/HelloWorld.Tizen/bin/HelloWorld.Tizen.exe
-```
-to build the profiler and launch profiling of HelloWorld application. The rest of the steps are the same as in the Measurements section of this document.
 
 ## Troubleshooting
 

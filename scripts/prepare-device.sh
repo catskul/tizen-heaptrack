@@ -1,16 +1,37 @@
-#!/bin/bash -x
+#!/bin/bash
 
-SDB=/home/ubuntu/tizen-studio/tools/sdb
-RPMS_DIR=/home/ubuntu/device-rpms
-SCRIPTS_PATH=/home/ubuntu/heaptrack-scripts
+SCRIPTS_PATH=$(dirname $BASH_SOURCE)
 
-$SDB root on
+if [ ! -f "$SDB" ]; then
+  source $SCRIPTS_PATH/common.sh
+  test_sdb_version
+  if [ $? != 0 ]; then
+    exit 1
+  fi
+fi
 
 if [ "$($SDB shell 'ls -d1 /opt/usr/rpms 2> /dev/null')" != "" ]; then
-  echo "The script already completed for the device. Please, don't use it second time until reset of the device to initial state"
-
-  exit 1
+  echo "Device is already prepared to run the profiler."
+  exit 0
 fi
+
+echo "This step will move things around on the device in order to get additional space"
+echo "required to run the profiler. What will be moved:"
+echo " - /usr/share/dotnet -> /opt/usr/dotnet"
+echo " - /usr/share/dotnet-tizen -> /opt/usr/dotnet-tizen"
+echo " - /usr/lib/debug -> /opt/usr/lib/debug"
+echo " - /usr/src/debug -> /opt/usr/src/debug"
+echo "Symlinks to new locations will be created in old locations."
+5
+read_consent "Do you want to proceed?" consent
+if ! $consent; then
+   echo "Can not proceed without preparing the device"
+   exit 1
+fi
+
+read_dir "Please enter the location of debug RPMs [] " RPMS_DIR
+
+$SDB root on
 
 $SDB shell "mkdir /opt/usr/rpms"
 $SDB push $RPMS_DIR/* /opt/usr/rpms
