@@ -271,38 +271,6 @@ static HRESULT GetClassNameFromClassId(ICorProfilerInfo *info, ClassID classId, 
   return S_OK;
 }
 
-static HRESULT GetClassSizeFromClassId(ICorProfilerInfo2 *info, ClassID classId, ULONG *pulClassSize) {
-  ModuleID moduleId;
-  mdTypeDef mdClass;
-  ClassID parentClassId;
-
-  HRESULT hr = info->GetClassIDInfo2(classId, &moduleId, &mdClass, &parentClassId, 0, nullptr, nullptr);
-  if (parentClassId) {
-    ULONG parentClassSize = 0;
-    hr = GetClassSizeFromClassId(info, parentClassId, &parentClassSize);
-    *pulClassSize += parentClassSize;
-  }
-
-  if (hr != S_OK)
-    return hr;
-
-  IMetaDataImport * pIMetaDataImport;
-  hr = info->GetModuleMetaData(moduleId, CorOpenFlags::ofRead, IID_IMetaDataImport, 
-                                                              (LPUNKNOWN *)&pIMetaDataImport);
-  if (hr != S_OK)
-    return hr; 
-
-  ULONG classSize = 0;
-  hr = pIMetaDataImport->GetClassLayout(mdClass, nullptr, nullptr, 0, nullptr, &classSize);
-  *pulClassSize += classSize;
-  
-  if (hr != S_OK)
-    return hr;
-
-  pIMetaDataImport->Release();
-  return S_OK;
-}
-
 void encodeWChar(WCHAR *orig, char *encoded) {
   int i = 0;
   while (orig[i] != 0) {
@@ -445,32 +413,34 @@ HRESULT STDMETHODCALLTYPE Profiler::ClassLoadStarted(ClassID classId) {
 HRESULT STDMETHODCALLTYPE
     Profiler::ClassLoadFinished(ClassID classId, HRESULT hrStatus) {
 
-  if (hrStatus != S_OK)
+  if (hrStatus != S_OK) {
+    fprintf(stderr, "[W] Failed to load class %x, HRESULT=%x\n", classId, hrStatus);
     return S_OK;
+  }
+
   ICorProfilerInfo2 *info;
-  HRESULT hr = g_pICorProfilerInfoUnknown->QueryInterface(IID_ICorProfilerInfo2,
-                                                          (void **)&info);
-  if (hr != S_OK)
-    return E_FAIL;
+  HRESULT hr = g_pICorProfilerInfoUnknown->QueryInterface(IID_ICorProfilerInfo2, (void **)&info);
+  if (hr != S_OK) {
+    assert(false && "Failed to retreive ICorProfilerInfo");
+  }
 
+  ULONG classSize = 0;
   WCHAR wszClassName[MAX_NAME_LENGTH + 1];
-  hr = GetClassNameFromClassId(info, classId, wszClassName);
 
-  if (hr != S_OK)
-    return E_FAIL;
+  hr = GetClassNameFromClassId(info, classId, wszClassName);
+  if (hr != S_OK) {
+    fprintf(stderr, "[W] Failed to retrieve class name for class %x, HRESULT=%x\n", classId, hr);
+    goto Cleanup;
+  }
 
   char className[MAX_NAME_LENGTH + 1];
   encodeWChar(wszClassName, className);
-  uint32_t classSize = 0;
 
-  GetClassSizeFromClassId(info, classId, &classSize);
+  heaptrack_loadclass(reinterpret_cast<void*>(classId), className);
 
-  if (hr != S_OK)
-    return E_FAIL;
-
-  heaptrack_loadclass(reinterpret_cast<void*>(classId), classSize, className);
+Cleanup:
   info->Release();
-  return S_OK;
+  return hr;
 }
 
 HRESULT STDMETHODCALLTYPE Profiler::ClassUnloadStarted(ClassID classId) {
@@ -654,10 +624,10 @@ HRESULT STDMETHODCALLTYPE
                                ULONG cObjectRefs, ObjectID objectRefIds[]) {
   HRESULT hr;
   ICorProfilerInfo *info;
-  hr = g_pICorProfilerInfoUnknown->QueryInterface(IID_ICorProfilerInfo,
-                                                            (void **)&info);
-  if (hr != S_OK)
-    return hr;
+  hr = g_pICorProfilerInfoUnknown->QueryInterface(IID_ICorProfilerInfo, (void **)&info);
+  if (hr != S_OK) {
+    assert(false && "Failed to retreive ICorProfilerInfo");
+  }
 
   for (int i = 0; i < cObjectRefs; ++i) {    
     ClassID subjClass;
@@ -665,7 +635,7 @@ HRESULT STDMETHODCALLTYPE
 
     // We still want the best estimate, even though something went wrong.
     if (hr != S_OK) {
-      fprintf(stderr, "Unknown type for object %zx", objectRefIds[i]);
+      fprintf(stderr, "[W] Unknown type for object %x, HRESULT=%x\n", objectRefIds[i], hr);
       continue;
     }
 
@@ -679,11 +649,11 @@ HRESULT STDMETHODCALLTYPE
     Profiler::RootReferences(ULONG cRootRefs, ObjectID rootRefIds[]) {
   HRESULT hr;
   ICorProfilerInfo *info;
-  hr = g_pICorProfilerInfoUnknown->QueryInterface(IID_ICorProfilerInfo,
-                                                            (void **)&info);
+  hr = g_pICorProfilerInfoUnknown->QueryInterface(IID_ICorProfilerInfo, (void **)&info);
 
-  if (hr != S_OK)
-    return hr;
+  if (hr != S_OK) {
+    assert(false && "Failed to retreive ICorProfilerInfo");
+  }
 
   for (int i = 0; i < cRootRefs; ++i) {    
     ClassID rootClass;
@@ -693,7 +663,7 @@ HRESULT STDMETHODCALLTYPE
     if (hr != S_OK) {
       // Silently ignore null objects - we're not interested in these
       if (rootRefIds[0] != 0)
-          fprintf(stderr, "Unknown type for object %zx", rootRefIds[i]);
+          fprintf(stderr, "[W] Unknown type for object %x, HRESULT=%x\n", rootRefIds[i], hr);
       continue;
     }
 

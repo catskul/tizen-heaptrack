@@ -68,7 +68,7 @@ AccumulatedTraceData::AccumulatedTraceData()
     allocations.reserve(16384);
     stopIndices.reserve(4);
     opNewIpIndices.reserve(16);
-    classInfos.reserve(4096);
+    classIndices.reserve(4096);
     objectTreeNodes.reserve(16384);
 }
 
@@ -795,10 +795,9 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             if (pass != FirstPass) {
                 continue;
             }
-            ClassInfo classInfo;
-            reader >> classInfo.classIndex;
-            reader >> classInfo.size;
-            classInfos.push_back(classInfo);
+            ClassIndex classIndex;
+            reader >> classIndex;
+            classIndices.push_back(classIndex);
         } else {
             cerr << "failed to parse line: " << reader.line() << endl;
         }

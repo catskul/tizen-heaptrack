@@ -512,7 +512,7 @@ public:
         if (fprintf(s_data->out, "G 1\n") < 0) {
             writeError();
             return;
-    	}
+        }
 
         ObjectGraph graph;
         graph.clear();
@@ -529,7 +529,7 @@ public:
                     rangeLength, reinterpret_cast<uintptr_t>(rangeStart), reinterpret_cast<uintptr_t>(rangeMovedTo)) < 0) {
             writeError();
             return;
-	}
+        }
     }
 
     void handleFinishGC()
@@ -543,19 +543,19 @@ public:
         if (fprintf(s_data->out, "G 0\n") < 0) {
             writeError();
             return;
-	    }
+        }
 
         ObjectGraph graph;
         graph.print(gc_counter, s_data->out);
     }
 
-    void handleLoadClass(void *classId, unsigned long classSize, char *className) {
+    void handleLoadClass(void *classId, char *className) {
         std::string formattedName;
         formattedName.append("[");
         formattedName.append(className);
         formattedName.append("]");
         fprintf(s_data->out, "n %" PRIxPTR " %s\n", reinterpret_cast<uintptr_t>(classId), formattedName.c_str());
-        fprintf(s_data->out, "C %" PRIxPTR " %lx\n",  reinterpret_cast<uintptr_t>(classId), classSize);
+        fprintf(s_data->out, "C %" PRIxPTR "\n",  reinterpret_cast<uintptr_t>(classId));
         TraceTree::knownNames.insert(classId);
     }
 
@@ -1009,22 +1009,34 @@ void heaptrack_finishgc() {
 }
 
 void heaptrack_add_object_dep(void *keyObjectId, void *keyClassId, void *valObjectId, void *valClassId) {
+    assert(!RecursionGuard::isActive);
+    RecursionGuard guard;
+    
+    debugLog<VerboseOutput>("heaptrack_add_object_dep");
+
     ObjectGraph graph;
     graph.index(keyObjectId, keyClassId, valObjectId, valClassId);
 }
 
 void heaptrack_gcroot(void *objectId, void *classId) {
+    assert(!RecursionGuard::isActive);
+    RecursionGuard guard;
+    
+    debugLog<VerboseOutput>("heaptrack_gcroot");
+
     ObjectGraph graph;
     graph.addRoot(objectId, classId);
 }
 
 __attribute__((noinline))
-void heaptrack_loadclass(void *classId, unsigned long classSize, char *className) {
+void heaptrack_loadclass(void *classId, char *className) {
     assert(!RecursionGuard::isActive);
     RecursionGuard guard;
 
+    debugLog<VerboseOutput>("heaptrack_loadclass");
+
     HeapTrack heaptrack(guard);
-    heaptrack.handleLoadClass(classId, classSize, className);
+    heaptrack.handleLoadClass(classId, className);
 }
 
 void heaptrack_invalidate_module_cache()

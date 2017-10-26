@@ -137,6 +137,25 @@ QVariant ObjectTreeModel::data(const QModelIndex& index, int role) const
         QString tooltip;
         QTextStream stream(&tooltip);
         stream << "<qt><pre style='font-family:monospace;'>";
+        switch (static_cast<Columns>(index.column())) {
+            case ClassNameColumn:
+                stream << i18n("The name of the class.");
+                break;
+            case InstanceCountColumn:
+                stream << i18n("Total number of instances in this reference chain.");
+                break;
+            case GCNumColumn:
+                stream << i18n("GC number after which the snapshot has been taken.");
+                break;
+            case ShallowSizeColumn:
+                stream << i18n("Total size of objects of this type in a given reference chain.");
+                break;
+            case ReferencedSizeColumn:
+                stream << i18n("Total size of objects of this type referenced by other objects in a given reference chain.");
+                break;
+            case NUM_COLUMNS:
+                break;
+            }
         stream << "</pre></qt>";
         return tooltip;
     }

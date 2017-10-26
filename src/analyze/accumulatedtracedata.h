@@ -87,12 +87,6 @@ struct Allocation : public AllocationData
     TraceIndex traceIndex;
 };
 
-struct ClassInfo
-{
-    ClassIndex classIndex;
-    uint64_t size = 0;
-};
-
 struct ObjectTreeNode
 {
     uint64_t gcNum;
@@ -368,7 +362,7 @@ struct AccumulatedTraceData
     std::vector<std::string> strings;
     std::vector<IpIndex> opNewIpIndices;
     std::vector<AllocationInfo> allocationInfos;
-    std::vector<ClassInfo> classInfos;
+    std::vector<ClassIndex> classIndices;
     std::vector<ObjectTreeNode> objectTreeNodes;
 
     AddressRangesMap addressRangeInfos;

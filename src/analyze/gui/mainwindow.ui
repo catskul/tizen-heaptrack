@@ -29,7 +29,10 @@
     </property>
     <item>
      <widget class="KMessageWidget" name="messages">
-      <property name="icon" stdset="0">
+      <property name="messageType">
+       <enum>KMessageWidget::Information</enum>
+      </property>
+      <property name="icon">
        <iconset theme="dialog-error">
         <normaloff>.</normaloff>.</iconset>
       </property>
@@ -59,31 +62,37 @@
           </property>
           <layout class="QFormLayout" name="formLayout">
            <item row="1" column="1">
-            <widget class="KUrlRequester" name="openFile" native="true">
+            <widget class="KUrlRequester" name="openFile">
              <property name="toolTip">
               <string>&lt;qt&gt;&lt;p&gt;This field specifies the primary heaptrack data file. These files are called &lt;tt&gt;heaptrack.$APP.$PID.gz&lt;/tt&gt;. You can produce such a file by profiling your application, e.g. via:&lt;/p&gt;
 &lt;pre&gt;&lt;code&gt;heaptrack &amp;lt;yourapplication&amp;gt; ...&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Or, alternatively, you can attach to a running process via&lt;/p&gt;
 &lt;pre&gt;&lt;code&gt;heaptrack --pid $(pidof &amp;lt;yourapplication&amp;gt;)&lt;/code&gt;&lt;/pre&gt;&lt;/qt&gt;</string>
              </property>
-             <property name="filter" stdset="0">
+             <property name="filter">
               <string>heaptrack.*.*.gz</string>
              </property>
-             <property name="placeholderText" stdset="0">
+             <property name="placeholderText">
               <string>path/to/heaptrack.$APP.$PID.gz</string>
+             </property>
+             <property name="fileDialogModality">
+              <enum>Qt::WindowModal</enum>
              </property>
             </widget>
            </item>
            <item row="2" column="1">
-            <widget class="KUrlRequester" name="compareTo" native="true">
+            <widget class="KUrlRequester" name="compareTo">
              <property name="toolTip">
               <string>&lt;qt&gt;You can optionally specify a second heaptrack data file to compare to. If set, this file will be used as a base and its cost gets subtracted from the primary data costs.&lt;/qt&gt;</string>
              </property>
-             <property name="filter" stdset="0">
+             <property name="filter">
               <string>heaptrack.*.*.gz</string>
              </property>
-             <property name="placeholderText" stdset="0">
+             <property name="placeholderText">
               <string>path/to/heaptrack.$APP.$PID.gz</string>
+             </property>
+             <property name="fileDialogModality">
+              <enum>Qt::WindowModal</enum>
              </property>
             </widget>
            </item>
@@ -862,7 +871,6 @@
    <class>KMessageWidget</class>
    <extends>QFrame</extends>
    <header>kmessagewidget.h</header>
-   <container>1</container>
   </customwidget>
   <customwidget>
    <class>KUrlRequester</class>

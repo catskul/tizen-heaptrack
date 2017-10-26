@@ -626,7 +626,7 @@ void MainWindow::setupStacks()
         if (!current.isValid()) {
             stacksModel->clear();
         } else {
-            auto proxy = qobject_cast<const QSortFilterProxyModel*>(current.model());
+            auto proxy = qobject_cast<const TreeProxy*>(current.model());
             Q_ASSERT(proxy);
             auto leaf = proxy->mapToSource(current);
             stacksModel->fillFromIndex(leaf);

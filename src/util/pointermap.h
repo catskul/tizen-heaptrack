@@ -165,6 +165,7 @@ public:
         return {index, true};
     }
 
+    // Get AllocationIndex for a pointer without removing it from the map
     std::pair<AllocationIndex, bool> peekPointer(const uint64_t ptr)
     {
         const SplitPointer pointer(ptr);

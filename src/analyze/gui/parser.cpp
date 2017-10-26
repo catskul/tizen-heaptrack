@@ -794,8 +794,7 @@ std::unique_ptr<ObjectNode> buildObjectGraph(ParserData& data, size_t &nodeIndex
 
         uint64_t childPtr = data.objectTreeNodes[nodeIndex].objectPtr;
         if (ObjectNode::nodes.find(childPtr) == ObjectNode::nodes.end()) {
-            ObjectNode::nodes.insert(std::pair<uint64_t, std::unique_ptr<ObjectNode>>(
-                                         childPtr, std::move(buildObjectGraph(data, nodeIndex))));
+            ObjectNode::nodes.insert(std::pair<uint64_t, std::unique_ptr<ObjectNode>>(childPtr, std::move(buildObjectGraph(data, nodeIndex))));
         } else {
             Q_ASSERT(data.objectTreeNodes[nodeIndex].numChildren == 0 && "Incorrect number of children");
             ++nodeIndex;
@@ -808,7 +807,6 @@ std::unique_ptr<ObjectNode> buildObjectGraph(ParserData& data, size_t &nodeIndex
 
 ObjectTreeData buildObjectTree(ParserData& data)
 {
-
     ObjectTreeData ret;
     size_t nodeIndex = 0;
     while (nodeIndex < data.objectTreeNodes.size()) {

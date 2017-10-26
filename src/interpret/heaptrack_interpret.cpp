@@ -322,7 +322,7 @@ struct AccumulatedTraceData
         return ipId;
     }
 
-    size_t addClass(const uintptr_t classPointer, const size_t classSize) {
+    size_t addClass(const uintptr_t classPointer) {
         if (!classPointer) {
             return 0;
         }
@@ -335,7 +335,7 @@ struct AccumulatedTraceData
         size_t classIndex = intern(m_managedNames[classPointer]);
         m_encounteredClasses.insert(it, make_pair(classPointer, classIndex));
 
-        fprintf(stdout, "C %zx %zx\n", classIndex, classSize);
+        fprintf(stdout, "C %zx\n", classIndex);
         return classIndex;
     }
 
@@ -471,7 +471,7 @@ int main(int /*argc*/, char** /*argv*/)
 
                 uintptr_t addressStart = 0;
                 if (!(reader >> addressStart)) {
-                    cerr << "failed to parse line: " << reader.line() << endl;
+                    cerr << "[C] failed to parse line: " << reader.line() << endl;
                     return 1;
                 }
 
@@ -493,7 +493,7 @@ int main(int /*argc*/, char** /*argv*/)
             size_t parentIndex = 0;
             int is_managed;
             if (!(reader >> instructionPointer) || !(reader >> parentIndex) || !(reader >> is_managed)) {
-                cerr << "failed to parse line: " << reader.line() << endl;
+                cerr << "[C] failed to parse line: " << reader.line() << endl;
                 return 1;
             }
             // ensure ip is encountered
@@ -502,7 +502,7 @@ int main(int /*argc*/, char** /*argv*/)
             fprintf(stdout, "t %zx %zx\n", ipId, parentIndex);
         } else if (reader.mode() == '^') {
             if (isGCInProcess) {
-                cerr << "wrong trace format (allocation during GC - according to Book of the Runtime, concurrent GC is turned off in case profiling is enabled)" << endl;
+                cerr << "[W] wrong trace format (allocation during GC - according to Book of the Runtime, concurrent GC is turned off in case profiling is enabled)" << endl;
                 continue;
             }
 
@@ -512,7 +512,7 @@ int main(int /*argc*/, char** /*argv*/)
             TraceIndex traceId;
             uint64_t ptr = 0;
             if (!(reader >> traceId.index) || !(reader >> size) || !(reader >> ptr)) {
-                cerr << "failed to parse line: " << reader.line() << endl;
+                cerr << "[W] failed to parse line: " << reader.line() << endl;
                 continue;
             }
 
@@ -528,7 +528,7 @@ int main(int /*argc*/, char** /*argv*/)
             int isStart;
 
             if (!(reader >> isStart) || !(isStart == 1 || isStart == 0)) {
-                cerr << "failed to parse line: " << reader.line() << endl;
+                cerr << "[W] failed to parse line: " << reader.line() << endl;
                 continue;
             }
 
@@ -536,7 +536,7 @@ int main(int /*argc*/, char** /*argv*/)
             {
                 // GC chunk start
                 if (isGCInProcess) {
-                    cerr << "wrong trace format (nested GC chunks)" << endl;
+                    cerr << "[W] wrong trace format (nested GC chunks)" << endl;
                     continue;
                 }
 
@@ -550,7 +550,7 @@ int main(int /*argc*/, char** /*argv*/)
 
                 // GC chunk end
                 if (!isGCInProcess) {
-                    cerr << "wrong trace format (nested GC chunks?)" << endl;
+                    cerr << "[W] wrong trace format (nested GC chunks?)" << endl;
                     continue;
                 }
 
@@ -560,7 +560,7 @@ int main(int /*argc*/, char** /*argv*/)
                     auto allocation = ptrToIndex.takePointer(managedPtr);
 
                     if (!allocation.second) {
-                        cerr << "wrong trace format (unknown managed pointer) 0x" << std::hex << managedPtr << std::dec << endl;
+                        cerr << "[W] wrong trace format (unknown managed pointer) 0x" << std::hex << managedPtr << std::dec << endl;
                         continue;
                     }
 
@@ -575,14 +575,14 @@ int main(int /*argc*/, char** /*argv*/)
             }
         } else if (reader.mode() == 'L') {
             if (!isGCInProcess) {
-                cerr << "wrong trace format (range survival event when no GC is running)" << endl;
+                cerr << "[W] wrong trace format (range survival event when no GC is running)" << endl;
                 continue;
             }
 
             uint64_t rangeLength, rangeStart, rangeMovedTo;
 
             if (!(reader >> rangeLength) || !(reader >> rangeStart) || !(reader >> rangeMovedTo)) {
-                cerr << "failed to parse line: " << reader.line() << endl;
+                cerr << "[W] failed to parse line: " << reader.line() << endl;
                 continue;
             }
 
@@ -593,7 +593,7 @@ int main(int /*argc*/, char** /*argv*/)
                 auto it = gcManagedPointersSet.lower_bound(targetRangeStart);
 
                 if (it != gcManagedPointersSet.end() && *it < targetRangeEnd) {
-                    cerr << "wrong trace format (survival ranges are intersecting during a GC session)" << endl;
+                    cerr << "[W] wrong trace format (survival ranges are intersecting during a GC session)" << endl;
                     continue;
                 }
             }
@@ -652,7 +652,7 @@ int main(int /*argc*/, char** /*argv*/)
             TraceIndex traceId;
             uint64_t ptr = 0;
             if (!(reader >> size) || !(reader >> traceId.index) || !(reader >> ptr)) {
-                cerr << "failed to parse line: " << reader.line() << endl;
+                cerr << "[W] failed to parse line: " << reader.line() << endl;
                 continue;
             }
 
@@ -666,7 +666,7 @@ int main(int /*argc*/, char** /*argv*/)
         } else if (reader.mode() == '-') {
             uint64_t ptr = 0;
             if (!(reader >> ptr)) {
-                cerr << "failed to parse line: " << reader.line() << endl;
+                cerr << "[W] failed to parse line: " << reader.line() << endl;
                 continue;
             }
             bool temporary = lastPtr == ptr;
@@ -682,21 +682,22 @@ int main(int /*argc*/, char** /*argv*/)
             --leakedAllocations;
         } else if (reader.mode() == 'n') {
             uint64_t ip;
-            string name;
-            if (!(reader >> ip) || !(reader >> name)) {
-                cerr << "failed to parse line: " << reader.line() << endl;
+            string methodOrClassName;
+            if (!(reader >> ip) || !(reader >> methodOrClassName)) {
+                cerr << "[W] failed to parse line: " << reader.line() << endl;
+                continue;
             }
 
-            if (managed_name_ids.find(name) == managed_name_ids.end()) {
-                managed_name_ids.insert(std::make_pair(name, 1));
+            if (managed_name_ids.find(methodOrClassName) == managed_name_ids.end()) {
+                managed_name_ids.insert(std::make_pair(methodOrClassName, 1));
             } else {
-                int id = ++managed_name_ids[name];
+                int id = ++managed_name_ids[methodOrClassName];
 
-                name.append("~");
-                name.append(std::to_string(id));
+                methodOrClassName.append("~");
+                methodOrClassName.append(std::to_string(id));
             }
 
-            data.addManagedNameForIP(ip, name);
+            data.addManagedNameForIP(ip, methodOrClassName);
         } else if (reader.mode() == 'e') {
             size_t gcCounter = 0;
             size_t numChildren = 0;
@@ -704,30 +705,29 @@ int main(int /*argc*/, char** /*argv*/)
             uintptr_t classPointer = 0;
 
             if (!(reader >> gcCounter) || !(reader >> numChildren) || !(reader >> objectPointer) || !(reader >> classPointer)) {
-                cerr << "failed to parse line: " << reader.line() << endl;
+                cerr << "[W] failed to parse line: " << reader.line() << endl;
                 continue;
             }
 
             // ensure class is encountered
-            const auto classId = data.addClass(classPointer, 0);
+            const auto classId = data.addClass(classPointer);
             if (classId == 0 && classPointer != 0) {
-                cerr << "Unknown class id (" << classPointer << ") here: " << reader.line() << endl;
+                cerr << "[W] Unknown class id (" << classPointer << ") here: " << reader.line() << endl;
                 continue;
-	        }
+            }
 
             const auto objectId = ptrToIndex.peekPointer(objectPointer);
             if (!objectId.second)
-                cerr << "unknown object id (" << objectPointer << ") here: " << reader.line() << endl;
+                cerr << "[W] unknown object id (" << objectPointer << ") here: " << reader.line() << endl;
             // trace point, map current output index to parent index
             fprintf(stdout, "e %zx %zx %zx %zx %zx\n", gcCounter, numChildren, objectPointer, classId, objectId.first.index);
         } else if (reader.mode() == 'C') {
             uintptr_t classPointer = 0;
-            size_t classSize = 0;
-            if (!(reader >> classPointer) || !(reader >> classSize)) {
-                cerr << "failed to parse line: " << reader.line() << endl;
+            if (!(reader >> classPointer)) {
+                cerr << "[W] failed to parse line: " << reader.line() << endl;
                 continue;
             }
-            data.addClass(classPointer, classSize);
+            data.addClass(classPointer);
         } else {
             fputs(reader.line().c_str(), stdout);
             fputc('\n', stdout);
