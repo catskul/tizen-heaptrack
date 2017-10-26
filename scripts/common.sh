@@ -50,9 +50,9 @@ read_dir() {
 read_consent() {
     local __prompt=$1
     local __result=$2
-    local __tmp=""
-    read_one_of "$__prompt" "Y n" __tmp
-    if [ "$tmp" == "Y" ]; then
+    local __consent=""
+    read_one_of "$__prompt" "Y n" __consent
+    if [ "$__consent" == "Y" ]; then
         export $__result=true
     else
         export $__result=false
@@ -60,7 +60,9 @@ read_consent() {
 }
 
 test_sdb_version() {
-    read_file "sdb was not found. Enter sdb path [] " SDB
+    if [ -z "$SDB" ]; then
+        read_file "sdb was not found. Enter sdb path [] " SDB
+    fi
     ver=( $($SDB version | sed -r 's/.*([0-9]+)\.([0-9]+)\.([0-9]+).*/\1 \2 \3/g') )
     if [[ "${ver[0]}" < "2" ]] || [[ "${ver[1]}" < "3" ]]; then
         echo "Unsupported sdb version:  ${ver[0]}.${ver[1]}.${ver[2]}. Please update sdb to at least 2.3.0"

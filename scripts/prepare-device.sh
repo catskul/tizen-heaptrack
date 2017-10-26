@@ -22,7 +22,7 @@ echo " - /usr/share/dotnet-tizen -> /opt/usr/dotnet-tizen"
 echo " - /usr/lib/debug -> /opt/usr/lib/debug"
 echo " - /usr/src/debug -> /opt/usr/src/debug"
 echo "Symlinks to new locations will be created in old locations."
-5
+
 read_consent "Do you want to proceed?" consent
 if ! $consent; then
    echo "Can not proceed without preparing the device"
