@@ -710,6 +710,8 @@ int main(int /*argc*/, char** /*argv*/)
             }
 
             // ensure class is encountered
+            // TODO: arrays are not reported to the profiler in ClassLoadFinished, so they will be reported in the trace here
+            // instead of the next case. We should figure out how to add them to the trace earlier on.
             const auto classId = data.addClass(classPointer);
             if (classId == 0 && classPointer != 0) {
                 cerr << "[W] Unknown class id (" << classPointer << ") here: " << reader.line() << endl;
