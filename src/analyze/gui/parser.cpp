@@ -526,12 +526,14 @@ void setParents(QVector<RowData>& children, const RowData* parent)
 TreeData mergeAllocations(const ParserData& data, bool bIncludeLeaves)
 {
     TreeData topRows;
-    auto addRow = [](TreeData* rows, const LocationData::Ptr& location, const Allocation::Stats& cost) -> TreeData* {
+    auto addRow = [](TreeData* rows, const LocationData::Ptr& location, const Allocation::Stats& cost, AllocationData::CoreCLRType type) -> TreeData* {
         auto it = lower_bound(rows->begin(), rows->end(), location);
-        if (it != rows->end() && it->location == location) {
+        if (it != rows->end() && it->location == location && it->stackType == type)
+        {
             it->cost += cost;
-        } else {
-            it = rows->insert(it, {cost, location, nullptr, {}});
+        } else
+        {
+            it = rows->insert(it, {cost, location, nullptr, {}, type});
         }
         return &it->children;
     };
@@ -557,12 +559,13 @@ TreeData mergeAllocations(const ParserData& data, bool bIncludeLeaves)
             const auto& ip = data.findIp(trace.ipIndex);
             if (!(AccumulatedTraceData::isHideUnmanagedStackParts && !ip.isManaged)) {
                 auto location = data.stringCache.location(trace.ipIndex, ip, isUntrackedLocation);
-                rows = addRow(rows, location, *stats);
+                AllocationData::CoreCLRType clrType = AccumulatedTraceData::isShowCoreCLRPartOption ? trace.nodeType : AllocationData::CoreCLRType::nonCoreCLR;
+                rows = addRow(rows, location, *stats, clrType);
                 for (const auto& inlined : ip.inlined) {
                     auto inlinedLocation = data.stringCache.frameLocation(inlined, ip, isUntrackedLocation);
-                    rows = addRow(rows, inlinedLocation, *stats);
+                    rows = addRow(rows, inlinedLocation, *stats, clrType);
                 }
-	    }
+            }
             if (data.isStopIndex(ip.frame.functionIndex)) {
                 break;
             }
@@ -602,7 +605,7 @@ AllocationData::Stats buildTopDown(const TreeData& bottomUpData, TreeData* topDo
                 auto data = findByLocation(*node, stack);
                 if (!data) {
                     // create an empty top-down item for this bottom-up node
-                    *stack << RowData{{}, node->location, nullptr, {}};
+                    *stack << RowData{{}, node->location, nullptr, {}, node->stackType};
                     data = &stack->back();
                 }
                 // always use the leaf node's cost and propagate that one up the chain

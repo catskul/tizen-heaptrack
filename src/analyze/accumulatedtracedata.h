@@ -78,7 +78,7 @@ struct TraceNode
 {
     IpIndex ipIndex;
     TraceIndex parentIndex;
-    AllocationData::CoreCLRType coreclrType;
+    AllocationData::CoreCLRType nodeType;
 };
 
 struct Allocation : public AllocationData
@@ -340,6 +340,7 @@ struct AccumulatedTraceData
 
     TraceNode findTrace(const TraceIndex traceIndex) const;
     TraceNode findPrevTrace(const TraceIndex traceIndex) const;
+    void updateTraceNodeType(const TraceIndex traceIndex, AllocationData::CoreCLRType type);
 
     bool isStopIndex(const StringIndex index) const;
 
@@ -348,10 +349,10 @@ struct AccumulatedTraceData
     void mapRemoveRanges(const uint64_t start, const uint64_t size);
     void combineContiguousSimilarRanges();
 
-    AllocationData::CoreCLRType checkCallStackIsCoreCLR(TraceIndex traceIndex);
+    bool checkCallStackIsCoreCLR(TraceIndex traceIndex);
+    bool checkCallStackIsUntracked(TraceIndex traceIndex);
     bool isValidTrace(const TraceIndex traceIndex) const;
     AllocationData::CoreCLRType checkIsNodeCoreCLR(IpIndex ipindex);
-    AllocationData::CoreCLRType combineTwoTypes(AllocationData::CoreCLRType a, AllocationData::CoreCLRType b);
     void calculatePeak(AllocationData::DisplayId type);
 
     // indices of functions that should stop the backtrace, e.g. main or static

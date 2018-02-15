@@ -234,12 +234,6 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
             reader >> node.ipIndex;
             reader >> node.parentIndex;
 
-            AllocationData::CoreCLRType coreclrType;
-            if (isShowCoreCLRPartOption)
-            {
-                coreclrType = checkIsNodeCoreCLR(node.ipIndex);
-            }
-
             // skip operator new and operator new[] at the beginning of traces
             while (find(opNewIpIndices.begin(), opNewIpIndices.end(), node.ipIndex) != opNewIpIndices.end()) {
                 node = findTrace(node.parentIndex);
@@ -256,16 +250,6 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
 
                     node = findTrace(node.parentIndex);
                 }
-            }
-
-            if (isShowCoreCLRPartOption)
-            {
-                coreclrType = combineTwoTypes(checkIsNodeCoreCLR(node.ipIndex), coreclrType);
-                if (coreclrType != AllocationData::CoreCLRType::CoreCLR)
-                {
-                    coreclrType = combineTwoTypes(checkCallStackIsCoreCLR(node.parentIndex), coreclrType);
-                }
-                node.coreclrType = coreclrType;
             }
 
             traces.push_back(node);
@@ -826,21 +810,48 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
                     continue;
                 }
 
-                AllocationData::CoreCLRType isCoreclr = findTrace(it->traceIndex).coreclrType;
+                // Update type for each trace node
+                TraceIndex index = it->traceIndex;
+                while (isValidTrace(index))
+                {
+                    TraceNode node = findTrace(index);
+                    updateTraceNodeType(index, checkIsNodeCoreCLR(node.ipIndex));
+                    index = node.parentIndex;
+                }
 
-                if (isCoreclr == AllocationData::CoreCLRType::CoreCLR)
+                AllocationData::CoreCLRType stackType;
+                if (checkCallStackIsCoreCLR(it->traceIndex))
+                {
+                    stackType = AllocationData::CoreCLRType::CoreCLR;
+                }
+                else if (checkCallStackIsUntracked(it->traceIndex))
+                {
+                    // Untracked shouldn't occur for malloc
+                    assert(0);
+                }
+                else if (!isValidTrace(findTrace(it->traceIndex).parentIndex))
+                {
+                    // Single element in stack, mark it unknown
+                    stackType = AllocationData::CoreCLRType::unknown;
+                }
+                else
+                {
+                    stackType = AllocationData::CoreCLRType::nonCoreCLR;
+                }
+
+                if (stackType == AllocationData::CoreCLRType::CoreCLR)
                 {
                     totalCoreclr += *(it->getDisplay ());
                 }
-                else if (isCoreclr == AllocationData::CoreCLRType::nonCoreCLR)
+                else if (stackType == AllocationData::CoreCLRType::nonCoreCLR)
                 {
                     totalNonCoreclr += *(it->getDisplay ());
                 }
-                else if (isCoreclr == AllocationData::CoreCLRType::untracked)
+                else if (stackType == AllocationData::CoreCLRType::untracked)
                 {
                     totalUntracked += *(it->getDisplay ());
                 }
-                else if (isCoreclr == AllocationData::CoreCLRType::unknown)
+                else if (stackType == AllocationData::CoreCLRType::unknown)
                 {
                     totalUnknown += *(it->getDisplay ());
                 }
@@ -871,36 +882,59 @@ bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
                     continue;
                 }
 
-                AllocationData::CoreCLRType coreclrType = AllocationData::CoreCLRType::unknown;
-                if (it->second.isCoreCLR == 0)
+                TraceIndex index = it->second.traceIndex;
+                while (isValidTrace(index))
                 {
-                    coreclrType = AllocationData::CoreCLRType::nonCoreCLR;
+                    TraceNode node = findTrace(index);
+                    AllocationData::CoreCLRType nodeType;
+                    if (it->second.isCoreCLR == 2)
+                    {
+                        nodeType = AllocationData::CoreCLRType::untracked;
+                    }
+                    else
+                    {
+                        nodeType = checkIsNodeCoreCLR(node.ipIndex);
+                    }
+                    updateTraceNodeType(index, nodeType);
+                    index = node.parentIndex;
                 }
-                else if (it->second.isCoreCLR == 1)
-                {
-                    coreclrType = AllocationData::CoreCLRType::CoreCLR;
-                }
-                else if (it->second.isCoreCLR == 2)
-                {
-                    coreclrType = AllocationData::CoreCLRType::untracked;
-                }
-                assert(coreclrType != AllocationData::CoreCLRType::unknown);
 
-                AllocationData::CoreCLRType isCoreclr = combineTwoTypes(findTrace(it->second.traceIndex).coreclrType, coreclrType);
+                AllocationData::CoreCLRType stackType;
+                if (it->second.isCoreCLR == 2)
+                {
+                    stackType = AllocationData::CoreCLRType::untracked;
+                }
+                else if (checkCallStackIsCoreCLR(it->second.traceIndex))
+                {
+                    stackType = AllocationData::CoreCLRType::CoreCLR;
+                }
+                else if (checkCallStackIsUntracked(it->second.traceIndex))
+                {
+                    stackType = AllocationData::CoreCLRType::untracked;
+                }
+                else if (!isValidTrace(findTrace(it->second.traceIndex).parentIndex))
+                {
+                    // single element in stack
+                    stackType = AllocationData::CoreCLRType::unknown;
+                }
+                else
+                {
+                    stackType = AllocationData::CoreCLRType::nonCoreCLR;
+                }
 
-                if (isCoreclr == AllocationData::CoreCLRType::CoreCLR)
+                if (stackType == AllocationData::CoreCLRType::CoreCLR)
                 {
                     totalCoreclr.leaked += val;
                 }
-                else if (isCoreclr == AllocationData::CoreCLRType::nonCoreCLR)
+                else if (stackType == AllocationData::CoreCLRType::nonCoreCLR)
                 {
                     totalNonCoreclr.leaked += val;
                 }
-                else if (isCoreclr == AllocationData::CoreCLRType::untracked)
+                else if (stackType == AllocationData::CoreCLRType::untracked)
                 {
                     totalUntracked.leaked += val;
                 }
-                else if (isCoreclr == AllocationData::CoreCLRType::unknown)
+                else if (stackType == AllocationData::CoreCLRType::unknown)
                 {
                     totalUnknown.leaked += val;
                 }
@@ -957,35 +991,59 @@ AccumulatedTraceData::calculatePeak(AllocationData::DisplayId type)
             continue;
         }
 
-        AllocationData::CoreCLRType coreclrType = AllocationData::CoreCLRType::unknown;
-        if (addressRangeInfo.isCoreCLR == 0)
+        TraceIndex index = addressRangeInfo.traceIndex;
+        while (isValidTrace(index))
         {
-            coreclrType = AllocationData::CoreCLRType::nonCoreCLR;
-        }
-        else if (addressRangeInfo.isCoreCLR == 1)
-        {
-            coreclrType = AllocationData::CoreCLRType::CoreCLR;
-        }
-        else if (addressRangeInfo.isCoreCLR == 2)
-        {
-            coreclrType = AllocationData::CoreCLRType::untracked;
+            TraceNode node = findTrace(index);
+            AllocationData::CoreCLRType nodeType;
+            if (addressRangeInfo.isCoreCLR == 2)
+            {
+                nodeType = AllocationData::CoreCLRType::untracked;
+            }
+            else
+            {
+                nodeType = checkIsNodeCoreCLR(node.ipIndex);
+            }
+            updateTraceNodeType(index, nodeType);
+            index = node.parentIndex;
         }
 
-        AllocationData::CoreCLRType isCoreclr = combineTwoTypes(findTrace(addressRangeInfo.traceIndex).coreclrType, coreclrType);
+        AllocationData::CoreCLRType stackType;
+        if (addressRangeInfo.isCoreCLR == 2)
+        {
+            stackType = AllocationData::CoreCLRType::untracked;
+        }
+        else if (checkCallStackIsCoreCLR(addressRangeInfo.traceIndex))
+        {
+            stackType = AllocationData::CoreCLRType::CoreCLR;
+        }
+        else if (checkCallStackIsUntracked(addressRangeInfo.traceIndex))
+        {
+            stackType = AllocationData::CoreCLRType::untracked;
+        }
+        else if (!isValidTrace(findTrace(addressRangeInfo.traceIndex).parentIndex))
+        {
+            // single element in stack
+            stackType = AllocationData::CoreCLRType::unknown;
+        }
+        else
+        {
+            stackType = AllocationData::CoreCLRType::nonCoreCLR;
+        }
 
-        if (isCoreclr == AllocationData::CoreCLRType::CoreCLR)
+        if (stackType == AllocationData::CoreCLRType::CoreCLR)
         {
             partCoreclrMMAP.peak += peak;
         }
-        else if (isCoreclr == AllocationData::CoreCLRType::nonCoreCLR)
+        else if (stackType == AllocationData::CoreCLRType::nonCoreCLR)
         {
             partNonCoreclrMMAP.peak += peak;
         }
-        else if (isCoreclr == AllocationData::CoreCLRType::untracked)
+        else if (stackType == AllocationData::CoreCLRType::untracked)
         {
             partUntrackedMMAP.peak += peak;
         }
-        else if (isCoreclr == AllocationData::CoreCLRType::unknown)
+        else if (stackType == AllocationData::CoreCLRType::unknown)
         {
             partUnknownMMAP.peak += peak;
         }
@@ -1025,49 +1083,38 @@ AccumulatedTraceData::checkIsNodeCoreCLR(IpIndex ipindex)
     return coreclrType;
 }
 
-AllocationData::CoreCLRType
-AccumulatedTraceData::combineTwoTypes(AllocationData::CoreCLRType a, AllocationData::CoreCLRType b)
-{
-    if (a == AllocationData::CoreCLRType::CoreCLR
-        || b == AllocationData::CoreCLRType::CoreCLR)
-    {
-        return AllocationData::CoreCLRType::CoreCLR;
-    }
-
-    if (a == AllocationData::CoreCLRType::untracked
-        || b == AllocationData::CoreCLRType::untracked)
-    {
-        return AllocationData::CoreCLRType::untracked;
-    }
-
-    if (a == AllocationData::CoreCLRType::nonCoreCLR
-        || b == AllocationData::CoreCLRType::nonCoreCLR)
-    {
-        return AllocationData::CoreCLRType::nonCoreCLR;
-    }
-
-    return AllocationData::CoreCLRType::unknown;
-}
-
-AllocationData::CoreCLRType
+bool
 AccumulatedTraceData::checkCallStackIsCoreCLR(TraceIndex index)
 {
-    AllocationData::CoreCLRType isCoreclr = AllocationData::CoreCLRType::unknown;
-
     while (isValidTrace(index))
     {
         TraceNode node = findTrace(index);
         index = node.parentIndex;
 
-        if (node.coreclrType == AllocationData::CoreCLRType::CoreCLR)
+        if (node.nodeType == AllocationData::CoreCLRType::CoreCLR)
         {
-            return node.coreclrType;
+            return true;
         }
-
-        isCoreclr = combineTwoTypes(isCoreclr, node.coreclrType);
     }
 
-    return isCoreclr;
+    return false;
+}
+
+bool
+AccumulatedTraceData::checkCallStackIsUntracked(TraceIndex index)
+{
+    while (isValidTrace(index))
+    {
+        TraceNode node = findTrace(index);
+        index = node.parentIndex;
+
+        if (node.nodeType != AllocationData::CoreCLRType::untracked)
+        {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 namespace { // helpers for diffing
@@ -1361,6 +1408,14 @@ TraceNode AccumulatedTraceData::findTrace(const TraceIndex traceIndex) const
         return {};
     } else {
         return traces[traceIndex.index - 1];
+    }
+}
+
+void AccumulatedTraceData::updateTraceNodeType(const TraceIndex traceIndex, AllocationData::CoreCLRType type)
+{
+    if (isValidTrace(traceIndex))
+    {
+        traces[traceIndex.index - 1].nodeType = type;
     }
 }
 

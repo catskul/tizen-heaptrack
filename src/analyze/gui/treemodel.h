@@ -34,6 +34,7 @@ struct RowData
     LocationData::Ptr location;
     const RowData* parent;
     QVector<RowData> children;
+    AllocationData::CoreCLRType stackType;
     bool operator<(const LocationData::Ptr& rhs) const
     {
         return *location < *rhs;

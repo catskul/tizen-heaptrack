@@ -71,9 +71,9 @@ enum SearchMatchType
 class FrameGraphicsItem : public QGraphicsRectItem
 {
 public:
-    FrameGraphicsItem(const qint64 cost, CostType costType, const QString& function,
+    FrameGraphicsItem(const qint64 cost, CostType costType, const QString& function, AllocationData::CoreCLRType type,
                       FrameGraphicsItem* parent = nullptr);
-    FrameGraphicsItem(const qint64 cost, const QString& function, FrameGraphicsItem* parent);
+    FrameGraphicsItem(const qint64 cost, const QString& function, AllocationData::CoreCLRType type, FrameGraphicsItem* parent);
 
     qint64 cost() const;
     void setCost(qint64 cost);
@@ -94,24 +94,27 @@ private:
     CostType m_costType;
     bool m_isHovered;
     SearchMatchType m_searchMatch = NoSearch;
+    AllocationData::CoreCLRType stackType;
 };
 
 Q_DECLARE_METATYPE(FrameGraphicsItem*)
 
 FrameGraphicsItem::FrameGraphicsItem(const qint64 cost, CostType costType, const QString& function,
-                                     FrameGraphicsItem* parent)
+                                     AllocationData::CoreCLRType type, FrameGraphicsItem* parent)
     : QGraphicsRectItem(parent)
     , m_cost(cost)
     , m_function(function)
     , m_costType(costType)
     , m_isHovered(false)
+    , stackType (type)
 {
     setFlag(QGraphicsItem::ItemIsSelectable);
     setAcceptHoverEvents(true);
 }
 
-FrameGraphicsItem::FrameGraphicsItem(const qint64 cost, const QString& function, FrameGraphicsItem* parent)
-    : FrameGraphicsItem(cost, parent->m_costType, function, parent)
+FrameGraphicsItem::FrameGraphicsItem(const qint64 cost, const QString& function, AllocationData::CoreCLRType type,
+                                     FrameGraphicsItem* parent)
+    : FrameGraphicsItem(cost, parent->m_costType, function, type, parent)
 {
 }
 
@@ -264,7 +267,22 @@ namespace {
 /**
  * Generate a brush from the "mem" color space used in upstream FlameGraph.pl
  */
-QBrush brush()
+QBrush brush_coreclr()
+{
+    // intern the brushes, to reuse them across items which can be thousands
+    // otherwise we'd end up with dozens of allocations and higher memory
+    // consumption
+    static const QVector<QBrush> brushes = []() -> QVector<QBrush> {
+        QVector<QBrush> brushes;
+        std::generate_n(std::back_inserter(brushes), 100, []() {
+            return QColor(220, 100 + 50 * qreal(rand()) / RAND_MAX, 200 + 50 * qreal(rand()) / RAND_MAX, 125);
+        });
+        return brushes;
+    }();
+    return brushes.at(rand() % brushes.size());
+}
+
+QBrush brush_noncoreclr()
 {
     // intern the brushes, to reuse them across items which can be thousands
     // otherwise we'd end up with dozens of allocations and higher memory
@@ -273,6 +291,36 @@ QBrush brush()
         QVector<QBrush> brushes;
         std::generate_n(std::back_inserter(brushes), 100, []() {
             return QColor(0, 190 + 50 * qreal(rand()) / RAND_MAX, 210 * qreal(rand()) / RAND_MAX, 125);
+        });
+        return brushes;
+    }();
+    return brushes.at(rand() % brushes.size());
+}
+
+QBrush brush_untracked()
+{
+    // intern the brushes, to reuse them across items which can be thousands
+    // otherwise we'd end up with dozens of allocations and higher memory
+    // consumption
+    static const QVector<QBrush> brushes = []() -> QVector<QBrush> {
+        QVector<QBrush> brushes;
+        std::generate_n(std::back_inserter(brushes), 100, []() {
+            return QColor(50, 50, 50 + 50 * qreal(rand()) / RAND_MAX, 125);
+        });
+        return brushes;
+    }();
+    return brushes.at(rand() % brushes.size());
+}
+
+QBrush brush_unknown()
+{
+    // intern the brushes, to reuse them across items which can be thousands
+    // otherwise we'd end up with dozens of allocations and higher memory
+    // consumption
+    static const QVector<QBrush> brushes = []() -> QVector<QBrush> {
+        QVector<QBrush> brushes;
+        std::generate_n(std::back_inserter(brushes), 100, []() {
+            return QColor(50 + 50 * qreal(rand()) / RAND_MAX, 50, 50, 125);
         });
         return brushes;
     }();
@@ -331,9 +379,37 @@ void toGraphicsItems(const QVector<RowData>& data, FrameGraphicsItem* parent, in
         }
         auto item = findItemByFunction(parent->childItems(), row.location->function);
         if (!item) {
-            item = new FrameGraphicsItem(row.cost.*member, row.location->function, parent);
+            AllocationData::CoreCLRType clrType = row.stackType;
+            item = new FrameGraphicsItem(row.cost.*member, row.location->function, clrType, parent);
             item->setPen(parent->pen());
-            item->setBrush(brush());
+
+            switch (clrType)
+            {
+                case AllocationData::CoreCLRType::CoreCLR:
+                {
+                    item->setBrush(brush_coreclr());
+                    break;
+                }
+                case AllocationData::CoreCLRType::nonCoreCLR:
+                {
+                    item->setBrush(brush_noncoreclr());
+                    break;
+                }
+                case AllocationData::CoreCLRType::untracked:
+                {
+                    item->setBrush(brush_untracked());
+                    break;
+                }
+                case AllocationData::CoreCLRType::unknown:
+                {
+                    item->setBrush(brush_unknown());
+                    break;
+                }
+                default:
+                {
+                    assert(0);
+                }
+            }
         } else {
             item->setCost(item->cost() + row.cost.*member);
         }
@@ -397,7 +473,7 @@ FrameGraphicsItem* parseData(const QVector<RowData>& topDownData, CostType type,
         label = i18n("%1 allocated in total", format.formatByteSize(totalCost, 1, KFormat::JEDECBinaryDialect));
         break;
     }
-    auto rootItem = new FrameGraphicsItem(totalCost, type, label);
+    auto rootItem = new FrameGraphicsItem(totalCost, type, label, AllocationData::CoreCLRType::nonCoreCLR);
     rootItem->setBrush(scheme.background());
     rootItem->setPen(pen);
     toGraphicsItems(topDownData, rootItem, member, totalCost * costThreshold / 100, collapseRecursion);
