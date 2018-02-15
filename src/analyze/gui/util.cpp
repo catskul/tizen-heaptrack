@@ -20,6 +20,10 @@
 
 #include <QString>
 
+#ifndef NO_K_LIB
+#include <KFormat>
+#endif
+
 QString Util::formatTime(qint64 ms)
 {
     if (ms > 60000) {
@@ -29,4 +33,54 @@ QString Util::formatTime(qint64 ms)
         // seconds
         return QString::number(double(ms) / 1000, 'g', 3) + QLatin1Char('s');
     }
+}
+
+QString Util::formatByteSize(int64_t size, int precision)
+{
+#ifndef NO_K_LIB
+    static KFormat format;
+    return format.formatByteSize(size, precision, KFormat::JEDECBinaryDialect);
+#else
+    int32_t divider = 0;
+    QString suffix;
+    if (size < 1024)
+    {
+        suffix = "B";
+    }
+    else
+    {
+        const int32_t LimitMB = 1024 * 1024;
+        if (size < LimitMB)
+        {
+            divider = 1024;
+            suffix = "KB";
+        }
+        else
+        {
+            const int32_t LimitGB = LimitMB * 1024;
+            if (size < LimitGB)
+            {
+                divider = LimitMB;
+                suffix = "MB";
+            }
+            else
+            {
+                divider = LimitGB;
+                suffix = "GB";
+            }
+        }
+    }
+    QString result;
+    if (divider > 1)
+    {
+        result = QString::number(size / (double)divider, 'f', precision);
+    }
+    else
+    {
+        result = QString::number(size);
+    }
+    result += ' ';
+    result += suffix;
+    return result;
+#endif
 }

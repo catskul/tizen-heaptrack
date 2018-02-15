@@ -21,7 +21,9 @@
 
 #include <QMainWindow>
 
+#ifndef NO_K_LIB
 #include <KSharedConfig>
+#endif
 
 namespace Ui {
 class MainWindow;
@@ -52,7 +54,9 @@ private:
 
     QScopedPointer<Ui::MainWindow> m_ui;
     Parser* m_parser;
+#ifndef NO_K_LIB // TODO!! find a replacement for KSharedConfig
     KSharedConfig::Ptr m_config;
+#endif
     bool m_diffMode = false;
 
     QAction* m_openAction = nullptr;

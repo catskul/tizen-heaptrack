@@ -18,8 +18,12 @@
 
 #include "parser.h"
 
+#ifdef NO_K_LIB
+#include "noklib.h"
+#else
 #include <KLocalizedString>
 #include <ThreadWeaver/ThreadWeaver>
+#endif
 
 #include <QDebug>
 
@@ -851,108 +855,137 @@ Parser::~Parser() = default;
 
 void Parser::parse(const QString& path, const QString& diffBase)
 {
-    using namespace ThreadWeaver;
-    stream() << make_job([this, path, diffBase]() {
-        const auto stdPath = path.toStdString();
-        auto data = make_shared<ParserData>();
-        emit progressMessageAvailable(i18n("parsing data..."));
+#ifdef NO_K_LIB
+    parseJob(path, diffBase);
+#else
+    ThreadWeaver::stream() << ThreadWeaver::make_job([this, path, diffBase]() {
+        parseJob(path, diffBase);
+    });
+#endif
+}
 
-        if (!diffBase.isEmpty()) {
-            ParserData diffData;
-            auto readBase =
-                async(launch::async, [&diffData, diffBase]() { return diffData.read(diffBase.toStdString()); });
-            if (!data->read(stdPath)) {
-                emit failedToOpen(path);
-                return;
-            }
-            if (!readBase.get()) {
-                emit failedToOpen(diffBase);
-                return;
-            }
-            data->diff(diffData);
-            data->stringCache.diffMode = true;
-        } else if (!data->read(stdPath)) {
+void Parser::parseJob(const QString& path, const QString& diffBase)
+{
+    const auto stdPath = path.toStdString();
+    auto data = make_shared<ParserData>();
+    emit progressMessageAvailable(i18n("parsing data..."));
+
+    if (!diffBase.isEmpty()) {
+        ParserData diffData;
+        auto readBase =
+            async(launch::async, [&diffData, diffBase]() { return diffData.read(diffBase.toStdString()); });
+        if (!data->read(stdPath)) {
             emit failedToOpen(path);
             return;
         }
+        if (!readBase.get()) {
+            emit failedToOpen(diffBase);
+            return;
+        }
+        data->diff(diffData);
+        data->stringCache.diffMode = true;
+    } else if (!data->read(stdPath)) {
+        emit failedToOpen(path);
+        return;
+    }
 
-        data->updateStringCache();
+    data->updateStringCache();
 
-        AllocationData::Stats *partCoreclr;
-        AllocationData::Stats *partNonCoreclr;
-        AllocationData::Stats *partUntracked;
-        AllocationData::Stats *partUnknown;
+    AllocationData::Stats *partCoreclr;
+    AllocationData::Stats *partNonCoreclr;
+    AllocationData::Stats *partUntracked;
+    AllocationData::Stats *partUnknown;
 
-        if (AllocationData::display == AllocationData::DisplayId::malloc)
+    if (AllocationData::display == AllocationData::DisplayId::malloc)
+    {
+        partCoreclr = &data->partCoreclr;
+        partNonCoreclr = &data->partNonCoreclr;
+        partUntracked = &data->partUntracked;
+        partUnknown = &data->partUnknown;
+    }
+    else
+    {
+        partCoreclr = &data->partCoreclrMMAP;
+        partNonCoreclr = &data->partNonCoreclrMMAP;
+        partUntracked = &data->partUntrackedMMAP;
+        partUnknown = &data->partUnknownMMAP;
+    }
+
+    emit summaryAvailable({QString::fromStdString(data->debuggee), *data->totalCost.getDisplay(), data->totalTime, data->getPeakTime(),
+                           data->peakRSS * 1024,
+                           data->systemInfo.pages * data->systemInfo.pageSize, data->fromAttached,
+                           *partCoreclr, *partNonCoreclr, *partUntracked, *partUnknown});
+
+    emit progressMessageAvailable(i18n("merging allocations..."));
+    // merge allocations before modifying the data again
+    const auto mergedAllocations = mergeAllocations(*data, true);
+    emit bottomUpDataAvailable(mergedAllocations);
+
+    if (!AccumulatedTraceData::isHideUnmanagedStackParts) {
+        emit bottomUpFilterOutLeavesDataAvailable(mergeAllocations(*data, false));
+    } else {
+        emit bottomUpFilterOutLeavesDataAvailable(mergedAllocations);
+    }
+
+    if (AllocationData::display == AllocationData::DisplayId::managed) {
+        const auto objectTreeBottomUpData = buildObjectTree(*data);
+        emit objectTreeBottomUpDataAvailable(objectTreeBottomUpData);
+    }
+
+    // also calculate the size histogram
+    emit progressMessageAvailable(i18n("building size histogram..."));
+    const auto sizeHistogram = buildSizeHistogram(*data);
+    emit sizeHistogramDataAvailable(sizeHistogram);
+    // now data can be modified again for the chart data evaluation
+
+    const auto diffMode = data->stringCache.diffMode;
+    emit progressMessageAvailable(i18n("building charts..."));
+#ifndef NO_K_LIB
+    using namespace ThreadWeaver;
+    auto parallel = new Collection;
+    *parallel << make_job([this, mergedAllocations]()
+#endif
+    {
+        const auto topDownData = toTopDownData(mergedAllocations);
+        emit topDownDataAvailable(topDownData);
+    }
+#ifndef NO_K_LIB
+    ) << make_job([this, mergedAllocations, diffMode]()
+#endif
+    {
+        const auto callerCalleeData = toCallerCalleeData(mergedAllocations, diffMode);
+        emit callerCalleeDataAvailable(callerCalleeData);
+    }
+#ifndef NO_K_LIB
+    );
+#endif
+    if (!data->stringCache.diffMode) {
+        // only build charts when we are not diffing
+#ifndef NO_K_LIB
+        *parallel << make_job([this, data, stdPath]()
+#endif
         {
-            partCoreclr = &data->partCoreclr;
-            partNonCoreclr = &data->partNonCoreclr;
-            partUntracked = &data->partUntracked;
-            partUnknown = &data->partUnknown;
+            // this mutates data, and thus anything running in parallel must
+            // not access data
+            data->prepareBuildCharts();
+            data->read(stdPath);
+            emit consumedChartDataAvailable(data->consumedChartData);
+            emit instancesChartDataAvailable(data->instancesChartData);
+            emit allocationsChartDataAvailable(data->allocationsChartData);
+            emit allocatedChartDataAvailable(data->allocatedChartData);
+            emit temporaryChartDataAvailable(data->temporaryChartData);
         }
-        else
-        {
-            partCoreclr = &data->partCoreclrMMAP;
-            partNonCoreclr = &data->partNonCoreclrMMAP;
-            partUntracked = &data->partUntrackedMMAP;
-            partUnknown = &data->partUnknownMMAP;
-        }
+#ifndef NO_K_LIB
+        );
+#endif
+    }
 
-        emit summaryAvailable({QString::fromStdString(data->debuggee), *data->totalCost.getDisplay(), data->totalTime, data->getPeakTime(),
-                               data->peakRSS * 1024,
-                               data->systemInfo.pages * data->systemInfo.pageSize, data->fromAttached,
-                               *partCoreclr, *partNonCoreclr, *partUntracked, *partUnknown});
+#ifdef NO_K_LIB
+    emit finished();
+#else
+    auto sequential = new Sequence;
+    *sequential << parallel << make_job([this]() { emit finished(); });
 
-        emit progressMessageAvailable(i18n("merging allocations..."));
-        // merge allocations before modifying the data again
-        const auto mergedAllocations = mergeAllocations(*data, true);
-        emit bottomUpDataAvailable(mergedAllocations);
-
-        if (!AccumulatedTraceData::isHideUnmanagedStackParts) {
-            emit bottomUpFilterOutLeavesDataAvailable(mergeAllocations(*data, false));
-        } else {
-            emit bottomUpFilterOutLeavesDataAvailable(mergedAllocations);
-        }
-
-        if (AllocationData::display == AllocationData::DisplayId::managed) {
-            const auto objectTreeBottomUpData = buildObjectTree(*data);
-            emit objectTreeBottomUpDataAvailable(objectTreeBottomUpData);
-        }
-
-        // also calculate the size histogram
-        emit progressMessageAvailable(i18n("building size histogram..."));
-        const auto sizeHistogram = buildSizeHistogram(*data);
-        emit sizeHistogramDataAvailable(sizeHistogram);
-        // now data can be modified again for the chart data evaluation
-
-        const auto diffMode = data->stringCache.diffMode;
-        emit progressMessageAvailable(i18n("building charts..."));
-        auto parallel = new Collection;
-        *parallel << make_job([this, mergedAllocations]() {
-            const auto topDownData = toTopDownData(mergedAllocations);
-            emit topDownDataAvailable(topDownData);
-        }) << make_job([this, mergedAllocations, diffMode]() {
-            const auto callerCalleeData = toCallerCalleeData(mergedAllocations, diffMode);
-            emit callerCalleeDataAvailable(callerCalleeData);
-        });
-        if (!data->stringCache.diffMode) {
-            // only build charts when we are not diffing
-            *parallel << make_job([this, data, stdPath]() {
-                // this mutates data, and thus anything running in parallel must
-                // not access data
-                data->prepareBuildCharts();
-                data->read(stdPath);
-                emit consumedChartDataAvailable(data->consumedChartData);
-                emit instancesChartDataAvailable(data->instancesChartData);
-                emit allocationsChartDataAvailable(data->allocationsChartData);
-                emit allocatedChartDataAvailable(data->allocatedChartData);
-                emit temporaryChartDataAvailable(data->temporaryChartData);
-            });
-        }
-
-        auto sequential = new Sequence;
-        *sequential << parallel << make_job([this]() { emit finished(); });
-
-        stream() << sequential;
-    });
+    stream() << sequential;
+#endif
 }

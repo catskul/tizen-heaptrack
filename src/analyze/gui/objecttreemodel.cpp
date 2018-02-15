@@ -21,8 +21,14 @@
 #include <QDebug>
 #include <QTextStream>
 
+#ifdef NO_K_LIB
+#include "noklib.h"
+#else
 #include <KFormat>
 #include <KLocalizedString>
+#endif
+
+#include "util.h"
 
 #include <cmath>
 
@@ -122,12 +128,12 @@ QVariant ObjectTreeModel::data(const QModelIndex& index, int role) const
             if (role == SortRole) {
                 return static_cast<qint64>(row->allocated);
             }
-            return m_format.formatByteSize(row->allocated, 1, KFormat::JEDECBinaryDialect);
+            return Util::formatByteSize(row->allocated, 1);
         case ReferencedSizeColumn:
             if (role == SortRole) {
                 return static_cast<qint64>(row->referenced);
             }
-            return m_format.formatByteSize(row->referenced, 1, KFormat::JEDECBinaryDialect);
+            return Util::formatByteSize(row->referenced, 1);
         case GCNumColumn:
             return static_cast<quint64>(row->gcNum);
         case NUM_COLUMNS:

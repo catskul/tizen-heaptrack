@@ -19,8 +19,12 @@
 #include <QApplication>
 #include <QCommandLineParser>
 
+#ifdef NO_K_LIB
+#include "noklib.h"
+#else
 #include <KAboutData>
 #include <KLocalizedString>
+#endif
 
 #include "../accumulatedtracedata.h"
 #include "../allocationdata.h"
@@ -30,6 +34,7 @@ int main(int argc, char** argv)
 {
     QApplication app(argc, argv);
 
+#ifndef NO_K_LIB
     KLocalizedString::setApplicationDomain("heaptrack");
 
     KAboutData aboutData(QStringLiteral("heaptrack_gui"), i18n("Heaptrack GUI"), QStringLiteral("0.1"),
@@ -43,12 +48,15 @@ int main(int argc, char** argv)
     aboutData.setOrganizationDomain("kde.org");
 
     KAboutData::setApplicationData(aboutData);
+#endif
     app.setWindowIcon(QIcon::fromTheme(QStringLiteral("office-chart-area")));
 
     QCommandLineParser parser;
     parser.addVersionOption();
     parser.addHelpOption();
+#ifndef NO_K_LIB
     aboutData.setupCommandLine(&parser);
+#endif
 
     QCommandLineOption diffOption{{QStringLiteral("d"), QStringLiteral("diff")},
                                   i18n("Base profile data to compare other files to."),
@@ -75,7 +83,9 @@ int main(int argc, char** argv)
     parser.addOption(showCoreCLRPartOption);
 
     parser.process(app);
+#ifndef NO_K_LIB
     aboutData.processCommandLine(&parser);
+#endif
 
     bool isShowMalloc = parser.isSet(showMallocOption);
     bool isShowManaged = parser.isSet(showManagedOption);

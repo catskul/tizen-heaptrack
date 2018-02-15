@@ -19,11 +19,20 @@
 #include "treeproxy.h"
 
 TreeProxy::TreeProxy(int functionColumn, int fileColumn, int moduleColumn, QObject* parent)
+#ifdef NO_K_LIB
+    : QSortFilterProxyModel(parent)
+#else
     : KRecursiveFilterProxyModel(parent)
+#endif
     , m_functionColumn(functionColumn)
     , m_fileColumn(fileColumn)
     , m_moduleColumn(moduleColumn)
 {
+#if QT_VERSION >= 0x050A00
+    setRecursiveFilteringEnabled(true);
+#else
+    #pragma message("Qt 5.10+ is required, otherwise text filtering in GUI will not work as expected")
+#endif
 }
 
 TreeProxy::~TreeProxy() = default;
@@ -72,3 +81,10 @@ bool TreeProxy::acceptRow(int sourceRow, const QModelIndex& sourceParent) const
     }
     return true;
 }
+
+#ifdef NO_K_LIB
+bool TreeProxy::filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const
+{
+    return acceptRow(sourceRow, sourceParent);
+}
+#endif

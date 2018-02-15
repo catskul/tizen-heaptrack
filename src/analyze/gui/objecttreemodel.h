@@ -22,7 +22,10 @@
 #include <QAbstractItemModel>
 #include <QVector>
 
+#ifndef NO_K_LIB
 #include <KFormat>
+#endif
+
 #include <string.h>
 
 struct ObjectRowData
@@ -96,7 +99,9 @@ private:
     int rowOf(const ObjectRowData* row) const;
 
     ObjectTreeData m_data;
+#ifndef NO_K_LIB
     KFormat m_format;
+#endif
 };
 
 #endif // OBJECTTREEMODEL_H

@@ -22,10 +22,17 @@
 
 #include <cmath>
 
+#ifdef NO_K_LIB
+#include "noklib.h"
+#include <QAbstractButton>
+#else
 #include <KConfigGroup>
 #include <KLocalizedString>
 #include <KRecursiveFilterProxyModel>
 #include <KStandardAction>
+#endif
+
+#include "util.h"
 
 #include <QAction>
 #include <QDebug>
@@ -226,13 +233,17 @@ MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , m_ui(new Ui::MainWindow)
     , m_parser(new Parser(this))
+#ifndef NO_K_LIB // TODO!! find a replacement for KSharedConfig
     , m_config(KSharedConfig::openConfig(QStringLiteral("heaptrack_gui")))
+#endif
 {
     m_ui->setupUi(this);
 
+#ifndef NO_K_LIB // TODO!! find a replacement for KSharedConfig
     auto group = m_config->group(Config::Groups::MainWindow);
     auto state = group.readEntry(Config::Entries::State, QByteArray());
     restoreState(state, MAINWINDOW_VERSION);
+#endif
 
     m_ui->pages->setCurrentWidget(m_ui->openPage);
     // TODO: proper progress report
@@ -264,12 +275,12 @@ MainWindow::MainWindow(QWidget* parent)
         m_ui->tabWidget->setTabEnabled(m_ui->tabWidget->indexOf(m_ui->bottomUpTab), true);
     });
     connect(m_parser, &Parser::objectTreeBottomUpDataAvailable, this, [=](const ObjectTreeData& data) {
-        int maxGC = 0;
+        quint32 maxGC = 0;
         for (const ObjectRowData& row: data) {
             if (maxGC < row.gcNum)
                 maxGC = row.gcNum;
         }
-        for (int gc = 0; gc < maxGC; gc++) {
+        for (quint32 gc = 0; gc < maxGC; gc++) {
             m_ui->filterGC->addItem(QString::number(gc+1));
         }
         objectTreeModel->resetData(data);
@@ -297,7 +308,9 @@ MainWindow::MainWindow(QWidget* parent)
         bottomUpModelFilterOutLeaves->setSummary(data);
         topDownModel->setSummary(data);
         callerCalleeModel->setSummary(data);
+#ifndef NO_K_LIB
         KFormat format;
+#endif
         QString textLeft;
         QString textCenter;
         QString textRight;
@@ -316,7 +329,7 @@ MainWindow::MainWindow(QWidget* parent)
                    // xgettext:no-c-format
                    << i18n("<dt><b>total runtime</b>:</dt><dd>%1s</dd>", totalTimeS)
                    << i18n("<dt><b>total system memory</b>:</dt><dd>%1</dd>",
-                           format.formatByteSize(data.totalSystemMemory, 1, KFormat::JEDECBinaryDialect))
+                           Util::formatByteSize(data.totalSystemMemory, 1))
                    << "</dl></qt>";
         }
 
@@ -334,8 +347,8 @@ MainWindow::MainWindow(QWidget* parent)
                            qint64(data.cost.temporary / totalTimeS))
                    << i18n("<dt><b>bytes allocated in total</b> (ignoring "
                            "deallocations):</dt><dd>%1 (%2/s)</dd>",
-                           format.formatByteSize(data.cost.allocated, 2, KFormat::JEDECBinaryDialect),
-                           format.formatByteSize(data.cost.allocated / totalTimeS, 1, KFormat::JEDECBinaryDialect))
+                           Util::formatByteSize(data.cost.allocated, 2),
+                           Util::formatByteSize(data.cost.allocated / totalTimeS, 1))
                    << "</dl></qt>";
         }
         if (AccumulatedTraceData::isShowCoreCLRPartOption)
@@ -347,20 +360,20 @@ MainWindow::MainWindow(QWidget* parent)
                 stream << "<qt><dl>" << i18n("<dt><b>peak heap memory consumption</b>:</dt><dd>%1 "
                                              "after %2s</dd>"
                                              "</dt><dd>%3 (CoreCLR), %4 (non-CoreCLR), %5 (unknown)</dd>",
-                                             format.formatByteSize(data.cost.peak, 1, KFormat::JEDECBinaryDialect),
+                                             Util::formatByteSize(data.cost.peak, 1),
                                              peakTimeS,
-                                             format.formatByteSize(data.CoreCLRPart.peak, 1, KFormat::JEDECBinaryDialect),
-                                             format.formatByteSize(data.nonCoreCLRPart.peak, 1, KFormat::JEDECBinaryDialect),
-                                             format.formatByteSize(data.unknownPart.peak, 1, KFormat::JEDECBinaryDialect))
+                                             Util::formatByteSize(data.CoreCLRPart.peak, 1),
+                                             Util::formatByteSize(data.nonCoreCLRPart.peak, 1),
+                                             Util::formatByteSize(data.unknownPart.peak, 1))
                        << i18n("<dt><b>peak RSS</b> (including heaptrack "
                                "overhead):</dt><dd>%1</dd>",
-                               format.formatByteSize(data.peakRSS, 1, KFormat::JEDECBinaryDialect))
+                               Util::formatByteSize(data.peakRSS, 1))
                        << i18n("<dt><b>total memory leaked</b>:</dt><dd>%1</dd>"
                                "</dt><dd>%2 (CoreCLR), %3 (non-CoreCLR), %4 (unknown)</dd>",
-                               format.formatByteSize(data.cost.leaked, 1, KFormat::JEDECBinaryDialect),
-                               format.formatByteSize(data.CoreCLRPart.leaked, 1, KFormat::JEDECBinaryDialect),
-                               format.formatByteSize(data.nonCoreCLRPart.leaked, 1, KFormat::JEDECBinaryDialect),
-                               format.formatByteSize(data.unknownPart.leaked, 1, KFormat::JEDECBinaryDialect))
+                               Util::formatByteSize(data.cost.leaked, 1),
+                               Util::formatByteSize(data.CoreCLRPart.leaked, 1),
+                               Util::formatByteSize(data.nonCoreCLRPart.leaked, 1),
+                               Util::formatByteSize(data.unknownPart.leaked, 1))
                        << "</dl></qt>";
             }
             else
@@ -368,22 +381,22 @@ MainWindow::MainWindow(QWidget* parent)
                 stream << "<qt><dl>" << i18n("<dt><b>peak heap memory consumption</b>:</dt><dd>%1 "
                                              "after %2s</dd>"
                                              "</dt><dd>%3 (CoreCLR), %4 (non-CoreCLR), %5 (sbrk heap), %6 (unknown)</dd>",
-                                             format.formatByteSize(data.cost.peak, 1, KFormat::JEDECBinaryDialect),
+                                             Util::formatByteSize(data.cost.peak, 1),
                                              peakTimeS,
-                                             format.formatByteSize(data.CoreCLRPart.peak, 1, KFormat::JEDECBinaryDialect),
-                                             format.formatByteSize(data.nonCoreCLRPart.peak, 1, KFormat::JEDECBinaryDialect),
-                                             format.formatByteSize(data.untrackedPart.peak, 1, KFormat::JEDECBinaryDialect),
-                                             format.formatByteSize(data.unknownPart.peak, 1, KFormat::JEDECBinaryDialect))
+                                             Util::formatByteSize(data.CoreCLRPart.peak, 1),
+                                             Util::formatByteSize(data.nonCoreCLRPart.peak, 1),
+                                             Util::formatByteSize(data.untrackedPart.peak, 1),
+                                             Util::formatByteSize(data.unknownPart.peak, 1))
                        << i18n("<dt><b>peak RSS</b> (including heaptrack "
                                "overhead):</dt><dd>%1</dd>",
-                               format.formatByteSize(data.peakRSS, 1, KFormat::JEDECBinaryDialect))
+                               Util::formatByteSize(data.peakRSS, 1))
                        << i18n("<dt><b>total memory leaked</b>:</dt><dd>%1</dd>"
                                "</dt><dd>%2 (CoreCLR), %3 (non-CoreCLR), %4 (sbrk heap), %5 (unknown)</dd>",
-                               format.formatByteSize(data.cost.leaked, 1, KFormat::JEDECBinaryDialect),
-                               format.formatByteSize(data.CoreCLRPart.leaked, 1, KFormat::JEDECBinaryDialect),
-                               format.formatByteSize(data.nonCoreCLRPart.leaked, 1, KFormat::JEDECBinaryDialect),
-                               format.formatByteSize(data.untrackedPart.leaked, 1, KFormat::JEDECBinaryDialect),
-                               format.formatByteSize(data.unknownPart.leaked, 1, KFormat::JEDECBinaryDialect))
+                               Util::formatByteSize(data.cost.leaked, 1),
+                               Util::formatByteSize(data.CoreCLRPart.leaked, 1),
+                               Util::formatByteSize(data.nonCoreCLRPart.leaked, 1),
+                               Util::formatByteSize(data.untrackedPart.leaked, 1),
+                               Util::formatByteSize(data.unknownPart.leaked, 1))
                        << "</dl></qt>";
             }
         }
@@ -392,13 +405,13 @@ MainWindow::MainWindow(QWidget* parent)
             QTextStream stream(&textRight);
             stream << "<qt><dl>" << i18n("<dt><b>peak heap memory consumption</b>:</dt><dd>%1 "
                                          "after %2s</dd>",
-                                         format.formatByteSize(data.cost.peak, 1, KFormat::JEDECBinaryDialect),
+                                         Util::formatByteSize(data.cost.peak, 1),
                                          peakTimeS)
                    << i18n("<dt><b>peak RSS</b> (including heaptrack "
                            "overhead):</dt><dd>%1</dd>",
-                           format.formatByteSize(data.peakRSS, 1, KFormat::JEDECBinaryDialect))
+                           Util::formatByteSize(data.peakRSS, 1))
                    << i18n("<dt><b>total memory leaked</b>:</dt><dd>%1</dd>",
-                           format.formatByteSize(data.cost.leaked, 1, KFormat::JEDECBinaryDialect))
+                           Util::formatByteSize(data.cost.leaked, 1))
                    << "</dl></qt>";
         }
 
@@ -492,7 +505,7 @@ MainWindow::MainWindow(QWidget* parent)
         }
         return false;
     };
-
+#ifndef NO_K_LIB
     auto validateInput = [this, validateInputFile]() {
         m_ui->messages->hide();
         m_ui->buttonBox->setEnabled(validateInputFile(m_ui->openFile->url().toLocalFile(), false)
@@ -507,6 +520,24 @@ MainWindow::MainWindow(QWidget* parent)
         const auto base = m_ui->compareTo->url().toLocalFile();
         loadFile(path, base);
     });
+#else
+    m_ui->buttonBox->setEnabled(true);
+
+    auto validateInputAndLoadFile = [this, validateInputFile]() {
+       const auto path = m_ui->openFile->text();
+       if (!validateInputFile(path, false)) {
+           return;
+       }
+       Q_ASSERT(!path.isEmpty());
+       const auto base = m_ui->compareTo->text();
+       if (!validateInputFile(base, true)) {
+           return;
+       }
+       loadFile(path, base);
+    };
+
+    connect(m_ui->buttonBox, &QDialogButtonBox::clicked, this, validateInputAndLoadFile);
+#endif
 
     setupStacks();
 
@@ -545,22 +576,36 @@ MainWindow::MainWindow(QWidget* parent)
 
     setWindowTitle(i18n("Heaptrack"));
     // closing the current file shows the stack page to open a new one
+#ifdef NO_K_LIB
+    m_openAction = new QAction(i18n("&Open..."), this);
+    connect(m_openAction, &QAction::triggered, this, &MainWindow::closeFile);
+    m_openAction->setEnabled(false);
+    m_openNewAction = new QAction(i18n("&New"), this);
+    connect(m_openNewAction, &QAction::triggered, this, &MainWindow::openNewFile);
+    m_closeAction = new QAction(i18n("&Close"), this);
+    connect(m_closeAction, &QAction::triggered, this, &MainWindow::close);
+    m_quitAction = new QAction(i18n("&Quit"), this);
+    connect(m_quitAction, &QAction::triggered, qApp, &QApplication::quit);
+#else
     m_openAction = KStandardAction::open(this, SLOT(closeFile()), this);
     m_openAction->setEnabled(false);
-    m_ui->menu_File->addAction(m_openAction);
     m_openNewAction = KStandardAction::openNew(this, SLOT(openNewFile()), this);
-    m_ui->menu_File->addAction(m_openNewAction);
     m_closeAction = KStandardAction::close(this, SLOT(close()), this);
-    m_ui->menu_File->addAction(m_closeAction);
     m_quitAction = KStandardAction::quit(qApp, SLOT(quit()), this);
+#endif
+    m_ui->menu_File->addAction(m_openAction);
+    m_ui->menu_File->addAction(m_openNewAction);
+    m_ui->menu_File->addAction(m_closeAction);
     m_ui->menu_File->addAction(m_quitAction);
 }
 
 MainWindow::~MainWindow()
 {
+#ifndef NO_K_LIB // TODO!! find a replacement for KSharedConfig
     auto state = saveState(MAINWINDOW_VERSION);
     auto group = m_config->group(Config::Groups::MainWindow);
     group.writeEntry(Config::Entries::State, state);
+#endif
 }
 
 void MainWindow::loadFile(const QString& file, const QString& diffBase)

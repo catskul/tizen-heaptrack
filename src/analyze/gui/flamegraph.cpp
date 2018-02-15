@@ -37,10 +37,16 @@
 #include <QWheelEvent>
 #include <QLineEdit>
 
+#ifdef NO_K_LIB
+#include "noklib.h"
+#else
 #include <KColorScheme>
 #include <KLocalizedString>
 #include <KStandardAction>
 #include <ThreadWeaver/ThreadWeaver>
+#endif
+
+#include "util.h"
 
 enum CostType
 {
@@ -201,7 +207,6 @@ QString FrameGraphicsItem::description() const
     // we build the tooltip text on demand, which is much faster than doing that
     // for potentially thousands of items when we load the data
     QString tooltip;
-    KFormat format;
     qint64 totalCost = 0;
     {
         auto item = this;
@@ -231,7 +236,7 @@ QString FrameGraphicsItem::description() const
             i18nc("%1: peak consumption in bytes, %2: relative number, %3: "
                   "function label",
                   "%1 (%2%) contribution to peak consumption in %3 and below.",
-                  format.formatByteSize(m_cost, 1, KFormat::JEDECBinaryDialect), fraction, function);
+                  Util::formatByteSize(m_cost, 1), fraction, function);
         break;
     case PeakInstances:
         tooltip =
@@ -242,12 +247,12 @@ QString FrameGraphicsItem::description() const
         break;
     case Leaked:
         tooltip = i18nc("%1: leaked bytes, %2: relative number, %3: function label", "%1 (%2%) leaked in %3 and below.",
-                        format.formatByteSize(m_cost, 1, KFormat::JEDECBinaryDialect), fraction, function);
+                        Util::formatByteSize(m_cost, 1), fraction, function);
         break;
     case Allocated:
         tooltip = i18nc("%1: allocated bytes, %2: relative number, %3: function label",
                         "%1 (%2%) allocated in %3 and below.",
-                        format.formatByteSize(m_cost, 1, KFormat::JEDECBinaryDialect), fraction, function);
+                        Util::formatByteSize(m_cost, 1), fraction, function);
         break;
     }
 
@@ -448,10 +453,14 @@ FrameGraphicsItem* parseData(const QVector<RowData>& topDownData, CostType type,
         totalCost += frame.cost.*member;
     }
 
+#ifdef NO_K_LIB
+    QPalette pal;
+    const QPen pen(pal.color(QPalette::Active, QPalette::Foreground));
+#else
     KColorScheme scheme(QPalette::Active);
     const QPen pen(scheme.foreground().color());
+#endif
 
-    KFormat format;
     QString label;
     switch (type) {
     case Allocations:
@@ -461,20 +470,24 @@ FrameGraphicsItem* parseData(const QVector<RowData>& topDownData, CostType type,
         label = i18n("%1 temporary allocations in total", totalCost);
         break;
     case Peak:
-        label = i18n("%1 contribution to peak consumption", format.formatByteSize(totalCost, 1, KFormat::JEDECBinaryDialect));
+        label = i18n("%1 contribution to peak consumption", Util::formatByteSize(totalCost, 1));
         break;
     case PeakInstances:
         label = i18n("%1 contribution to peak number of instances", totalCost);
         break;
     case Leaked:
-        label = i18n("%1 leaked in total", format.formatByteSize(totalCost, 1, KFormat::JEDECBinaryDialect));
+        label = i18n("%1 leaked in total", Util::formatByteSize(totalCost, 1));
         break;
     case Allocated:
-        label = i18n("%1 allocated in total", format.formatByteSize(totalCost, 1, KFormat::JEDECBinaryDialect));
+        label = i18n("%1 allocated in total", Util::formatByteSize(totalCost, 1));
         break;
     }
     auto rootItem = new FrameGraphicsItem(totalCost, type, label, AllocationData::CoreCLRType::nonCoreCLR);
+#ifdef NO_K_LIB
+    rootItem->setBrush(pal.color(QPalette::Active, QPalette::Background));
+#else
     rootItem->setBrush(scheme.background());
+#endif
     rootItem->setPen(pen);
     toGraphicsItems(topDownData, rootItem, member, totalCost * costThreshold / 100, collapseRecursion);
     return rootItem;
@@ -635,10 +648,14 @@ FlameGraph::FlameGraph(QWidget* parent, Qt::WindowFlags flags)
     layout()->addWidget(m_displayLabel);
     layout()->addWidget(m_searchResultsLabel);
 
+#ifdef NO_K_LIB
+    // TODO!! implement back and forward
+#else
     m_backAction = KStandardAction::back(this, SLOT(navigateBack()), this);
     addAction(m_backAction);
     m_forwardAction = KStandardAction::forward(this, SLOT(navigateForward()), this);
     addAction(m_forwardAction);
+#endif
     m_resetAction = new QAction(QIcon::fromTheme(QStringLiteral("go-first")), i18n("Reset View"), this);
     m_resetAction->setShortcut(Qt::Key_Escape);
     connect(m_resetAction, &QAction::triggered, this, [this]() {
@@ -725,15 +742,19 @@ void FlameGraph::showData()
     setData(nullptr);
 
     m_buildingScene = true;
-    using namespace ThreadWeaver;
     auto data = m_showBottomUpData ? m_bottomUpData : m_topDownData;
     bool collapseRecursion = m_collapseRecursion;
     auto source = m_costSource->currentData().value<CostType>();
     auto threshold = m_costThreshold;
+#ifdef NO_K_LIB
+    setData(parseData(data, source, threshold, collapseRecursion));
+#else
+    using namespace ThreadWeaver;
     stream() << make_job([data, source, threshold, collapseRecursion, this]() {
         auto parsedData = parseData(data, source, threshold, collapseRecursion);
         QMetaObject::invokeMethod(this, "setData", Qt::QueuedConnection, Q_ARG(FrameGraphicsItem*, parsedData));
     });
+#endif
 }
 
 void FlameGraph::setTooltipItem(const FrameGraphicsItem* item)
@@ -839,7 +860,6 @@ void FlameGraph::setSearchValue(const QString& value)
         m_searchResultsLabel->hide();
     } else {
         QString label;
-        KFormat format;
         const auto costFraction = fraction(match.directCost, m_rootItem->cost());
         switch (m_costSource->currentData().value<CostType>()) {
         case Allocations:
@@ -852,8 +872,8 @@ void FlameGraph::setSearchValue(const QString& value)
         case Leaked:
         case Allocated:
             label = i18n("%1 (%2% of total of %3) matched by search.",
-                         format.formatByteSize(match.directCost, 1, KFormat::JEDECBinaryDialect), costFraction,
-                         format.formatByteSize(m_rootItem->cost(), 1, KFormat::JEDECBinaryDialect));
+                         Util::formatByteSize(match.directCost, 1), costFraction,
+                         Util::formatByteSize(m_rootItem->cost(), 1));
             break;
         }
         m_searchResultsLabel->setText(label);
@@ -877,7 +897,11 @@ void FlameGraph::navigateForward()
 
 void FlameGraph::updateNavigationActions()
 {
-    m_backAction->setEnabled(m_selectedItem > 0);
-    m_forwardAction->setEnabled(m_selectedItem + 1 < m_selectionHistory.size());
+    if (m_backAction) {
+        m_backAction->setEnabled(m_selectedItem > 0);
+    }
+    if (m_forwardAction) {
+        m_forwardAction->setEnabled(m_selectedItem + 1 < m_selectionHistory.size());
+    }
     m_resetAction->setEnabled(m_selectedItem > 0);
 }

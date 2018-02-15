@@ -16,19 +16,12 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#ifndef UTIL_H
-#define UTIL_H
+#ifndef LIBUNWIND_CONFIG_H
+#define LIBUNWIND_CONFIG_H
 
-#include <qglobal.h>
+#define LIBUNWIND_HAS_UNW_BACKTRACE 1
 
-class QString;
+#define LIBUNWIND_HAS_UNW_BACKTRACE_SKIP 0
 
-namespace Util {
+#endif // LIBUNWIND_CONFIG_H
 
-QString formatTime(qint64 ms);
-
-QString formatByteSize(int64_t size, int precision = 1);
-
-}
-
-#endif // UTIL_H

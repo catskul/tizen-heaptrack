@@ -16,19 +16,11 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#ifndef UTIL_H
-#define UTIL_H
+#ifndef HEAPTRACK_GUI_CONFIG_H
+#define HEAPTRACK_GUI_CONFIG_H
 
-#include <qglobal.h>
+#ifndef NO_K_LIB
+#define KChart_FOUND 1
+#endif
 
-class QString;
-
-namespace Util {
-
-QString formatTime(qint64 ms);
-
-QString formatByteSize(int64_t size, int precision = 1);
-
-}
-
-#endif // UTIL_H
+#endif // HEAPTRACK_CONFIG_H

@@ -25,7 +25,11 @@
 
 #include <boost/functional/hash.hpp>
 
+#ifdef NO_K_LIB
+#include "noklib.h"
+#else
 #include <KLocalizedString>
+#endif
 
 struct LocationData
 {

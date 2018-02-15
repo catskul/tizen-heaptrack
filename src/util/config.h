@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Milian Wolff <mail@milianw.de>
+ * Copyright 2014-2017 Milian Wolff <mail@milianw.de>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -16,19 +16,21 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#ifndef UTIL_H
-#define UTIL_H
+#ifndef HEAPTRACK_CONFIG_H
+#define HEAPTRACK_CONFIG_H
 
-#include <qglobal.h>
+#define HEAPTRACK_VERSION_STRING "1.1.0"
+#define HEAPTRACK_VERSION_MAJOR 1
+#define HEAPTRACK_VERSION_MINOR 1
+#define HEAPTRACK_VERSION_PATCH 0
+#define HEAPTRACK_VERSION ((HEAPTRACK_VERSION_MAJOR<<16)|(HEAPTRACK_VERSION_MINOR<<8)|(HEAPTRACK_VERSION_PATCH))
 
-class QString;
+#define HEAPTRACK_FILE_FORMAT_VERSION 2
 
-namespace Util {
+#define HEAPTRACK_DEBUG_BUILD 1
 
-QString formatTime(qint64 ms);
+// cfree() does not exist in glibc 2.26+.
+// See: https://bugs.kde.org/show_bug.cgi?id=383889
+#define HAVE_CFREE 0
 
-QString formatByteSize(int64_t size, int precision = 1);
-
-}
-
-#endif // UTIL_H
+#endif // HEAPTRACK_CONFIG_H

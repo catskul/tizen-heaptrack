@@ -22,7 +22,9 @@
 #include <QAbstractItemModel>
 #include <QVector>
 
+#ifndef NO_K_LIB
 #include <KFormat>
+#endif
 
 #include "../allocationdata.h"
 #include "locationdata.h"
@@ -96,7 +98,9 @@ private:
     TreeData m_data;
     RowData m_maxCost;
     // TODO: update via global event filter when the locale changes (changeEvent)
+#ifndef NO_K_LIB
     KFormat m_format;
+#endif
 };
 
 #endif // TREEMODEL_H
