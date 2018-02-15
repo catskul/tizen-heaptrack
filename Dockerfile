@@ -1,4 +1,4 @@
-FROM ubuntu:17.04
+FROM ubuntu:17.10
 
 RUN apt-get update && apt-get -y install cmake libsparsehash-dev \
   build-essential libunwind8-dev libunwind8 libboost-dev \
@@ -7,8 +7,8 @@ RUN apt-get update && apt-get -y install cmake libsparsehash-dev \
   libkf5coreaddons-dev libkf5i18n-dev libkf5itemmodels-dev \
   libkf5threadweaver-dev libkf5configwidgets-dev libkf5kiocore5 \
   libkf5kiowidgets5 kio-dev cpio rpm2cpio clang libkchart2 \
-  libkchart-dev binutils-arm-linux-gnueabi gcc-arm-linux-gnueabi gettext \
-  g++-arm-linux-gnueabi wget
+  libkchart-dev binutils-arm-linux-gnueabi gcc-6-arm-linux-gnueabi gettext \
+  g++-6-arm-linux-gnueabi wget
 
 #prepare folder structure
 RUN mkdir -p /rootfs/rpms && \
@@ -56,7 +56,7 @@ RUN cd /heaptrack/build-x64 && cmake .. && make -j4 && cp -r bin lib \
     /heaptrack-common/x64
 #build armel heaptrack collection modules without GUI
 RUN cd /heaptrack/build-armel && \
-    CC=arm-linux-gnueabi-gcc CXX=arm-linux-gnueabi-g++ CPLUS_INCLUDE_PATH=/rootfs/usr/lib/gcc/armv7l-tizen-linux-gnueabi/6.2.1/include/c++:/rootfs/usr/lib/gcc/armv7l-tizen-linux-gnueabi/6.2.1/include/c++/armv7l-tizen-linux-gnueabi cmake .. -DHEAPTRACK_BUILD_GUI=OFF -DCMAKE_TOOLCHAIN_FILE=/heaptrack/profiler/profiler/cross/armel/toolchain.cmake && \
+    CC=arm-linux-gnueabi-gcc-6 CXX=arm-linux-gnueabi-g++-6 CPLUS_INCLUDE_PATH=/rootfs/usr/lib/gcc/armv7l-tizen-linux-gnueabi/6.2.1/include/c++:/rootfs/usr/lib/gcc/armv7l-tizen-linux-gnueabi/6.2.1/include/c++/armv7l-tizen-linux-gnueabi cmake .. -DHEAPTRACK_BUILD_GUI=OFF -DCMAKE_TOOLCHAIN_FILE=/heaptrack/profiler/profiler/cross/armel/toolchain.cmake && \
     make -j4 && cp -r bin lib /heaptrack-common/armel
 #build managed profiler module
 ARG ARCH=""

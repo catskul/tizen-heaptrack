@@ -8,6 +8,10 @@ if (HAVE_FUTURE_SUPPORT)
     target_link_libraries(threaded ${CMAKE_THREAD_LIBS_INIT})
 endif()
 
+set_target_properties(test_cpp PROPERTIES
+  INCLUDE_DIRECTORIES ${CMAKE_CURRENT_BINARY_DIR}/../../src/
+)
+
 add_executable(callgraph callgraph.cpp)
 
 add_library(testlib SHARED lib.cpp)
