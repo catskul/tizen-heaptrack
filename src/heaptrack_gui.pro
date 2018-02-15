@@ -63,9 +63,6 @@ HEADERS += \
     analyze/gui/util.h \
     util/config.h
 
-FORMS += \
-    analyze/gui/mainwindow.ui
-
 !NO_K_LIB {
     QT += KCoreAddons # for KFormat
     QT += KI18n
@@ -94,9 +91,15 @@ FORMS += \
         analyze/gui/chartwidget.h \
         analyze/gui/histogrammodel.h \
         analyze/gui/histogramwidget.h
+
+    FORMS += \
+        analyze/gui/mainwindow.ui
 }
 
 NO_K_LIB {
     HEADERS += \
         analyze/gui/noklib.h
+
+    FORMS += \
+        analyze/gui/mainwindow_noklib.ui
 }
