@@ -7,8 +7,6 @@ TEMPLATE = app
 
 DEFINES += QT_DEPRECATED_WARNINGS
 
-#CONFIG += console c++11
-
 INCLUDEPATH += $$PWD/analyze/gui
 
 win32 {
@@ -25,8 +23,8 @@ unix {
 }
 
 #Test only!
-#DEFINES *= NO_K_LIB
 #CONFIG *= NO_K_LIB
+#DEFINES *= NO_K_LIB
 
 SOURCES += \
     analyze/accumulatedtracedata.cpp \
