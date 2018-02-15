@@ -18,14 +18,14 @@
 
 #include "mainwindow.h"
 
-#include <ui_mainwindow.h>
-
 #include <cmath>
 
 #ifdef NO_K_LIB
 #include "noklib.h"
+#include <ui_mainwindow_noklib.h>
 #include <QAbstractButton>
 #else
+#include <ui_mainwindow.h>
 #include <KConfigGroup>
 #include <KLocalizedString>
 #include <KRecursiveFilterProxyModel>
