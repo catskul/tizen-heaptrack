@@ -37,12 +37,12 @@
 #define POTENTIALLY_UNUSED
 #endif
 
-using namespace std;
-
 AllocationData::DisplayId AllocationData::display = AllocationData::DisplayId::malloc;
 
 bool AccumulatedTraceData::isHideUnmanagedStackParts = false;
 bool AccumulatedTraceData::isShowCoreCLRPartOption = false;
+
+typedef unsigned int uint;
 
 namespace {
 
@@ -53,7 +53,7 @@ bool operator>>(LineReader& reader, Index<Base>& index)
 }
 
 template <typename Base>
-ostream& operator<<(ostream& out, const Index<Base> index)
+std::ostream& operator<<(std::ostream& out, const Index<Base> index)
 {
     out << index.index;
     return out;
@@ -72,22 +72,22 @@ AccumulatedTraceData::AccumulatedTraceData()
     objectTreeNodes.reserve(16384);
 }
 
-const string& AccumulatedTraceData::stringify(const StringIndex stringId) const
+const std::string& AccumulatedTraceData::stringify(const StringIndex stringId) const
 {
     if (!stringId || stringId.index > strings.size()) {
-        static const string empty;
+        static const std::string empty;
         return empty;
     } else {
         return strings.at(stringId.index - 1);
     }
 }
 
-string AccumulatedTraceData::prettyFunction(const string& function) const
+std::string AccumulatedTraceData::prettyFunction(const std::string& function) const
 {
     if (!shortenTemplates) {
         return function;
     }
-    string ret;
+    std::string ret;
     ret.reserve(function.size());
     int depth = 0;
     for (size_t i = 0; i < function.size(); ++i) {
@@ -124,7 +124,7 @@ string AccumulatedTraceData::prettyFunction(const string& function) const
     return ret;
 }
 
-bool AccumulatedTraceData::read(const string& inputFile)
+bool AccumulatedTraceData::read(const std::string& inputFile)
 {
     if (totalTime == 0) {
         return read(inputFile, FirstPass) && read(inputFile, SecondPass);
@@ -133,8 +133,10 @@ bool AccumulatedTraceData::read(const string& inputFile)
     }
 }
 
-bool AccumulatedTraceData::read(const string& inputFile, const ParsePass pass)
+bool AccumulatedTraceData::read(const std::string& inputFile, const ParsePass pass)
 {
+    using namespace std;
+
     const bool isCompressed = boost::algorithm::ends_with(inputFile, ".gz");
     ifstream file(inputFile, isCompressed ? ios_base::in | ios_base::binary : ios_base::in);
 
@@ -152,8 +154,10 @@ bool AccumulatedTraceData::read(const string& inputFile, const ParsePass pass)
     return read(in, pass);
 }
 
-bool AccumulatedTraceData::read(istream& in, const ParsePass pass)
+bool AccumulatedTraceData::read(std::istream& in, const ParsePass pass)
 {
+    using namespace std;
+
     LineReader reader;
     int64_t timeStamp = 0;
 
@@ -1120,8 +1124,9 @@ AccumulatedTraceData::checkCallStackIsUntracked(TraceIndex index)
 namespace { // helpers for diffing
 
 template <typename IndexT, typename SortF>
-vector<IndexT> sortedIndices(size_t numIndices, SortF sorter)
+std::vector<IndexT> sortedIndices(size_t numIndices, SortF sorter)
 {
+    using namespace std;
     vector<IndexT> indices;
     indices.resize(numIndices);
     for (size_t i = 0; i < numIndices; ++i) {
@@ -1131,8 +1136,10 @@ vector<IndexT> sortedIndices(size_t numIndices, SortF sorter)
     return indices;
 }
 
-vector<StringIndex> remapStrings(vector<string>& lhs, const vector<string>& rhs)
+std::vector<StringIndex> remapStrings(std::vector<std::string>& lhs, const std::vector<std::string>& rhs)
 {
+    using namespace std;
+
     unordered_map<string, StringIndex> stringRemapping;
     StringIndex stringIndex;
     {
@@ -1201,6 +1208,7 @@ int compareTraceIndices(const TraceIndex& lhs, const AccumulatedTraceData& lhsDa
 
 POTENTIALLY_UNUSED void printTrace(const AccumulatedTraceData& data, TraceIndex index)
 {
+    using namespace std;
     do {
         const auto trace = data.findTrace(index);
         const auto& ip = data.findIp(trace.ipIndex);
@@ -1228,12 +1236,12 @@ void AccumulatedTraceData::diff(const AccumulatedTraceData& base)
 
     // step 1: sort trace indices of allocations for efficient lookup
     // step 2: while at it, also merge equal allocations
-    vector<TraceIndex> allocationTraceNodes;
+    std::vector<TraceIndex> allocationTraceNodes;
     allocationTraceNodes.reserve(allocations.size());
     for (auto it = allocations.begin(); it != allocations.end();) {
         const auto& allocation = *it;
         auto sortedIt =
-            lower_bound(allocationTraceNodes.begin(), allocationTraceNodes.end(), allocation.traceIndex,
+            std::lower_bound(allocationTraceNodes.begin(), allocationTraceNodes.end(), allocation.traceIndex,
                         [this](const TraceIndex& lhs, const TraceIndex& rhs) -> bool {
                             return compareTraceIndices(lhs, *this, rhs, *this, identity<InstructionPointer>) < 0;
                         });
@@ -1307,7 +1315,7 @@ void AccumulatedTraceData::diff(const AccumulatedTraceData& base)
 
     // copy the rhs trace index and the data it references into the lhs data,
     // recursively
-    function<TraceIndex(TraceIndex)> copyTrace = [this, &base, remapIpIndex,
+    std::function<TraceIndex(TraceIndex)> copyTrace = [this, &base, remapIpIndex,
                                                   &copyTrace](TraceIndex rhsIndex) -> TraceIndex {
         if (!rhsIndex) {
             return rhsIndex;
