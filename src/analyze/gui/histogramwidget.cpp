@@ -32,9 +32,15 @@
 #include <KChartHeaderFooter>
 #include <KChartLegend>
 
+#ifdef NO_K_LIB
+#include "noklib.h"
+#else
 #include <KColorScheme>
 #include <KFormat>
 #include <KLocalizedString>
+#endif
+
+#include "util.h"
 
 #include "histogrammodel.h"
 
@@ -52,8 +58,8 @@ public:
 
     const QString customizedLabel(const QString& label) const override
     {
-        KFormat format(QLocale::system());
-        return format.formatByteSize(label.toDouble(), 1, KFormat::JEDECBinaryDialect);
+//!!        KFormat format(QLocale::system());
+        return Util::formatByteSize(label.toDouble(), 1);
     }
 };
 
@@ -99,8 +105,13 @@ HistogramWidget::HistogramWidget(QWidget* parent)
     {
         m_total->setAntiAliasing(true);
 
+#ifdef NO_K_LIB
+        QPalette pal;
+        const QPen foreground(pal.color(QPalette::Active, QPalette::Foreground));
+#else
         KColorScheme scheme(QPalette::Active, KColorScheme::Window);
         QPen foreground(scheme.foreground().color());
+#endif
         auto bottomAxis = new CartesianAxis(m_total);
         auto axisTextAttributes = bottomAxis->textAttributes();
         axisTextAttributes.setPen(foreground);

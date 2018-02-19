@@ -27,7 +27,7 @@ namespace Util {
 
 QString formatTime(qint64 ms);
 
-QString formatByteSize(int64_t size, int precision = 1);
+QString formatByteSize(double size, int precision = 1);
 
 }
 

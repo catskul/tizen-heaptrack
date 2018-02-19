@@ -308,9 +308,6 @@ MainWindow::MainWindow(QWidget* parent)
         bottomUpModelFilterOutLeaves->setSummary(data);
         topDownModel->setSummary(data);
         callerCalleeModel->setSummary(data);
-#ifndef NO_K_LIB
-        KFormat format;
-#endif
         QString textLeft;
         QString textCenter;
         QString textRight;

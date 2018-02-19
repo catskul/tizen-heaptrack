@@ -31,9 +31,13 @@
 #include <KChartHeaderFooter>
 #include <KChartLegend>
 
+#ifdef NO_K_LIB
+#include "noklib.h"
+#else
 #include <KColorScheme>
 #include <KFormat>
 #include <KLocalizedString>
+#endif
 
 #include "chartmodel.h"
 #include "chartproxy.h"
@@ -68,8 +72,8 @@ public:
 
     const QString customizedLabel(const QString& label) const override
     {
-        KFormat format(QLocale::system());
-        return format.formatByteSize(label.toDouble(), 1, KFormat::JEDECBinaryDialect);
+//!!        KFormat format(QLocale::system());
+        return Util::formatByteSize(label.toDouble(), 1);
     }
 };
 }
@@ -136,8 +140,13 @@ void ChartWidget::setModel(ChartModel* model, bool minimalMode)
         totalPlotter->setModel(totalProxy);
         totalPlotter->setType(Plotter::Stacked);
 
+#ifdef NO_K_LIB
+        QPalette pal;
+        const QPen foreground(pal.color(QPalette::Active, QPalette::Foreground));
+#else
         KColorScheme scheme(QPalette::Active, KColorScheme::Window);
         const QPen foreground(scheme.foreground().color());
+#endif
         auto bottomAxis = new TimeAxis(totalPlotter);
         auto axisTextAttributes = bottomAxis->textAttributes();
         axisTextAttributes.setPen(foreground);

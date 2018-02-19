@@ -231,9 +231,6 @@ QVariant TreeModel::data(const QModelIndex& index, int role) const
         }
         stream << '\n';
         stream << '\n';
-#ifndef NO_K_LIB
-        KFormat format;
-#endif
         const auto allocatedFraction =
             QString::number(double(row->cost.allocated) * 100. / m_maxCost.cost.allocated, 'g', 3);
         const auto peakFraction = QString::number(double(row->cost.peak) * 100. / m_maxCost.cost.peak, 'g', 3);

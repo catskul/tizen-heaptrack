@@ -10,8 +10,8 @@ DEFINES += QT_DEPRECATED_WARNINGS
 INCLUDEPATH += $$PWD/analyze/gui
 
 win32 {
-    CONFIG += NO_K_LIB
-    DEFINES += NO_K_LIB
+    CONFIG += NO_K_LIB NO_K_CHART
+    DEFINES += NO_K_LIB NO_K_CHART
     INCLUDEPATH += $$(BOOST_LIB)
     LIBS += -L$$(BOOST_LIB)/stage/lib
 }
@@ -72,9 +72,12 @@ HEADERS += \
     QT += KIOWidgets
 
     QT += KItemModels
-    QT += KChart
 
     QT += ThreadWeaver
+}
+
+!NO_K_CHART {
+    QT += KChart
 
     SOURCES += \
         analyze/gui/chartmodel.cpp \

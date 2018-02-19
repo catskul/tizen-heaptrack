@@ -20,8 +20,12 @@
 
 #include <KChartGlobal>
 
+#ifdef NO_K_LIB
+#include "noklib.h"
+#else
 #include <KFormat>
 #include <KLocalizedString>
+#endif
 
 #include <QBrush>
 #include <QColor>

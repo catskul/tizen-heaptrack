@@ -35,7 +35,7 @@ QString Util::formatTime(qint64 ms)
     }
 }
 
-QString Util::formatByteSize(int64_t size, int precision)
+QString Util::formatByteSize(double size, int precision)
 {
 #ifndef NO_K_LIB
     static KFormat format;
@@ -73,12 +73,13 @@ QString Util::formatByteSize(int64_t size, int precision)
     QString result;
     if (divider > 1)
     {
-        result = QString::number(size / (double)divider, 'f', precision);
+        size /= divider;
     }
-    else
+    else if ((int32_t)size == size)
     {
-        result = QString::number(size);
+        precision = 0;
     }
+    result = QString::number(size, 'f', precision);
     result += ' ';
     result += suffix;
     return result;

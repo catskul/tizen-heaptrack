@@ -20,8 +20,12 @@
 
 #include <KChartGlobal>
 #include <KChartLineAttributes>
+#ifdef NO_K_LIB
+#include "noklib.h"
+#else
 #include <KFormat>
 #include <KLocalizedString>
+#endif
 
 #include <QBrush>
 #include <QDebug>
@@ -125,8 +129,7 @@ QVariant ChartModel::data(const QModelIndex& index, int role) const
         const QString time = Util::formatTime(data.timeStamp);
         auto byteCost = [cost]() -> QString
         {
-            KFormat format;
-            const auto formatted = format.formatByteSize(cost, 1, KFormat::JEDECBinaryDialect);
+            const auto formatted = Util::formatByteSize(cost, 1);
             if (cost > 1024) {
                 return i18nc("%1: the formatted byte size, e.g. \"1.2KB\", %2: the raw byte size, e.g. \"1300\"",
                              "%1 (%2 bytes)", formatted, cost);
