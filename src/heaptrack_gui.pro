@@ -19,6 +19,7 @@ win32 {
 unix {
 #    QMAKE_CXXFLAGS += -std=c++0x
 #    QMAKE_CXXFLAGS_WARN_ON += -Wno-unused-parameter # disable 'unused parameter' warning
+    CONFIG *= USE_CHART
     DEFINES *= USE_CHART
     LIBS += -lboost_program_options -lboost_iostreams -lpthread
 }
