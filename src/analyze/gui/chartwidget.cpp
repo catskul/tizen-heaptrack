@@ -20,6 +20,7 @@
 
 #include <QVBoxLayout>
 
+#ifdef KChart_FOUND
 #include <KChartChart>
 #include <KChartPlotter>
 
@@ -30,6 +31,7 @@
 #include <KChartGridAttributes>
 #include <KChartHeaderFooter>
 #include <KChartLegend>
+#endif
 
 #ifdef NO_K_LIB
 #include "noklib.h"
@@ -43,6 +45,7 @@
 #include "chartproxy.h"
 #include "util.h"
 
+#ifdef KChart_FOUND
 using namespace KChart;
 
 namespace {
@@ -77,25 +80,33 @@ public:
     }
 };
 }
+#endif
 
 ChartWidget::ChartWidget(QWidget* parent)
     : QWidget(parent)
+#ifdef KChart_FOUND
     , m_chart(new Chart(this))
+#endif
 {
     auto layout = new QVBoxLayout(this);
+#ifdef KChart_FOUND
     layout->addWidget(m_chart);
+#endif
     setLayout(layout);
 
+#ifdef KChart_FOUND
     auto* coordinatePlane = dynamic_cast<CartesianCoordinatePlane*>(m_chart->coordinatePlane());
     Q_ASSERT(coordinatePlane);
     coordinatePlane->setRubberBandZoomingEnabled(true);
     coordinatePlane->setAutoAdjustGridToZoom(true);
+#endif
 }
 
 ChartWidget::~ChartWidget() = default;
 
 void ChartWidget::setModel(ChartModel* model, bool minimalMode)
 {
+#ifdef KChart_FOUND
     auto* coordinatePlane = dynamic_cast<CartesianCoordinatePlane*>(m_chart->coordinatePlane());
     Q_ASSERT(coordinatePlane);
     foreach (auto diagram, coordinatePlane->diagrams()) {
@@ -108,6 +119,7 @@ void ChartWidget::setModel(ChartModel* model, bool minimalMode)
         grid.setSubGridVisible(false);
         coordinatePlane->setGlobalGridAttributes(grid);
     }
+#endif
 
     switch (model->type()) {
     case ChartModel::Consumed:
@@ -132,6 +144,7 @@ void ChartWidget::setModel(ChartModel* model, bool minimalMode)
         break;
     }
 
+#ifdef KChart_FOUND
     {
         auto totalPlotter = new Plotter(this);
         totalPlotter->setAntiAliasing(true);
@@ -190,6 +203,7 @@ void ChartWidget::setModel(ChartModel* model, bool minimalMode)
         plotter->setModel(proxy);
         coordinatePlane->addDiagram(plotter);
     }
+#endif
 }
 
 QSize ChartWidget::sizeHint() const

@@ -18,8 +18,12 @@
 
 #include "chartmodel.h"
 
+#include "gui_config.h"
+
+#ifdef KChart_FOUND
 #include <KChartGlobal>
 #include <KChartLineAttributes>
+#endif
 #ifdef NO_K_LIB
 #include "noklib.h"
 #else
@@ -58,12 +62,13 @@ QVariant ChartModel::headerData(int section, Qt::Orientation orientation, int ro
 {
     Q_ASSERT(orientation == Qt::Horizontal || section < columnCount());
     if (orientation == Qt::Horizontal) {
+#ifdef KChart_FOUND
         if (role == KChart::DatasetPenRole) {
             return QVariant::fromValue(m_columnDataSetPens.at(section));
         } else if (role == KChart::DatasetBrushRole) {
             return QVariant::fromValue(m_columnDataSetBrushes.at(section));
         }
-
+#endif
         if (role == Qt::DisplayRole || role == Qt::ToolTipRole) {
             if (section == 0) {
                 return i18n("Elapsed Time");
@@ -94,6 +99,7 @@ QVariant ChartModel::data(const QModelIndex& index, int role) const
     Q_ASSERT(index.column() >= 0 && index.column() < columnCount(index.parent()));
     Q_ASSERT(!index.parent().isValid());
 
+#ifdef KChart_FOUND
     if (role == KChart::LineAttributesRole) {
         KChart::LineAttributes attributes;
         attributes.setDisplayArea(true);
@@ -110,6 +116,7 @@ QVariant ChartModel::data(const QModelIndex& index, int role) const
     } else if (role == KChart::DatasetBrushRole) {
         return QVariant::fromValue(m_columnDataSetBrushes.at(index.column()));
     }
+#endif
 
     if (role != Qt::DisplayRole && role != Qt::ToolTipRole) {
         return {};

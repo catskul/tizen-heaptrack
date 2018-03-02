@@ -10,7 +10,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 INCLUDEPATH += $$PWD/analyze/gui
 
 win32 {
-    CONFIG += NO_K_LIB NO_K_CHART
+    CONFIG += NO_K_LIB NO_K_CHART QWT_CHART
     DEFINES += NO_K_LIB NO_K_CHART
     INCLUDEPATH += $$(BOOST_LIB)
     LIBS += -L$$(BOOST_LIB)/stage/lib
@@ -19,12 +19,20 @@ win32 {
 unix {
 #    QMAKE_CXXFLAGS += -std=c++0x
 #    QMAKE_CXXFLAGS_WARN_ON += -Wno-unused-parameter # disable 'unused parameter' warning
+    DEFINES *= USE_CHART
     LIBS += -lboost_program_options -lboost_iostreams -lpthread
 }
 
 #Test only!
 #CONFIG *= NO_K_LIB
 #DEFINES *= NO_K_LIB
+
+QWT_CHART {
+    # QMAKEFEATURES and QWT_ROOT environment variables must be set (e.g. to d:\Qwt\Qwt-6.2).
+    # This is the directory where qwt.prf and qwt*.pri files reside.
+    CONFIG *= USE_CHART QWT
+    DEFINES *= USE_CHART
+}
 
 SOURCES += \
     analyze/accumulatedtracedata.cpp \
@@ -76,21 +84,37 @@ HEADERS += \
     QT += ThreadWeaver
 }
 
+USE_CHART {
+    SOURCES += \
+        analyze/gui/chartmodel.cpp \
+#        analyze/gui/chartproxy.cpp \
+        analyze/gui/chartwidget.cpp \
+        analyze/gui/histogrammodel.cpp \
+#        analyze/gui/histogramwidget.cpp
+
+    HEADERS += \
+        analyze/gui/chartmodel.h \
+#        analyze/gui/chartproxy.h \
+        analyze/gui/chartwidget.h \
+        analyze/gui/histogrammodel.h \
+#        analyze/gui/histogramwidget.h
+}
+
 !NO_K_CHART {
     QT += KChart
 
     SOURCES += \
-        analyze/gui/chartmodel.cpp \
+#        analyze/gui/chartmodel.cpp \
         analyze/gui/chartproxy.cpp \
-        analyze/gui/chartwidget.cpp \
-        analyze/gui/histogrammodel.cpp \
+#        analyze/gui/chartwidget.cpp \
+#        analyze/gui/histogrammodel.cpp \
         analyze/gui/histogramwidget.cpp
 
     HEADERS += \
-        analyze/gui/chartmodel.h \
+#        analyze/gui/chartmodel.h \
         analyze/gui/chartproxy.h \
-        analyze/gui/chartwidget.h \
-        analyze/gui/histogrammodel.h \
+#        analyze/gui/chartwidget.h \
+#        analyze/gui/histogrammodel.h \
         analyze/gui/histogramwidget.h
 
     FORMS += \

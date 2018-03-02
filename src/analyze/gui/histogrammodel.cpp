@@ -18,7 +18,11 @@
 
 #include "histogrammodel.h"
 
+#include "gui_config.h"
+
+#ifdef KChart_FOUND
 #include <KChartGlobal>
+#endif
 
 #ifdef NO_K_LIB
 #include "noklib.h"
@@ -61,11 +65,13 @@ QVariant HistogramModel::data(const QModelIndex& index, int role) const
     if (!hasIndex(index.row(), index.column(), index.parent())) {
         return {};
     }
+#ifdef KChart_FOUND
     if (role == KChart::DatasetBrushRole) {
         return QVariant::fromValue(QBrush(colorForColumn(index.column(), columnCount())));
     } else if (role == KChart::DatasetPenRole) {
         return QVariant::fromValue(QPen(Qt::black));
     }
+#endif
 
     if (role != Qt::DisplayRole && role != Qt::ToolTipRole) {
         return {};

@@ -19,13 +19,17 @@
 #ifndef CHARTWIDGET_H
 #define CHARTWIDGET_H
 
+#include "gui_config.h"
+
 #include <QWidget>
 
 class ChartModel;
 
+#ifdef KChart_FOUND
 namespace KChart {
 class Chart;
 }
+#endif
 
 class QAbstractItemModel;
 
@@ -41,7 +45,9 @@ public:
     QSize sizeHint() const override;
 
 private:
+#ifdef KChart_FOUND
     KChart::Chart* m_chart;
+#endif
 };
 
 #endif // CHARTWIDGET_H
