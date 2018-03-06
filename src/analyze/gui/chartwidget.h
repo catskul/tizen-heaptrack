@@ -23,12 +23,22 @@
 
 #include <QWidget>
 
+//!! for debugging
+//#define SHOW_TABLES
+
+#ifdef SHOW_TABLES
+#include <QTableView>
+#endif
+
 class ChartModel;
 
-#ifdef KChart_FOUND
+#if defined(KChart_FOUND)
 namespace KChart {
 class Chart;
 }
+#elif defined(QWT_FOUND)
+#include "chartmodel2qwtseriesdata.h"
+class QwtPlot;
 #endif
 
 class QAbstractItemModel;
@@ -44,9 +54,23 @@ public:
 
     QSize sizeHint() const override;
 
+#if defined(QWT_FOUND)
+public slots:
+    void modelReset();
+#endif
+
 private:
-#ifdef KChart_FOUND
+#if defined(KChart_FOUND)
     KChart::Chart* m_chart;
+#elif defined(QWT_FOUND)
+    void updateQwtChart();
+
+    ChartModel* m_model;
+    QwtPlot* m_plot;
+#endif
+#ifdef SHOW_TABLES
+    QTableView* m_tableViewTotal;
+    QTableView* m_tableViewNoTotal;
 #endif
 };
 

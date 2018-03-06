@@ -60,7 +60,12 @@ ChartModel::Type ChartModel::type() const
 
 QVariant ChartModel::headerData(int section, Qt::Orientation orientation, int role) const
 {
-    Q_ASSERT(orientation == Qt::Horizontal || section < columnCount());
+//!!    Q_ASSERT(orientation == Qt::Horizontal || section < columnCount());
+    if (!((orientation == Qt::Horizontal || section < columnCount())))
+    {
+        return {};
+    }
+
     if (orientation == Qt::Horizontal) {
 #ifdef KChart_FOUND
         if (role == KChart::DatasetPenRole) {
@@ -227,4 +232,14 @@ void ChartModel::clearData()
     m_columnDataSetBrushes = {};
     m_columnDataSetPens = {};
     endResetModel();
+}
+
+const QPen& ChartModel::getColumnDataSetPen(int column) const
+{
+    return m_columnDataSetPens[column];
+}
+
+const QBrush& ChartModel::getColumnDataSetBrush(int column) const
+{
+    return m_columnDataSetBrushes[column];
 }

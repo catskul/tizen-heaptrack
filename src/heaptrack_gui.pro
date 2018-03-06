@@ -28,13 +28,6 @@ unix {
 #CONFIG *= NO_K_LIB
 #DEFINES *= NO_K_LIB
 
-QWT_CHART {
-    # QMAKEFEATURES and QWT_ROOT environment variables must be set (e.g. to d:\Qwt\Qwt-6.2).
-    # This is the directory where qwt.prf and qwt*.pri files reside.
-    CONFIG *= USE_CHART QWT
-    DEFINES *= USE_CHART
-}
-
 SOURCES += \
     analyze/accumulatedtracedata.cpp \
     analyze/gui/gui.cpp \
@@ -70,6 +63,35 @@ HEADERS += \
     analyze/gui/util.h \
     util/config.h
 
+QWT_CHART {
+    # QMAKEFEATURES and QWT_ROOT environment variables must be set (e.g. to d:\Qwt\Qwt-6.2).
+    # This is the directory where qwt.prf and qwt*.pri files reside.
+    CONFIG *= USE_CHART QWT
+    DEFINES *= USE_CHART QWT
+
+    SOURCES += \
+        analyze/gui/chartmodel2qwtseriesdata.cpp
+
+    HEADERS += \
+        analyze/gui/chartmodel2qwtseriesdata.h
+}
+
+USE_CHART {
+    SOURCES += \
+        analyze/gui/chartmodel.cpp \
+        analyze/gui/chartproxy.cpp \
+        analyze/gui/chartwidget.cpp \
+        analyze/gui/histogrammodel.cpp \
+#        analyze/gui/histogramwidget.cpp
+
+    HEADERS += \
+        analyze/gui/chartmodel.h \
+        analyze/gui/chartproxy.h \
+        analyze/gui/chartwidget.h \
+        analyze/gui/histogrammodel.h \
+#        analyze/gui/histogramwidget.h
+}
+
 !NO_K_LIB {
     QT += KCoreAddons # for KFormat
     QT += KI18n
@@ -85,37 +107,13 @@ HEADERS += \
     QT += ThreadWeaver
 }
 
-USE_CHART {
-    SOURCES += \
-        analyze/gui/chartmodel.cpp \
-#        analyze/gui/chartproxy.cpp \
-        analyze/gui/chartwidget.cpp \
-        analyze/gui/histogrammodel.cpp \
-#        analyze/gui/histogramwidget.cpp
-
-    HEADERS += \
-        analyze/gui/chartmodel.h \
-#        analyze/gui/chartproxy.h \
-        analyze/gui/chartwidget.h \
-        analyze/gui/histogrammodel.h \
-#        analyze/gui/histogramwidget.h
-}
-
 !NO_K_CHART {
     QT += KChart
 
     SOURCES += \
-#        analyze/gui/chartmodel.cpp \
-        analyze/gui/chartproxy.cpp \
-#        analyze/gui/chartwidget.cpp \
-#        analyze/gui/histogrammodel.cpp \
         analyze/gui/histogramwidget.cpp
 
     HEADERS += \
-#        analyze/gui/chartmodel.h \
-        analyze/gui/chartproxy.h \
-#        analyze/gui/chartwidget.h \
-#        analyze/gui/histogrammodel.h \
         analyze/gui/histogramwidget.h
 
     FORMS += \

@@ -20,7 +20,7 @@
 
 #include <QVBoxLayout>
 
-#ifdef KChart_FOUND
+#if defined(KChart_FOUND)
 #include <KChartChart>
 #include <KChartPlotter>
 
@@ -31,6 +31,12 @@
 #include <KChartGridAttributes>
 #include <KChartHeaderFooter>
 #include <KChartLegend>
+#elif defined(QWT_FOUND)
+#include <qwt_plot.h>
+#include <qwt_plot_curve.h>
+#include <qwt_plot_grid.h>
+#include <qwt_symbol.h>
+#include <qwt_legend.h>
 #endif
 
 #ifdef NO_K_LIB
@@ -84,13 +90,30 @@ public:
 
 ChartWidget::ChartWidget(QWidget* parent)
     : QWidget(parent)
-#ifdef KChart_FOUND
+#if defined(KChart_FOUND)
     , m_chart(new Chart(this))
+#elif defined(QWT_FOUND)
+    , m_model(nullptr)
+    , m_plot(new QwtPlot(this))
+#endif
+#ifdef SHOW_TABLES
+    , m_tableViewTotal(new QTableView(this))
+    , m_tableViewNoTotal(new QTableView(this))
 #endif
 {
     auto layout = new QVBoxLayout(this);
-#ifdef KChart_FOUND
+#if defined(KChart_FOUND)
     layout->addWidget(m_chart);
+#elif defined(QWT_FOUND)
+    layout->addWidget(m_plot);
+#endif
+#ifdef SHOW_TABLES
+    auto hLayout = new QHBoxLayout();
+    hLayout->addWidget(m_tableViewTotal);
+    hLayout->addWidget(m_tableViewNoTotal);
+    layout->addLayout(hLayout);
+    layout->setStretch(0, 100);
+    layout->setStretch(1, 100);
 #endif
     setLayout(layout);
 
@@ -144,11 +167,14 @@ void ChartWidget::setModel(ChartModel* model, bool minimalMode)
         break;
     }
 
-#ifdef KChart_FOUND
+#if defined(KChart_FOUND) || defined(SHOW_TABLES)
+    ChartProxy *totalProxy, *proxy;
+#endif
+#if defined(KChart_FOUND)
     {
         auto totalPlotter = new Plotter(this);
         totalPlotter->setAntiAliasing(true);
-        auto totalProxy = new ChartProxy(true, this);
+        totalProxy = new ChartProxy(true, this);
         totalProxy->setSourceModel(model);
         totalPlotter->setModel(totalProxy);
         totalPlotter->setType(Plotter::Stacked);
@@ -198,11 +224,36 @@ void ChartWidget::setModel(ChartModel* model, bool minimalMode)
         plotter->setAntiAliasing(true);
         plotter->setType(Plotter::Stacked);
 
-        auto proxy = new ChartProxy(false, this);
+        proxy = new ChartProxy(false, this);
         proxy->setSourceModel(model);
         plotter->setModel(proxy);
         coordinatePlane->addDiagram(plotter);
     }
+#elif defined(QWT_FOUND)
+    connect(model, SIGNAL(modelReset()), this, SLOT(modelReset()));
+    m_model = model;
+
+//!!    m_plot->setTitle( "Plot Demo" );
+    m_plot->setCanvasBackground(Qt::white);
+    m_plot->enableAxis(QwtPlot::yRight);
+    m_plot->enableAxis(QwtPlot::yLeft, false);
+//    m_plot->setAxisScale( QwtPlot::yLeft, 0.0, 10.0 );
+//    m_plot->insertLegend( new QwtLegend() );
+
+    QwtPlotGrid *grid = new QwtPlotGrid();
+    grid->attach(m_plot);
+
+#ifdef SHOW_TABLES
+    totalProxy = new ChartProxy(true, this);
+    totalProxy->setSourceModel(model);
+
+    proxy = new ChartProxy(false, this);
+    proxy->setSourceModel(model);
+#endif // SHOW_TABLES
+#endif // QWT_FOUND
+#ifdef SHOW_TABLES
+    m_tableViewTotal->setModel(totalProxy);
+    m_tableViewNoTotal->setModel(proxy);
 #endif
 }
 
@@ -210,5 +261,63 @@ QSize ChartWidget::sizeHint() const
 {
     return {400, 50};
 }
+
+#ifdef QWT_FOUND
+void ChartWidget::modelReset()
+{
+    updateQwtChart();
+}
+
+void ChartWidget::updateQwtChart()
+{
+    int columns = m_model->columnCount();
+//    int rows = m_model->rowCount();
+//    qDebug() << "rows: " << rows << "; columns: " << columns;
+/*
+    QwtPlotCurve *curve = new QwtPlotCurve();
+    curve->setTitle( "Some Points" );
+    QwtSymbol *symbol = new QwtSymbol( QwtSymbol::Ellipse,
+        QBrush( Qt::yellow ), QPen( Qt::red, 2 ), QSize( 8, 8 ) );
+    curve->setSymbol( symbol );
+    QPolygonF points;
+    points << QPointF( 0.0, 4.4 ) << QPointF( 1.0, 3.0 )
+        << QPointF( 2.0, 4.5 ) << QPointF( 3.0, 6.8 )
+        << QPointF( 4.0, 7.9 ) << QPointF( 5.0, 7.1 );
+    curve->setSamples( points );
+    curve->attach( m_plot );
+*/
+    m_plot->detachItems();
+
+    m_plot->setAxisTitle(QwtPlot::xBottom, m_model->headerData(0).toString());
+    m_plot->setAxisTitle(QwtPlot::yRight, m_model->headerData(1).toString());
+
+    for (int column = 1; column < columns ; column += 2)
+    {
+        auto curve = new QwtPlotCurve();
+        curve->setRenderHint(QwtPlotItem::RenderAntialiased, true);
+        curve->setYAxis(QwtPlot::yRight);
+
+        curve->setPen(m_model->getColumnDataSetPen(column));
+        curve->setBrush(m_model->getColumnDataSetBrush(column));
+
+        auto adapter = new ChartModel2QwtSeriesData(m_model, column);
+        curve->setSamples(adapter);
+/*
+        QPolygonF points;
+        for (int row = 0; row < rows; ++row)
+        {
+            QModelIndex index = m_model->index(row, 0); // time
+            qreal timeStamp = m_model->data(index).toDouble();
+            qreal cost = m_model->data(m_model->index(row, column)).toDouble();
+            points << QPointF(timeStamp, cost);
+        }
+        curve->setSamples(points);
+*/
+        curve->attach(m_plot);
+    }
+
+    m_plot->replot();
+}
+#endif
 
 #include "chartwidget.moc"

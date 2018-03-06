@@ -71,6 +71,9 @@ public:
     int rowCount(const QModelIndex& parent = QModelIndex()) const override;
     int columnCount(const QModelIndex& parent = QModelIndex()) const override;
 
+    const QPen& getColumnDataSetPen(int column) const;
+    const QBrush& getColumnDataSetBrush(int column) const;
+
 public slots:
     void resetData(const ChartData& data);
     void clearData();

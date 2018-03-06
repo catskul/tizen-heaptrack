@@ -19,8 +19,10 @@
 #ifndef HEAPTRACK_GUI_CONFIG_H
 #define HEAPTRACK_GUI_CONFIG_H
 
-#ifndef NO_K_CHART
+#if !defined(NO_K_CHART)
 #define KChart_FOUND 1
+#elif defined(QWT)
+#define QWT_FOUND 1
 #endif
 
 #endif // HEAPTRACK_CONFIG_H
