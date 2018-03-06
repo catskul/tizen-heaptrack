@@ -284,7 +284,7 @@ void encodeWChar(WCHAR *orig, char *encoded) {
   encoded[i] = 0;
 }
 
-void OnFunctionEnter(FunctionIDOrClientID functionID,
+void __stdcall OnFunctionEnter(FunctionIDOrClientID functionID,
                      COR_PRF_ELT_INFO eltInfo) {
   ICorProfilerInfo3 *info;
   HRESULT hr = g_pICorProfilerInfoUnknown->QueryInterface(IID_ICorProfilerInfo3,
@@ -313,7 +313,7 @@ void OnFunctionEnter(FunctionIDOrClientID functionID,
   info->Release();
 }
 
-void OnFunctionLeave(FunctionIDOrClientID functionID,
+void __stdcall OnFunctionLeave(FunctionIDOrClientID functionID,
                      COR_PRF_ELT_INFO eltInfo) {
   PopShadowStack();
 }
