@@ -10,23 +10,36 @@ DEFINES += QT_DEPRECATED_WARNINGS
 INCLUDEPATH += $$PWD/analyze/gui
 
 win32 {
-    CONFIG += NO_K_LIB NO_K_CHART QWT_CHART
+    CONFIG += NO_K_LIB NO_K_CHART
+
+#   comment the next line to not use QWT (i.e. don't show charts)
+    CONFIG += QWT_CHART
+
     DEFINES += NO_K_LIB NO_K_CHART
     INCLUDEPATH += $$(BOOST_LIB)
     LIBS += -L$$(BOOST_LIB)/stage/lib
 }
 
 unix {
-#    QMAKE_CXXFLAGS += -std=c++0x
-#    QMAKE_CXXFLAGS_WARN_ON += -Wno-unused-parameter # disable 'unused parameter' warning
     CONFIG *= USE_CHART
     DEFINES *= USE_CHART
+
+#   uncomment the next line to use QWT instead of KChart
+#   CONFIG += QWT_CHART
+
+    QWT_CHART {
+        CONFIG *= NO_K_LIB NO_K_CHART QWT_CHART
+        DEFINES *= NO_K_LIB NO_K_CHART
+        INCLUDEPATH += /usr/include/qwt
+        LIBS += -lqwt-qt5 # correct the library name if needed (e.g. to 'qwt')
+    }
+
     LIBS += -lboost_program_options -lboost_iostreams -lpthread
 }
 
 #Test only!
-#CONFIG *= NO_K_LIB
-#DEFINES *= NO_K_LIB
+#CONFIG *= NO_K_LIB NO_K_CHART
+#DEFINES *= NO_K_LIB NO_K_CHART
 
 SOURCES += \
     analyze/accumulatedtracedata.cpp \
