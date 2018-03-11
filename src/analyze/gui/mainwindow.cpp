@@ -242,6 +242,11 @@ MainWindow::MainWindow(QWidget* parent)
     , m_config(KSharedConfig::openConfig(QStringLiteral("heaptrack_gui")))
 #endif
 {
+#if defined(QWT_FOUND) && (QT_VERSION >= 0x050A00)
+    // TODO!! seems it doesn't help under Windows (Qt 5.10.0)
+    QCoreApplication::setAttribute(Qt::AA_DontShowShortcutsInContextMenus, false);
+#endif
+
     m_ui->setupUi(this);
 
 #ifndef NO_K_LIB // TODO!! find a replacement for KSharedConfig
@@ -582,9 +587,11 @@ MainWindow::MainWindow(QWidget* parent)
     // closing the current file shows the stack page to open a new one
 #ifdef NO_K_LIB
     m_openAction = new QAction(i18n("&Open..."), this);
+    m_openAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_O));
     connect(m_openAction, &QAction::triggered, this, &MainWindow::closeFile);
     m_openAction->setEnabled(false);
     m_openNewAction = new QAction(i18n("&New"), this);
+    m_openNewAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_N));
     connect(m_openNewAction, &QAction::triggered, this, &MainWindow::openNewFile);
     m_closeAction = new QAction(i18n("&Close"), this);
     connect(m_closeAction, &QAction::triggered, this, &MainWindow::close);
@@ -692,6 +699,12 @@ void MainWindow::setupStacks()
             auto tree = (widget == m_ui->topDownTab) ? m_ui->topDownResults : m_ui->bottomUpResults;
             fillFromIndex(tree->selectionModel()->currentIndex());
         }
+#ifdef QWT_FOUND
+        const auto chartWidget = dynamic_cast<ChartWidget*>(widget);
+        if (chartWidget) {
+            chartWidget->updateIfOptionsChanged();
+        }
+#endif
     };
     connect(m_ui->tabWidget, &QTabWidget::currentChanged, this, tabChanged);
     connect(m_parser, &Parser::bottomUpDataAvailable, this, [tabChanged]() { tabChanged(0); });

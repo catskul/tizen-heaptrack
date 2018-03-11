@@ -40,6 +40,7 @@ class Chart;
 #include "chartmodel2qwtseriesdata.h"
 #include <QPen>
 class QwtPlot;
+class QAction;
 #endif
 
 class QAbstractItemModel;
@@ -56,19 +57,45 @@ public:
     QSize sizeHint() const override;
 
 #if defined(QWT_FOUND)
+    void updateIfOptionsChanged();
+
 public slots:
     void modelReset();
+#ifndef QT_NO_CONTEXTMENU
+protected:
+    virtual void contextMenuEvent(QContextMenuEvent *event) override;
+#endif
 #endif
 
 private:
 #if defined(KChart_FOUND)
     KChart::Chart* m_chart;
 #elif defined(QWT_FOUND)
+private slots:
+    void toggleShowTotal(bool checked);
+    void toggleShowLegend(bool checked);
+    void toggleShowSymbols(bool checked);
+    void toggleShowVLines(bool checked);
+private:
     void updateQwtChart();
 
     ChartModel* m_model;
     QwtPlot* m_plot;
     QPen m_vLinePen;
+
+    QAction* m_showTotalAction;
+    QAction* m_showLegendAction;
+    QAction* m_showSymbolsAction;
+    QAction* m_showVLinesAction;
+
+    static bool globalShowTotal;
+    bool m_showTotal;
+    static bool globalShowLegend;
+    bool m_showLegend;
+    static bool globalShowSymbols;
+    bool m_showSymbols;
+    static bool globalShowVLines;
+    bool m_showVLines;
 #endif
 #ifdef SHOW_TABLES
     QTableView* m_tableViewTotal;

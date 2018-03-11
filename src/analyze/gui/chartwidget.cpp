@@ -39,6 +39,9 @@
 #include <qwt_symbol.h>
 #include <qwt_legend.h>
 #include <qwt_scale_draw.h>
+#include <QAction>
+#include <QContextMenuEvent>
+#include <QMenu>
 #include <QRegularExpression>
 #endif
 
@@ -104,6 +107,11 @@ class SizeScaleDraw: public QwtScaleDraw
         return Util::formatByteSize(value, 1);
     }
 };
+
+bool ChartWidget::globalShowTotal = true;
+bool ChartWidget::globalShowLegend = true;
+bool ChartWidget::globalShowSymbols = false;
+bool ChartWidget::globalShowVLines = false;
 #endif
 
 ChartWidget::ChartWidget(QWidget* parent)
@@ -113,6 +121,10 @@ ChartWidget::ChartWidget(QWidget* parent)
 #elif defined(QWT_FOUND)
     , m_model(nullptr)
     , m_plot(new QwtPlot(this))
+    , m_showTotal(globalShowTotal)
+    , m_showLegend(globalShowLegend)
+    , m_showSymbols(globalShowSymbols)
+    , m_showVLines(globalShowVLines)
 #endif
 #ifdef SHOW_TABLES
     , m_tableViewTotal(new QTableView(this))
@@ -126,6 +138,35 @@ ChartWidget::ChartWidget(QWidget* parent)
     layout->addWidget(m_plot);
     m_vLinePen.setStyle(Qt::DashLine);
     m_vLinePen.setColor(Qt::gray);
+
+    m_showTotalAction = new QAction(i18n("Show Total"), this);
+    // TODO!! shortcuts don't work under Windows (Qt 5.10.0)
+    m_showTotalAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_T));
+    m_showTotalAction->setShortcutVisibleInContextMenu(true);
+    m_showTotalAction->setStatusTip(i18n("Show the total amount curve"));
+    m_showTotalAction->setCheckable(true);
+    connect(m_showTotalAction, &QAction::triggered, this, &ChartWidget::toggleShowTotal);
+
+    m_showLegendAction = new QAction(i18n("Show Legend"), this);
+    m_showLegendAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_L));
+    m_showLegendAction->setShortcutVisibleInContextMenu(true);
+    m_showLegendAction->setStatusTip(i18n("Show the chart legend"));
+    m_showLegendAction->setCheckable(true);
+    connect(m_showLegendAction, &QAction::triggered, this, &ChartWidget::toggleShowLegend);
+
+    m_showSymbolsAction = new QAction(i18n("Show Symbols"), this);
+    m_showSymbolsAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_S));
+    m_showSymbolsAction->setShortcutVisibleInContextMenu(true);
+    m_showSymbolsAction->setStatusTip(i18n("Show symbols (chart data points)"));
+    m_showSymbolsAction->setCheckable(true);
+    connect(m_showSymbolsAction, &QAction::triggered, this, &ChartWidget::toggleShowSymbols);
+
+    m_showVLinesAction = new QAction(i18n("Show Vertical Lines"), this);
+    m_showVLinesAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_V));
+    m_showVLinesAction->setShortcutVisibleInContextMenu(true);
+    m_showVLinesAction->setStatusTip(i18n("Show vertical lines corresponding to timestamps"));
+    m_showVLinesAction->setCheckable(true);
+    connect(m_showVLinesAction, &QAction::triggered, this, &ChartWidget::toggleShowVLines);
 #endif
 #ifdef SHOW_TABLES
     auto hLayout = new QHBoxLayout();
@@ -282,7 +323,75 @@ void ChartWidget::modelReset()
     updateQwtChart();
 }
 
-static QString prepareCurveLabel(QString label)
+void ChartWidget::contextMenuEvent(QContextMenuEvent *event)
+{
+    QMenu menu(this);
+    m_showTotalAction->setChecked(m_showTotal);
+    menu.addAction(m_showTotalAction);
+    menu.addSeparator();
+    m_showLegendAction->setChecked(m_showLegend);
+    menu.addAction(m_showLegendAction);
+    m_showSymbolsAction->setChecked(m_showSymbols);
+    menu.addAction(m_showSymbolsAction);
+    m_showVLinesAction->setChecked(m_showVLines);
+    menu.addAction(m_showVLinesAction);
+    menu.exec(event->globalPos());
+}
+
+void ChartWidget::toggleShowTotal(bool checked)
+{
+    globalShowTotal = checked;
+    updateIfOptionsChanged();
+}
+
+void ChartWidget::toggleShowLegend(bool checked)
+{
+    globalShowLegend = checked;
+    updateIfOptionsChanged();
+}
+
+void ChartWidget::toggleShowSymbols(bool checked)
+{
+    globalShowSymbols = checked;
+    updateIfOptionsChanged();
+}
+
+void ChartWidget::toggleShowVLines(bool checked)
+{
+    globalShowVLines = checked;
+    updateIfOptionsChanged();
+}
+
+void ChartWidget::updateIfOptionsChanged()
+{
+    bool update = false;
+    if (m_showTotal != globalShowTotal)
+    {
+        m_showTotal = globalShowTotal;
+        update = true;
+    }
+    if (m_showLegend != globalShowLegend)
+    {
+        m_showLegend = globalShowLegend;
+        update = true;
+    }
+    if (m_showSymbols != globalShowSymbols)
+    {
+        m_showSymbols = globalShowSymbols;
+        update = true;
+    }
+    if (m_showVLines != globalShowVLines)
+    {
+        m_showVLines = globalShowVLines;
+        update = true;
+    }
+    if (update)
+    {
+        updateQwtChart();
+    }
+}
+
+static QString getCurveTitle(QString label)
 {
     const int MaxLineLength = 48;
 
@@ -296,10 +405,10 @@ static QString prepareCurveLabel(QString label)
     QString result;
     do
     {
-        int i1 = label.indexOf(delimBefore, MaxLineLength);
-        int i2 = label.indexOf(delimAfter, MaxLineLength - 1);
         int i = -1;
         int wrapAfter = 0;
+        int i1 = label.indexOf(delimBefore, MaxLineLength);
+        int i2 = label.indexOf(delimAfter, MaxLineLength - 1);
         if (i1 >= 0)
         {
             if (i2 >= 0)
@@ -345,25 +454,14 @@ static QString prepareCurveLabel(QString label)
 
 void ChartWidget::updateQwtChart()
 {
+    setUpdatesEnabled(false);
+
     int columns = m_model->columnCount();
     int rows = m_model->rowCount();
-//    qDebug() << "rows: " << rows << "; columns: " << columns;
-/*
-//    m_plot->setAxisScale( QwtPlot::yLeft, 0.0, 10.0 );
-//    m_plot->insertLegend( new QwtLegend() );
-    QwtPlotCurve *curve = new QwtPlotCurve();
-    QwtSymbol *symbol = new QwtSymbol( QwtSymbol::Ellipse,
-        QBrush( Qt::yellow ), QPen( Qt::red, 2 ), QSize( 8, 8 ) );
-    curve->setSymbol( symbol );
-    QPolygonF points;
-    points << QPointF( 0.0, 4.4 ) << QPointF( 1.0, 3.0 )
-        << QPointF( 4.0, 7.9 ) << QPointF( 5.0, 7.1 );
-    curve->setSamples( points );
-    curve->attach( m_plot );
-*/
+
     m_plot->detachItems();
 
-    m_plot->insertLegend(new QwtLegend());
+    m_plot->insertLegend(m_showLegend ? new QwtLegend() : nullptr);
 
     m_plot->setAxisTitle(QwtPlot::xBottom, m_model->headerData(0).toString());
     m_plot->setAxisTitle(QwtPlot::yRight, m_model->headerData(1).toString());
@@ -377,9 +475,14 @@ void ChartWidget::updateQwtChart()
     auto grid = new QwtPlotGrid();
     grid->attach(m_plot);
 
-    for (int column = 1; column < columns ; column += 2)
+    int column = 1;
+    if (!m_showTotal)
     {
-        auto curve = new QwtPlotCurve();
+        column += 2;
+    }
+    for (; column < columns ; column += 2)
+    {
+        auto curve = new QwtPlotCurve(getCurveTitle(m_model->getColumnLabel(column)));
         curve->setRenderHint(QwtPlotItem::RenderAntialiased, true);
         curve->setYAxis(QwtPlot::yRight);
 
@@ -389,25 +492,32 @@ void ChartWidget::updateQwtChart()
         auto adapter = new ChartModel2QwtSeriesData(m_model, column);
         curve->setSamples(adapter);
 
-        QwtSymbol *symbol = new QwtSymbol(QwtSymbol::Ellipse,
-            QBrush(Qt::white), QPen(Qt::black, 2), QSize(6, 6));
-        curve->setSymbol(symbol);
-
-        curve->setTitle(prepareCurveLabel(m_model->getColumnLabel(column)));
+        if (m_showSymbols)
+        {
+            QwtSymbol *symbol = new QwtSymbol(QwtSymbol::Ellipse,
+                QBrush(Qt::white), QPen(Qt::black, 2), QSize(6, 6));
+            curve->setSymbol(symbol);
+        }
 
         curve->attach(m_plot);
     }
 
-    for (int row = 1; row < rows; ++row)
+    if (m_showVLines)
     {
-        auto marker = new QwtPlotMarker();
-        marker->setLinePen(m_vLinePen);
-        marker->setLineStyle(QwtPlotMarker::VLine);
-        marker->setXValue(m_model->getTimestamp(row));
-        marker->attach(m_plot);
+        for (int row = 1; row < rows; ++row)
+        {
+            auto marker = new QwtPlotMarker();
+            marker->setLinePen(m_vLinePen);
+            marker->setLineStyle(QwtPlotMarker::VLine);
+            marker->setXValue(m_model->getTimestamp(row));
+            marker->attach(m_plot);
+        }
     }
 
     m_plot->replot();
+
+    setUpdatesEnabled(true);
+    update();
 }
 #endif // QWT_FOUND
 
