@@ -35,8 +35,11 @@
 #include <qwt_plot.h>
 #include <qwt_plot_curve.h>
 #include <qwt_plot_grid.h>
+#include <qwt_plot_marker.h>
 #include <qwt_symbol.h>
 #include <qwt_legend.h>
+#include <qwt_scale_draw.h>
+#include <QRegularExpression>
 #endif
 
 #ifdef NO_K_LIB
@@ -81,11 +84,26 @@ public:
 
     const QString customizedLabel(const QString& label) const override
     {
-//!!        KFormat format(QLocale::system());
         return Util::formatByteSize(label.toDouble(), 1);
     }
 };
 }
+#elif defined(QWT_FOUND)
+class TimeScaleDraw: public QwtScaleDraw
+{
+    virtual QwtText label(double value) const
+    {
+        return Util::formatTime((qint64)value);
+    }
+};
+
+class SizeScaleDraw: public QwtScaleDraw
+{
+    virtual QwtText label(double value) const
+    {
+        return Util::formatByteSize(value, 1);
+    }
+};
 #endif
 
 ChartWidget::ChartWidget(QWidget* parent)
@@ -106,6 +124,8 @@ ChartWidget::ChartWidget(QWidget* parent)
     layout->addWidget(m_chart);
 #elif defined(QWT_FOUND)
     layout->addWidget(m_plot);
+    m_vLinePen.setStyle(Qt::DashLine);
+    m_vLinePen.setColor(Qt::gray);
 #endif
 #ifdef SHOW_TABLES
     auto hLayout = new QHBoxLayout();
@@ -233,15 +253,9 @@ void ChartWidget::setModel(ChartModel* model, bool minimalMode)
     connect(model, SIGNAL(modelReset()), this, SLOT(modelReset()));
     m_model = model;
 
-//!!    m_plot->setTitle( "Plot Demo" );
     m_plot->setCanvasBackground(Qt::white);
     m_plot->enableAxis(QwtPlot::yRight);
     m_plot->enableAxis(QwtPlot::yLeft, false);
-//    m_plot->setAxisScale( QwtPlot::yLeft, 0.0, 10.0 );
-//    m_plot->insertLegend( new QwtLegend() );
-
-    QwtPlotGrid *grid = new QwtPlotGrid();
-    grid->attach(m_plot);
 
 #ifdef SHOW_TABLES
     totalProxy = new ChartProxy(true, this);
@@ -268,28 +282,100 @@ void ChartWidget::modelReset()
     updateQwtChart();
 }
 
+static QString prepareCurveLabel(QString label)
+{
+    const int MaxLineLength = 48;
+
+    int labelLength = label.size();
+    if (labelLength <= MaxLineLength)
+    {
+        return label;
+    }
+    static QRegularExpression delimBefore("[(<]");
+    static QRegularExpression delimAfter("[- .,)>\\/]");
+    QString result;
+    do
+    {
+        int i1 = label.indexOf(delimBefore, MaxLineLength);
+        int i2 = label.indexOf(delimAfter, MaxLineLength - 1);
+        int i = -1;
+        int wrapAfter = 0;
+        if (i1 >= 0)
+        {
+            if (i2 >= 0)
+            {
+                if (i2 < i1)
+                {
+                    i = i2;
+                    wrapAfter = 1;
+                }
+                else
+                {
+                    i = i1;
+                }
+            }
+            else
+            {
+                i = i1;
+            }
+        }
+        else
+        {
+            i = i2;
+            wrapAfter = 1;
+        }
+        if (i < 0)
+        {
+            break;
+        }
+        i += wrapAfter;
+        result += label.left(i).toHtmlEscaped();
+        label.remove(0, i);
+        if (label.isEmpty()) // special: avoid <br> at the end
+        {
+            return result;
+        }
+        result += "<br>";
+        labelLength -= i;
+    }
+    while (labelLength > MaxLineLength);
+    result += label.toHtmlEscaped();
+    return result;
+}
+
 void ChartWidget::updateQwtChart()
 {
     int columns = m_model->columnCount();
-//    int rows = m_model->rowCount();
+    int rows = m_model->rowCount();
 //    qDebug() << "rows: " << rows << "; columns: " << columns;
 /*
+//    m_plot->setAxisScale( QwtPlot::yLeft, 0.0, 10.0 );
+//    m_plot->insertLegend( new QwtLegend() );
     QwtPlotCurve *curve = new QwtPlotCurve();
-    curve->setTitle( "Some Points" );
     QwtSymbol *symbol = new QwtSymbol( QwtSymbol::Ellipse,
         QBrush( Qt::yellow ), QPen( Qt::red, 2 ), QSize( 8, 8 ) );
     curve->setSymbol( symbol );
     QPolygonF points;
     points << QPointF( 0.0, 4.4 ) << QPointF( 1.0, 3.0 )
-        << QPointF( 2.0, 4.5 ) << QPointF( 3.0, 6.8 )
         << QPointF( 4.0, 7.9 ) << QPointF( 5.0, 7.1 );
     curve->setSamples( points );
     curve->attach( m_plot );
 */
     m_plot->detachItems();
 
+    m_plot->insertLegend(new QwtLegend());
+
     m_plot->setAxisTitle(QwtPlot::xBottom, m_model->headerData(0).toString());
     m_plot->setAxisTitle(QwtPlot::yRight, m_model->headerData(1).toString());
+    m_plot->setAxisScaleDraw(QwtPlot::xBottom, new TimeScaleDraw());
+    if (!(m_model->type() == ChartModel::Allocations || m_model->type() == ChartModel::Instances ||
+          m_model->type() == ChartModel::Temporary))
+    {
+        m_plot->setAxisScaleDraw(QwtPlot::yRight, new SizeScaleDraw());
+    }
+
+    auto grid = new QwtPlotGrid();
+    grid->attach(m_plot);
 
     for (int column = 1; column < columns ; column += 2)
     {
@@ -297,27 +383,32 @@ void ChartWidget::updateQwtChart()
         curve->setRenderHint(QwtPlotItem::RenderAntialiased, true);
         curve->setYAxis(QwtPlot::yRight);
 
-        curve->setPen(m_model->getColumnDataSetPen(column));
-        curve->setBrush(m_model->getColumnDataSetBrush(column));
+        curve->setPen(m_model->getColumnDataSetPen(column - 1));
+        curve->setBrush(m_model->getColumnDataSetBrush(column - 1));
 
         auto adapter = new ChartModel2QwtSeriesData(m_model, column);
         curve->setSamples(adapter);
-/*
-        QPolygonF points;
-        for (int row = 0; row < rows; ++row)
-        {
-            QModelIndex index = m_model->index(row, 0); // time
-            qreal timeStamp = m_model->data(index).toDouble();
-            qreal cost = m_model->data(m_model->index(row, column)).toDouble();
-            points << QPointF(timeStamp, cost);
-        }
-        curve->setSamples(points);
-*/
+
+        QwtSymbol *symbol = new QwtSymbol(QwtSymbol::Ellipse,
+            QBrush(Qt::white), QPen(Qt::black, 2), QSize(6, 6));
+        curve->setSymbol(symbol);
+
+        curve->setTitle(prepareCurveLabel(m_model->getColumnLabel(column)));
+
         curve->attach(m_plot);
+    }
+
+    for (int row = 1; row < rows; ++row)
+    {
+        auto marker = new QwtPlotMarker();
+        marker->setLinePen(m_vLinePen);
+        marker->setLineStyle(QwtPlotMarker::VLine);
+        marker->setXValue(m_model->getTimestamp(row));
+        marker->attach(m_plot);
     }
 
     m_plot->replot();
 }
-#endif
+#endif // QWT_FOUND
 
 #include "chartwidget.moc"

@@ -219,6 +219,9 @@ void ChartModel::resetData(const ChartData& data)
     const auto columns = columnCount();
     for (int i = 0; i < columns; ++i) {
         auto color = colorForColumn(i, columns);
+#ifdef QWT_FOUND
+        color.setAlpha(i > 1 ? 127 : 50);
+#endif
         m_columnDataSetBrushes << QBrush(color);
         m_columnDataSetPens << QPen(color);
     }
@@ -232,6 +235,16 @@ void ChartModel::clearData()
     m_columnDataSetBrushes = {};
     m_columnDataSetPens = {};
     endResetModel();
+}
+
+qint64 ChartModel::getTimestamp(int row) const
+{
+    return m_data.rows[row].timeStamp;
+}
+
+QString ChartModel::getColumnLabel(int column) const
+{
+    return m_data.labels.value(column / 2);
 }
 
 const QPen& ChartModel::getColumnDataSetPen(int column) const

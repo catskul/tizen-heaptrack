@@ -38,6 +38,7 @@ class Chart;
 }
 #elif defined(QWT_FOUND)
 #include "chartmodel2qwtseriesdata.h"
+#include <QPen>
 class QwtPlot;
 #endif
 
@@ -67,6 +68,7 @@ private:
 
     ChartModel* m_model;
     QwtPlot* m_plot;
+    QPen m_vLinePen;
 #endif
 #ifdef SHOW_TABLES
     QTableView* m_tableViewTotal;

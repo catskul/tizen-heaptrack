@@ -71,6 +71,8 @@ public:
     int rowCount(const QModelIndex& parent = QModelIndex()) const override;
     int columnCount(const QModelIndex& parent = QModelIndex()) const override;
 
+    qint64 getTimestamp(int row) const;
+    QString getColumnLabel(int column) const;
     const QPen& getColumnDataSetPen(int column) const;
     const QBrush& getColumnDataSetBrush(int column) const;
 
