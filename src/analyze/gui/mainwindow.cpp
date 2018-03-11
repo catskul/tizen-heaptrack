@@ -703,6 +703,7 @@ void MainWindow::setupStacks()
         const auto chartWidget = dynamic_cast<ChartWidget*>(widget);
         if (chartWidget) {
             chartWidget->updateIfOptionsChanged();
+            chartWidget->setFocus(); // to handle keyboard events in the widget
         }
 #endif
     };

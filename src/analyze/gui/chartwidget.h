@@ -65,7 +65,9 @@ public slots:
 protected:
     virtual void contextMenuEvent(QContextMenuEvent *event) override;
 #endif
-#endif
+    // workaround for handling the context menu shortcuts
+    virtual void keyPressEvent(QKeyEvent *event) override;
+#endif // QWT_FOUND
 
 private:
 #if defined(KChart_FOUND)

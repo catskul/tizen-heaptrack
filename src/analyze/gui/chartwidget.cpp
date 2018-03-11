@@ -140,33 +140,39 @@ ChartWidget::ChartWidget(QWidget* parent)
     m_vLinePen.setColor(Qt::gray);
 
     m_showTotalAction = new QAction(i18n("Show Total"), this);
-    // TODO!! shortcuts don't work under Windows (Qt 5.10.0)
-    m_showTotalAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_T));
-    m_showTotalAction->setShortcutVisibleInContextMenu(true);
     m_showTotalAction->setStatusTip(i18n("Show the total amount curve"));
     m_showTotalAction->setCheckable(true);
     connect(m_showTotalAction, &QAction::triggered, this, &ChartWidget::toggleShowTotal);
 
     m_showLegendAction = new QAction(i18n("Show Legend"), this);
-    m_showLegendAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_L));
-    m_showLegendAction->setShortcutVisibleInContextMenu(true);
     m_showLegendAction->setStatusTip(i18n("Show the chart legend"));
     m_showLegendAction->setCheckable(true);
     connect(m_showLegendAction, &QAction::triggered, this, &ChartWidget::toggleShowLegend);
 
     m_showSymbolsAction = new QAction(i18n("Show Symbols"), this);
-    m_showSymbolsAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_S));
-    m_showSymbolsAction->setShortcutVisibleInContextMenu(true);
     m_showSymbolsAction->setStatusTip(i18n("Show symbols (chart data points)"));
     m_showSymbolsAction->setCheckable(true);
     connect(m_showSymbolsAction, &QAction::triggered, this, &ChartWidget::toggleShowSymbols);
 
     m_showVLinesAction = new QAction(i18n("Show Vertical Lines"), this);
-    m_showVLinesAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_V));
-    m_showVLinesAction->setShortcutVisibleInContextMenu(true);
     m_showVLinesAction->setStatusTip(i18n("Show vertical lines corresponding to timestamps"));
     m_showVLinesAction->setCheckable(true);
     connect(m_showVLinesAction, &QAction::triggered, this, &ChartWidget::toggleShowVLines);
+
+    // shortcuts don't work under Windows (Qt 5.10.0) so using a workaround (manual processing
+    // in keyPressEvent)
+
+    m_showTotalAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_T));
+    m_showLegendAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_L));
+    m_showSymbolsAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_S));
+    m_showVLinesAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_V));
+
+    m_showTotalAction->setShortcutVisibleInContextMenu(true);
+    m_showLegendAction->setShortcutVisibleInContextMenu(true);
+    m_showSymbolsAction->setShortcutVisibleInContextMenu(true);
+    m_showVLinesAction->setShortcutVisibleInContextMenu(true);
+
+    setFocusPolicy(Qt::StrongFocus);
 #endif
 #ifdef SHOW_TABLES
     auto hLayout = new QHBoxLayout();
@@ -323,6 +329,7 @@ void ChartWidget::modelReset()
     updateQwtChart();
 }
 
+#ifndef QT_NO_CONTEXTMENU
 void ChartWidget::contextMenuEvent(QContextMenuEvent *event)
 {
     QMenu menu(this);
@@ -336,6 +343,37 @@ void ChartWidget::contextMenuEvent(QContextMenuEvent *event)
     m_showVLinesAction->setChecked(m_showVLines);
     menu.addAction(m_showVLinesAction);
     menu.exec(event->globalPos());
+}
+#endif
+
+void ChartWidget::keyPressEvent(QKeyEvent *event)
+{
+    if (event->modifiers() & Qt::AltModifier)
+    {
+        switch (event->key())
+        {
+        case Qt::Key_T:
+            toggleShowTotal(!globalShowTotal);
+            break;
+        case Qt::Key_L:
+            toggleShowLegend(!globalShowLegend);
+            break;
+        case Qt::Key_S:
+            toggleShowSymbols(!globalShowSymbols);
+            break;
+        case Qt::Key_V:
+            toggleShowVLines(!globalShowVLines);
+            break;
+        default:
+            event->ignore();
+            return;
+        }
+        event->accept();
+    }
+    else
+    {
+        event->ignore();
+    }
 }
 
 void ChartWidget::toggleShowTotal(bool checked)
