@@ -166,12 +166,12 @@ ChartWidget::ChartWidget(QWidget* parent)
     m_showLegendAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_L));
     m_showSymbolsAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_S));
     m_showVLinesAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_V));
-
+#if QT_VERSION >= 0x050A00
     m_showTotalAction->setShortcutVisibleInContextMenu(true);
     m_showLegendAction->setShortcutVisibleInContextMenu(true);
     m_showSymbolsAction->setShortcutVisibleInContextMenu(true);
     m_showVLinesAction->setShortcutVisibleInContextMenu(true);
-
+#endif
     setFocusPolicy(Qt::StrongFocus);
 #endif
 #ifdef SHOW_TABLES
@@ -518,7 +518,7 @@ void ChartWidget::updateQwtChart()
     {
         column += 2;
     }
-    for (; column < columns ; column += 2)
+    for (; column < columns; column += 2)
     {
         auto curve = new QwtPlotCurve(getCurveTitle(m_model->getColumnLabel(column)));
         curve->setRenderHint(QwtPlotItem::RenderAntialiased, true);
