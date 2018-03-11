@@ -492,8 +492,6 @@ static QString getCurveTitle(QString label)
 
 void ChartWidget::updateQwtChart()
 {
-    setUpdatesEnabled(false);
-
     int columns = m_model->columnCount();
     int rows = m_model->rowCount();
 
@@ -553,9 +551,6 @@ void ChartWidget::updateQwtChart()
     }
 
     m_plot->replot();
-
-    setUpdatesEnabled(true);
-    update();
 }
 #endif // QWT_FOUND
 
