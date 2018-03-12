@@ -25,7 +25,7 @@ unix {
     DEFINES *= USE_CHART
 
 #   uncomment the next line to use QWT instead of KChart
-   CONFIG += QWT_CHART
+#   CONFIG += QWT_CHART
 
     QWT_CHART {
         CONFIG *= NO_K_LIB NO_K_CHART QWT_CHART
