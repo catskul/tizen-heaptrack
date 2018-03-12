@@ -83,10 +83,12 @@ QWT_CHART {
     DEFINES *= USE_CHART QWT
 
     SOURCES += \
-        analyze/gui/chartmodel2qwtseriesdata.cpp
+        analyze/gui/chartmodel2qwtseriesdata.cpp \
+        analyze/gui/chartwidgetqwtplot.cpp
 
     HEADERS += \
-        analyze/gui/chartmodel2qwtseriesdata.h
+        analyze/gui/chartmodel2qwtseriesdata.h \
+        analyze/gui/chartwidgetqwtplot.h
 }
 
 USE_CHART {

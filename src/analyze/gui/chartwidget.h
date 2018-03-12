@@ -37,9 +37,7 @@ namespace KChart {
 class Chart;
 }
 #elif defined(QWT_FOUND)
-#include "chartmodel2qwtseriesdata.h"
-#include <QPen>
-class QwtPlot;
+#include "chartwidgetqwtplot.h"
 class QAction;
 #endif
 
@@ -74,30 +72,21 @@ private:
     KChart::Chart* m_chart;
 #elif defined(QWT_FOUND)
 private slots:
+    void resetZoom();
     void toggleShowTotal(bool checked);
     void toggleShowLegend(bool checked);
     void toggleShowSymbols(bool checked);
     void toggleShowVLines(bool checked);
 private:
-    void updateQwtChart();
+    ChartWidgetQwtPlot* m_plot;
 
-    ChartModel* m_model;
-    QwtPlot* m_plot;
-    QPen m_vLinePen;
-
+    QAction* m_resetZoomAction;
     QAction* m_showTotalAction;
     QAction* m_showLegendAction;
     QAction* m_showSymbolsAction;
     QAction* m_showVLinesAction;
 
-    static bool globalShowTotal;
-    bool m_showTotal;
-    static bool globalShowLegend;
-    bool m_showLegend;
-    static bool globalShowSymbols;
-    bool m_showSymbols;
-    static bool globalShowVLines;
-    bool m_showVLines;
+    static ChartWidgetQwtPlot::Options globalOptions;
 #endif
 #ifdef SHOW_TABLES
     QTableView* m_tableViewTotal;

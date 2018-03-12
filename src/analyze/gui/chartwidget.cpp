@@ -32,17 +32,9 @@
 #include <KChartHeaderFooter>
 #include <KChartLegend>
 #elif defined(QWT_FOUND)
-#include <qwt_plot.h>
-#include <qwt_plot_curve.h>
-#include <qwt_plot_grid.h>
-#include <qwt_plot_marker.h>
-#include <qwt_symbol.h>
-#include <qwt_legend.h>
-#include <qwt_scale_draw.h>
 #include <QAction>
 #include <QContextMenuEvent>
 #include <QMenu>
-#include <QRegularExpression>
 #endif
 
 #ifdef NO_K_LIB
@@ -92,26 +84,7 @@ public:
 };
 }
 #elif defined(QWT_FOUND)
-class TimeScaleDraw: public QwtScaleDraw
-{
-    virtual QwtText label(double value) const
-    {
-        return Util::formatTime((qint64)value);
-    }
-};
-
-class SizeScaleDraw: public QwtScaleDraw
-{
-    virtual QwtText label(double value) const
-    {
-        return Util::formatByteSize(value, 1);
-    }
-};
-
-bool ChartWidget::globalShowTotal = true;
-bool ChartWidget::globalShowLegend = true;
-bool ChartWidget::globalShowSymbols = false;
-bool ChartWidget::globalShowVLines = false;
+ChartWidgetQwtPlot::Options ChartWidget::globalOptions(ChartWidgetQwtPlot::ShowTotal | ChartWidgetQwtPlot::ShowLegend);
 #endif
 
 ChartWidget::ChartWidget(QWidget* parent)
@@ -119,12 +92,7 @@ ChartWidget::ChartWidget(QWidget* parent)
 #if defined(KChart_FOUND)
     , m_chart(new Chart(this))
 #elif defined(QWT_FOUND)
-    , m_model(nullptr)
-    , m_plot(new QwtPlot(this))
-    , m_showTotal(globalShowTotal)
-    , m_showLegend(globalShowLegend)
-    , m_showSymbols(globalShowSymbols)
-    , m_showVLines(globalShowVLines)
+    , m_plot(new ChartWidgetQwtPlot(this, globalOptions))
 #endif
 #ifdef SHOW_TABLES
     , m_tableViewTotal(new QTableView(this))
@@ -136,8 +104,10 @@ ChartWidget::ChartWidget(QWidget* parent)
     layout->addWidget(m_chart);
 #elif defined(QWT_FOUND)
     layout->addWidget(m_plot);
-    m_vLinePen.setStyle(Qt::DashLine);
-    m_vLinePen.setColor(Qt::gray);
+
+    m_resetZoomAction = new QAction(i18n("Reset Zoom"), this);
+    m_resetZoomAction->setStatusTip(i18n("Reset the chart zoom factor"));
+    connect(m_resetZoomAction, &QAction::triggered, this, &ChartWidget::resetZoom);
 
     m_showTotalAction = new QAction(i18n("Show Total"), this);
     m_showTotalAction->setStatusTip(i18n("Show the total amount curve"));
@@ -150,7 +120,7 @@ ChartWidget::ChartWidget(QWidget* parent)
     connect(m_showLegendAction, &QAction::triggered, this, &ChartWidget::toggleShowLegend);
 
     m_showSymbolsAction = new QAction(i18n("Show Symbols"), this);
-    m_showSymbolsAction->setStatusTip(i18n("Show symbols (chart data points)"));
+    m_showSymbolsAction->setStatusTip(i18n("Show symbols (the chart data points)"));
     m_showSymbolsAction->setCheckable(true);
     connect(m_showSymbolsAction, &QAction::triggered, this, &ChartWidget::toggleShowSymbols);
 
@@ -162,11 +132,13 @@ ChartWidget::ChartWidget(QWidget* parent)
     // shortcuts don't work under Windows (Qt 5.10.0) so using a workaround (manual processing
     // in keyPressEvent)
 
+    m_resetZoomAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_R));
     m_showTotalAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_T));
     m_showLegendAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_L));
     m_showSymbolsAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_S));
     m_showVLinesAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_V));
 #if QT_VERSION >= 0x050A00
+    m_resetZoomAction->setShortcutVisibleInContextMenu(true);
     m_showTotalAction->setShortcutVisibleInContextMenu(true);
     m_showLegendAction->setShortcutVisibleInContextMenu(true);
     m_showSymbolsAction->setShortcutVisibleInContextMenu(true);
@@ -298,12 +270,7 @@ void ChartWidget::setModel(ChartModel* model, bool minimalMode)
     }
 #elif defined(QWT_FOUND)
     connect(model, SIGNAL(modelReset()), this, SLOT(modelReset()));
-    m_model = model;
-
-    m_plot->setCanvasBackground(Qt::white);
-    m_plot->enableAxis(QwtPlot::yRight);
-    m_plot->enableAxis(QwtPlot::yLeft, false);
-
+    m_plot->setModel(model);
 #ifdef SHOW_TABLES
     totalProxy = new ChartProxy(true, this);
     totalProxy->setSourceModel(model);
@@ -326,21 +293,23 @@ QSize ChartWidget::sizeHint() const
 #ifdef QWT_FOUND
 void ChartWidget::modelReset()
 {
-    updateQwtChart();
+    m_plot->rebuild(true);
 }
 
 #ifndef QT_NO_CONTEXTMENU
 void ChartWidget::contextMenuEvent(QContextMenuEvent *event)
 {
     QMenu menu(this);
-    m_showTotalAction->setChecked(m_showTotal);
+    menu.addAction(m_resetZoomAction);
+    menu.addSeparator();
+    m_showTotalAction->setChecked(m_plot->hasOption(ChartWidgetQwtPlot::ShowTotal));
     menu.addAction(m_showTotalAction);
     menu.addSeparator();
-    m_showLegendAction->setChecked(m_showLegend);
+    m_showLegendAction->setChecked(m_plot->hasOption(ChartWidgetQwtPlot::ShowLegend));
     menu.addAction(m_showLegendAction);
-    m_showSymbolsAction->setChecked(m_showSymbols);
+    m_showSymbolsAction->setChecked(m_plot->hasOption(ChartWidgetQwtPlot::ShowSymbols));
     menu.addAction(m_showSymbolsAction);
-    m_showVLinesAction->setChecked(m_showVLines);
+    m_showVLinesAction->setChecked(m_plot->hasOption(ChartWidgetQwtPlot::ShowVLines));
     menu.addAction(m_showVLinesAction);
     menu.exec(event->globalPos());
 }
@@ -352,17 +321,20 @@ void ChartWidget::keyPressEvent(QKeyEvent *event)
     {
         switch (event->key())
         {
+        case Qt::Key_R:
+            resetZoom();
+            break;
         case Qt::Key_T:
-            toggleShowTotal(!globalShowTotal);
+            toggleShowTotal(!m_plot->hasOption(ChartWidgetQwtPlot::ShowTotal));
             break;
         case Qt::Key_L:
-            toggleShowLegend(!globalShowLegend);
+            toggleShowLegend(!m_plot->hasOption(ChartWidgetQwtPlot::ShowLegend));
             break;
         case Qt::Key_S:
-            toggleShowSymbols(!globalShowSymbols);
+            toggleShowSymbols(!m_plot->hasOption(ChartWidgetQwtPlot::ShowSymbols));
             break;
         case Qt::Key_V:
-            toggleShowVLines(!globalShowVLines);
+            toggleShowVLines(!m_plot->hasOption(ChartWidgetQwtPlot::ShowVLines));
             break;
         default:
             event->ignore();
@@ -376,181 +348,34 @@ void ChartWidget::keyPressEvent(QKeyEvent *event)
     }
 }
 
+void ChartWidget::updateIfOptionsChanged()
+{
+    m_plot->setOptions(globalOptions);
+}
+
+void ChartWidget::resetZoom()
+{
+    m_plot->resetZoom();
+}
+
 void ChartWidget::toggleShowTotal(bool checked)
 {
-    globalShowTotal = checked;
-    updateIfOptionsChanged();
+    globalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowTotal, checked);
 }
 
 void ChartWidget::toggleShowLegend(bool checked)
 {
-    globalShowLegend = checked;
-    updateIfOptionsChanged();
+    globalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowLegend, checked);
 }
 
 void ChartWidget::toggleShowSymbols(bool checked)
 {
-    globalShowSymbols = checked;
-    updateIfOptionsChanged();
+    globalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowSymbols, checked);
 }
 
 void ChartWidget::toggleShowVLines(bool checked)
 {
-    globalShowVLines = checked;
-    updateIfOptionsChanged();
-}
-
-void ChartWidget::updateIfOptionsChanged()
-{
-    bool update = false;
-    if (m_showTotal != globalShowTotal)
-    {
-        m_showTotal = globalShowTotal;
-        update = true;
-    }
-    if (m_showLegend != globalShowLegend)
-    {
-        m_showLegend = globalShowLegend;
-        update = true;
-    }
-    if (m_showSymbols != globalShowSymbols)
-    {
-        m_showSymbols = globalShowSymbols;
-        update = true;
-    }
-    if (m_showVLines != globalShowVLines)
-    {
-        m_showVLines = globalShowVLines;
-        update = true;
-    }
-    if (update)
-    {
-        updateQwtChart();
-    }
-}
-
-static QString getCurveTitle(QString label)
-{
-    const int MaxLineLength = 48;
-
-    int labelLength = label.size();
-    if (labelLength <= MaxLineLength)
-    {
-        return label;
-    }
-    static QRegularExpression delimBefore("[(<]");
-    static QRegularExpression delimAfter("[- .,)>\\/]");
-    QString result;
-    do
-    {
-        int i = -1;
-        int wrapAfter = 0;
-        int i1 = label.indexOf(delimBefore, MaxLineLength);
-        int i2 = label.indexOf(delimAfter, MaxLineLength - 1);
-        if (i1 >= 0)
-        {
-            if (i2 >= 0)
-            {
-                if (i2 < i1)
-                {
-                    i = i2;
-                    wrapAfter = 1;
-                }
-                else
-                {
-                    i = i1;
-                }
-            }
-            else
-            {
-                i = i1;
-            }
-        }
-        else
-        {
-            i = i2;
-            wrapAfter = 1;
-        }
-        if (i < 0)
-        {
-            break;
-        }
-        i += wrapAfter;
-        result += label.left(i).toHtmlEscaped();
-        label.remove(0, i);
-        if (label.isEmpty()) // special: avoid <br> at the end
-        {
-            return result;
-        }
-        result += "<br>";
-        labelLength -= i;
-    }
-    while (labelLength > MaxLineLength);
-    result += label.toHtmlEscaped();
-    return result;
-}
-
-void ChartWidget::updateQwtChart()
-{
-    int columns = m_model->columnCount();
-    int rows = m_model->rowCount();
-
-    m_plot->detachItems();
-
-    m_plot->insertLegend(m_showLegend ? new QwtLegend() : nullptr);
-
-    m_plot->setAxisTitle(QwtPlot::xBottom, m_model->headerData(0).toString());
-    m_plot->setAxisTitle(QwtPlot::yRight, m_model->headerData(1).toString());
-    m_plot->setAxisScaleDraw(QwtPlot::xBottom, new TimeScaleDraw());
-    if (!(m_model->type() == ChartModel::Allocations || m_model->type() == ChartModel::Instances ||
-          m_model->type() == ChartModel::Temporary))
-    {
-        m_plot->setAxisScaleDraw(QwtPlot::yRight, new SizeScaleDraw());
-    }
-
-    auto grid = new QwtPlotGrid();
-    grid->attach(m_plot);
-
-    int column = 1;
-    if (!m_showTotal)
-    {
-        column += 2;
-    }
-    for (; column < columns; column += 2)
-    {
-        auto curve = new QwtPlotCurve(getCurveTitle(m_model->getColumnLabel(column)));
-        curve->setRenderHint(QwtPlotItem::RenderAntialiased, true);
-        curve->setYAxis(QwtPlot::yRight);
-
-        curve->setPen(m_model->getColumnDataSetPen(column - 1));
-        curve->setBrush(m_model->getColumnDataSetBrush(column - 1));
-
-        auto adapter = new ChartModel2QwtSeriesData(m_model, column);
-        curve->setSamples(adapter);
-
-        if (m_showSymbols)
-        {
-            QwtSymbol *symbol = new QwtSymbol(QwtSymbol::Ellipse,
-                QBrush(Qt::white), QPen(Qt::black, 2), QSize(6, 6));
-            curve->setSymbol(symbol);
-        }
-
-        curve->attach(m_plot);
-    }
-
-    if (m_showVLines)
-    {
-        for (int row = 1; row < rows; ++row)
-        {
-            auto marker = new QwtPlotMarker();
-            marker->setLinePen(m_vLinePen);
-            marker->setLineStyle(QwtPlotMarker::VLine);
-            marker->setXValue(m_model->getTimestamp(row));
-            marker->attach(m_plot);
-        }
-    }
-
-    m_plot->replot();
+    globalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowVLines, checked);
 }
 #endif // QWT_FOUND
 
