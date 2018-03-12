@@ -33,7 +33,9 @@ class SizeScaleDraw: public QwtScaleDraw
 class Zoomer: public QwtPlotZoomer
 {
 public:
-    Zoomer(ChartWidgetQwtPlot *plot) : QwtPlotZoomer(plot->canvas()), m_plot(plot)
+    Zoomer(ChartWidgetQwtPlot *plot)
+        : QwtPlotZoomer(QwtPlot::xBottom, QwtPlot::yRight, plot->canvas()),
+          m_plot(plot)
     {
         setRubberBandPen(QColor(Qt::darkGreen));
         setTrackerMode(QwtPlotPicker::AlwaysOn);
