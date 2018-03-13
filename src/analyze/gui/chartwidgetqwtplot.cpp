@@ -74,16 +74,18 @@ ChartWidgetQwtPlot::ChartWidgetQwtPlot(QWidget *parent, Options options)
     enableAxis(QwtPlot::yRight);
     enableAxis(QwtPlot::yLeft, false);
 
+    // TODO!! show help about zooming and panning
+
     // LeftButton for the zooming
     // Shift+LeftButton: zoom out by 1
     // Ctrl+LeftButton: zoom out to full size
     m_zoomer->setMousePattern(QwtEventPattern::MouseSelect2, Qt::LeftButton, Qt::ControlModifier);
     m_zoomer->setMousePattern(QwtEventPattern::MouseSelect3, Qt::LeftButton, Qt::ShiftModifier);
-/*
-    // MidButton for the panning
+
+    // Alt+LeftButton for the panning
     auto panner = new QwtPlotPanner(canvas());
-    panner->setMouseButton(Qt::MidButton);
-*/
+    panner->setMouseButton(Qt::LeftButton, Qt::AltModifier);
+
     m_vLinePen.setStyle(Qt::DashLine);
     m_vLinePen.setColor(Qt::gray);
 }
@@ -180,6 +182,14 @@ void ChartWidgetQwtPlot::rebuild(bool resetZoomAndPan)
 
     if (resetZoomAndPan)
     {
+        if (!m_xScaleDiv.isEmpty())
+        {
+            setAxisScaleDiv(QwtPlot::xBottom, m_xScaleDiv);
+        }
+        if (!m_yScaleDiv.isEmpty())
+        {
+            setAxisScaleDiv(QwtPlot::yRight, m_yScaleDiv);
+        }
         setAxisAutoScale(QwtPlot::xBottom, true);
         setAxisAutoScale(QwtPlot::yRight, true);
     }
@@ -256,13 +266,31 @@ void ChartWidgetQwtPlot::rebuild(bool resetZoomAndPan)
     if (resetZoomAndPan)
     {
         m_zoomer->setZoomBase(false);
+        m_xScaleDiv = axisScaleDiv(QwtPlot::xBottom);
+        m_yScaleDiv = axisScaleDiv(QwtPlot::yRight);
     }
 }
 
 void ChartWidgetQwtPlot::resetZoom()
 {
-    if (m_zoomer)
+    bool doReplot = false;
+    if (m_zoomer->zoomRectIndex() != 0)
     {
         m_zoomer->zoom(0);
+        doReplot = true;
+    }
+    if (!m_xScaleDiv.isEmpty() && (m_xScaleDiv != axisScaleDiv(QwtPlot::xBottom)))
+    {
+        setAxisScaleDiv(QwtPlot::xBottom, m_xScaleDiv);
+        doReplot = true;
+    }
+    if (!m_yScaleDiv.isEmpty() && (m_yScaleDiv != axisScaleDiv(QwtPlot::yRight)))
+    {
+        setAxisScaleDiv(QwtPlot::yRight, m_yScaleDiv);
+        doReplot = true;
+    }
+    if (doReplot)
+    {
+        replot();
     }
 }

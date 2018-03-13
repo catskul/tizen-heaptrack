@@ -2,6 +2,7 @@
 #define CHARTWIDGETQWTPLOT_H
 
 #include <qwt_plot.h>
+#include <qwt_scale_div.h>
 
 #include <QPen>
 
@@ -48,6 +49,8 @@ private:
     QPen m_vLinePen;
 
     Zoomer *m_zoomer;
+
+    QwtScaleDiv m_xScaleDiv, m_yScaleDiv;
 };
 
 inline ChartWidgetQwtPlot::Options operator | (ChartWidgetQwtPlot::Options i, ChartWidgetQwtPlot::Options f)

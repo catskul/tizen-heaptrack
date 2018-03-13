@@ -105,8 +105,8 @@ ChartWidget::ChartWidget(QWidget* parent)
 #elif defined(QWT_FOUND)
     layout->addWidget(m_plot);
 
-    m_resetZoomAction = new QAction(i18n("Reset Zoom"), this);
-    m_resetZoomAction->setStatusTip(i18n("Reset the chart zoom factor"));
+    m_resetZoomAction = new QAction(i18n("Reset Zoom and Pan"), this);
+    m_resetZoomAction->setStatusTip(i18n("Reset the chart zoom and pan"));
     connect(m_resetZoomAction, &QAction::triggered, this, &ChartWidget::resetZoom);
 
     m_showTotalAction = new QAction(i18n("Show Total"), this);
