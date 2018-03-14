@@ -19,14 +19,27 @@
 #ifndef HISTOGRAMWIDGET_H
 #define HISTOGRAMWIDGET_H
 
+#include "gui_config.h"
+
 #include <QWidget>
 
+//!! for debugging
+#define SHOW_TABLES
+
+#ifdef SHOW_TABLES
+#include <QTableView>
+#endif
+
+#if defined(KChart_FOUND)
 namespace KChart {
 class Chart;
 class BarDiagram;
 }
+#elif defined(QWT_FOUND)
+#include "histogramwidgetqwtplot.h"
+#endif
 
-class QAbstractItemModel;
+class HistogramModel;
 
 class HistogramWidget : public QWidget
 {
@@ -35,12 +48,25 @@ public:
     explicit HistogramWidget(QWidget* parent = nullptr);
     virtual ~HistogramWidget();
 
-    void setModel(QAbstractItemModel* model);
+    void setModel(HistogramModel* model);
+
+#if defined(QWT_FOUND)
+public slots:
+    void modelReset();
+#endif
 
 private:
+#if defined(KChart_FOUND)
     KChart::Chart* m_chart;
     KChart::BarDiagram* m_total;
     KChart::BarDiagram* m_detailed;
+#elif defined(QWT_FOUND)
+    HistogramWidgetQwtPlot* m_plot;
+#endif
+#ifdef SHOW_TABLES
+    QTableView* m_tableViewTotal;
+    QTableView* m_tableViewNoTotal;
+#endif
 };
 
 #endif // HISTOGRAMWIDGET_H

@@ -84,11 +84,13 @@ QWT_CHART {
 
     SOURCES += \
         analyze/gui/chartmodel2qwtseriesdata.cpp \
-        analyze/gui/chartwidgetqwtplot.cpp
+        analyze/gui/chartwidgetqwtplot.cpp \
+        analyze/gui/histogramwidgetqwtplot.cpp
 
     HEADERS += \
         analyze/gui/chartmodel2qwtseriesdata.h \
-        analyze/gui/chartwidgetqwtplot.h
+        analyze/gui/chartwidgetqwtplot.h \
+        analyze/gui/histogramwidgetqwtplot.h
 }
 
 USE_CHART {
@@ -97,14 +99,14 @@ USE_CHART {
         analyze/gui/chartproxy.cpp \
         analyze/gui/chartwidget.cpp \
         analyze/gui/histogrammodel.cpp \
-#        analyze/gui/histogramwidget.cpp
+        analyze/gui/histogramwidget.cpp
 
     HEADERS += \
         analyze/gui/chartmodel.h \
         analyze/gui/chartproxy.h \
         analyze/gui/chartwidget.h \
         analyze/gui/histogrammodel.h \
-#        analyze/gui/histogramwidget.h
+        analyze/gui/histogramwidget.h
 }
 
 !NO_K_LIB {
@@ -124,12 +126,6 @@ USE_CHART {
 
 !NO_K_CHART {
     QT += KChart
-
-    SOURCES += \
-        analyze/gui/histogramwidget.cpp
-
-    HEADERS += \
-        analyze/gui/histogramwidget.h
 
     FORMS += \
         analyze/gui/mainwindow.ui

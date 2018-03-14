@@ -21,6 +21,7 @@
 #include <QSortFilterProxyModel>
 #include <QVBoxLayout>
 
+#if defined(KChart_FOUND)
 #include <KChartBarDiagram>
 #include <KChartChart>
 
@@ -31,6 +32,7 @@
 #include <KChartGridAttributes>
 #include <KChartHeaderFooter>
 #include <KChartLegend>
+#endif
 
 #ifdef NO_K_LIB
 #include "noklib.h"
@@ -44,9 +46,12 @@
 
 #include "histogrammodel.h"
 
+#ifdef KChart_FOUND
 using namespace KChart;
+#endif
 
 namespace {
+#if defined(KChart_FOUND)
 class SizeAxis : public CartesianAxis
 {
     Q_OBJECT
@@ -62,6 +67,7 @@ public:
         return Util::formatByteSize(label.toDouble(), 1);
     }
 };
+#endif
 
 class HistogramProxy : public QSortFilterProxyModel
 {
@@ -91,14 +97,37 @@ private:
 
 HistogramWidget::HistogramWidget(QWidget* parent)
     : QWidget(parent)
+#if defined(KChart_FOUND)
     , m_chart(new KChart::Chart(this))
     , m_total(new BarDiagram(this))
     , m_detailed(new BarDiagram(this))
+#elif defined(QWT_FOUND)
+    , m_plot(new HistogramWidgetQwtPlot(this))
+#endif
+#ifdef SHOW_TABLES
+    , m_tableViewTotal(new QTableView(this))
+    , m_tableViewNoTotal(new QTableView(this))
+#endif
 {
     auto layout = new QVBoxLayout(this);
+#if defined(KChart_FOUND)
     layout->addWidget(m_chart);
+#elif defined(QWT_FOUND)
+    layout->addWidget(m_plot);
+#endif
+#ifdef SHOW_TABLES
+    auto hLayout = new QHBoxLayout();
+    hLayout->addWidget(m_tableViewTotal);
+    hLayout->addWidget(m_tableViewNoTotal);
+    hLayout->setStretch(0, 25);
+    hLayout->setStretch(1, 75);
+    layout->addLayout(hLayout);
+    layout->setStretch(0, 100);
+    layout->setStretch(1, 100);
+#endif
     setLayout(layout);
 
+#ifdef KChart_FOUND
     auto* coordinatePlane = dynamic_cast<CartesianCoordinatePlane*>(m_chart->coordinatePlane());
     Q_ASSERT(coordinatePlane);
 
@@ -142,22 +171,49 @@ HistogramWidget::HistogramWidget(QWidget* parent)
 
         m_detailed->setType(BarDiagram::Stacked);
     }
+#endif
 }
 
 HistogramWidget::~HistogramWidget() = default;
 
-void HistogramWidget::setModel(QAbstractItemModel* model)
+void HistogramWidget::setModel(HistogramModel *model)
 {
+#if defined(KChart_FOUND) || defined(SHOW_TABLES)
+    HistogramProxy *totalProxy, *proxy;
+#endif
+#if defined(KChart_FOUND)
     {
-        auto proxy = new HistogramProxy(true, this);
-        proxy->setSourceModel(model);
-        m_total->setModel(proxy);
+        totalProxy = new HistogramProxy(true, this);
+        totalProxy->setSourceModel(model);
+        m_total->setModel(totalProxy);
     }
     {
-        auto proxy = new HistogramProxy(false, this);
+        proxy = new HistogramProxy(false, this);
         proxy->setSourceModel(model);
         m_detailed->setModel(proxy);
     }
+#elif defined(QWT_FOUND)
+    connect(model, SIGNAL(modelReset()), this, SLOT(modelReset()));
+    m_plot->setModel(model);
+#ifdef SHOW_TABLES
+    totalProxy = new HistogramProxy(true, this);
+    totalProxy->setSourceModel(model);
+
+    proxy = new HistogramProxy(false, this);
+    proxy->setSourceModel(model);
+#endif // SHOW_TABLES
+#endif // QWT_FOUND, KChart_FOUND
+#ifdef SHOW_TABLES
+    m_tableViewTotal->setModel(totalProxy);
+    m_tableViewNoTotal->setModel(proxy);
+#endif
 }
+
+#if defined(QWT_FOUND)
+void HistogramWidget::modelReset()
+{
+    m_plot->rebuild(true);
+}
+#endif
 
 #include "histogramwidget.moc"

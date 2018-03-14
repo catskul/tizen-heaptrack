@@ -78,6 +78,8 @@ private slots:
     void toggleShowSymbols(bool checked);
     void toggleShowVLines(bool checked);
 private:
+    void createActions();
+
     ChartWidgetQwtPlot* m_plot;
 
     QAction* m_resetZoomAction;
@@ -87,7 +89,7 @@ private:
     QAction* m_showVLinesAction;
 
     static ChartWidgetQwtPlot::Options globalOptions;
-#endif
+#endif // QWT_FOUND, KChart_FOUND
 #ifdef SHOW_TABLES
     QTableView* m_tableViewTotal;
     QTableView* m_tableViewNoTotal;

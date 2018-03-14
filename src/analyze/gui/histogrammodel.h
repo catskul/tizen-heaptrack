@@ -64,6 +64,8 @@ public:
     void resetData(const HistogramData& data);
     void clearData();
 
+    QColor getColumnColor(int column) const;
+
 private:
     HistogramData m_data;
 };

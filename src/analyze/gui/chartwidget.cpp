@@ -105,6 +105,30 @@ ChartWidget::ChartWidget(QWidget* parent)
 #elif defined(QWT_FOUND)
     layout->addWidget(m_plot);
 
+    createActions();
+#endif
+#ifdef SHOW_TABLES
+    auto hLayout = new QHBoxLayout();
+    hLayout->addWidget(m_tableViewTotal);
+    hLayout->addWidget(m_tableViewNoTotal);
+    layout->addLayout(hLayout);
+    layout->setStretch(0, 100);
+    layout->setStretch(1, 100);
+#endif
+    setLayout(layout);
+
+#ifdef KChart_FOUND
+    auto* coordinatePlane = dynamic_cast<CartesianCoordinatePlane*>(m_chart->coordinatePlane());
+    Q_ASSERT(coordinatePlane);
+    coordinatePlane->setRubberBandZoomingEnabled(true);
+    coordinatePlane->setAutoAdjustGridToZoom(true);
+#endif
+}
+
+ChartWidget::~ChartWidget() = default;
+
+void ChartWidget::createActions()
+{
     m_resetZoomAction = new QAction(i18n("Reset Zoom and Pan"), this);
     m_resetZoomAction->setStatusTip(i18n("Reset the chart zoom and pan"));
     connect(m_resetZoomAction, &QAction::triggered, this, &ChartWidget::resetZoom);
@@ -145,26 +169,7 @@ ChartWidget::ChartWidget(QWidget* parent)
     m_showVLinesAction->setShortcutVisibleInContextMenu(true);
 #endif
     setFocusPolicy(Qt::StrongFocus);
-#endif
-#ifdef SHOW_TABLES
-    auto hLayout = new QHBoxLayout();
-    hLayout->addWidget(m_tableViewTotal);
-    hLayout->addWidget(m_tableViewNoTotal);
-    layout->addLayout(hLayout);
-    layout->setStretch(0, 100);
-    layout->setStretch(1, 100);
-#endif
-    setLayout(layout);
-
-#ifdef KChart_FOUND
-    auto* coordinatePlane = dynamic_cast<CartesianCoordinatePlane*>(m_chart->coordinatePlane());
-    Q_ASSERT(coordinatePlane);
-    coordinatePlane->setRubberBandZoomingEnabled(true);
-    coordinatePlane->setAutoAdjustGridToZoom(true);
-#endif
 }
-
-ChartWidget::~ChartWidget() = default;
 
 void ChartWidget::setModel(ChartModel* model, bool minimalMode)
 {
@@ -278,7 +283,7 @@ void ChartWidget::setModel(ChartModel* model, bool minimalMode)
     proxy = new ChartProxy(false, this);
     proxy->setSourceModel(model);
 #endif // SHOW_TABLES
-#endif // QWT_FOUND
+#endif // QWT_FOUND, KChart_FOUND
 #ifdef SHOW_TABLES
     m_tableViewTotal->setModel(totalProxy);
     m_tableViewNoTotal->setModel(proxy);

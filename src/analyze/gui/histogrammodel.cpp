@@ -83,6 +83,9 @@ QVariant HistogramModel::data(const QModelIndex& index, int role) const
         if (index.column() == 0) {
             return i18n("%1 allocations in total", column.allocations);
         }
+        if (!column.location) {
+            return {};
+        }
         if (!column.location->file.isEmpty()) {
             return i18n("%1 allocations from %2 at %3:%4 in %5", column.allocations, column.location->function,
                         column.location->file, column.location->line, column.location->module);
@@ -121,4 +124,9 @@ void HistogramModel::clearData()
     beginResetModel();
     m_data = {};
     endResetModel();
+}
+
+QColor HistogramModel::getColumnColor(int column) const
+{
+    return colorForColumn(column, columnCount());
 }

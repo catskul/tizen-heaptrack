@@ -118,9 +118,10 @@ void ChartWidgetQwtPlot::setOptions(Options options)
 static QString getCurveTitle(QString label)
 {
     const int MaxLineLength = 48;
+    const int LastLineExtra = 12; // take into account the label continuation " (max=...)"
 
     int labelLength = label.size();
-    if (labelLength <= MaxLineLength)
+    if (labelLength + LastLineExtra <= MaxLineLength)
     {
         return label.toHtmlEscaped();
     }
@@ -171,7 +172,7 @@ static QString getCurveTitle(QString label)
         result += "<br>";
         labelLength -= i;
     }
-    while (labelLength > MaxLineLength);
+    while (labelLength + LastLineExtra > MaxLineLength);
     result += label.toHtmlEscaped();
     return result;
 }

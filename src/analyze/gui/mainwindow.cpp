@@ -56,14 +56,9 @@
 
 #if USE_CHART
 #include "chartmodel.h"
+#include "chartproxy.h"
 #include "chartwidget.h"
 #include "histogrammodel.h"
-#endif
-#if KChart_FOUND
-//!!#include "chartmodel.h"
-#include "chartproxy.h"
-//!!#include "chartwidget.h"
-//!!#include "histogrammodel.h"
 #include "histogramwidget.h"
 #endif
 
@@ -468,7 +463,6 @@ MainWindow::MainWindow(QWidget* parent)
                         &Parser::temporaryChartDataAvailable, this);
         }
 
-#ifdef KChart_FOUND
         auto sizesTab = new HistogramWidget(this);
         m_ui->tabWidget->addTab(sizesTab, i18n("Sizes"));
         m_ui->tabWidget->setTabEnabled(m_ui->tabWidget->indexOf(sizesTab), false);
@@ -480,7 +474,6 @@ MainWindow::MainWindow(QWidget* parent)
                 sizeHistogramModel->resetData(data);
                 m_ui->tabWidget->setTabEnabled(m_ui->tabWidget->indexOf(sizesTab), true);
                 });
-#endif
     }
 #endif
 
