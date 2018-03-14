@@ -24,7 +24,7 @@
 #include <QWidget>
 
 //!! for debugging
-#define SHOW_TABLES
+//#define SHOW_TABLES
 
 #ifdef SHOW_TABLES
 #include <QTableView>
