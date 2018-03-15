@@ -25,6 +25,8 @@ public:
 
     void setModel(ChartModel* model);
 
+    bool isSizeModel() const { return m_isSizeModel; }
+
     Options options() const { return m_options; }
 
     bool hasOption(Options option) const { return (m_options & option) != 0; }
@@ -37,9 +39,15 @@ public:
 
     void resetZoom();
 
-    bool isSizeModel() const { return m_isSizeModel; }
+    bool getCurveTooltip(const QPointF &position, QString &tooltip) const;
 
 private:
+    friend class Zoomer;
+
+    void clearTooltip();
+
+    void restoreTooltip();
+
     ChartModel *m_model;
 
     bool m_isSizeModel;
@@ -51,6 +59,8 @@ private:
     Zoomer *m_zoomer;
 
     QwtScaleDiv m_xScaleDiv, m_yScaleDiv;
+
+    QString m_plotTooltip;
 };
 
 inline ChartWidgetQwtPlot::Options operator | (ChartWidgetQwtPlot::Options i, ChartWidgetQwtPlot::Options f)

@@ -12,7 +12,9 @@
 #include <qwt_scale_draw.h>
 #include <qwt_symbol.h>
 
-#include <QRegularExpression>
+#include <QToolTip>
+
+#include <limits>
 
 class TimeScaleDraw: public QwtScaleDraw
 {
@@ -44,16 +46,31 @@ public:
 protected:
     virtual QwtText trackerTextF(const QPointF &pos) const
     {
-        QString value;
-        if (m_plot->isSizeModel())
+//qDebug() << "pos.x=" << pos.x() << "; pos.y=" << pos.y();
+        if ((pos.x() < 0) || (pos.y() < 0))
         {
-            value = Util::formatByteSize(pos.y());
+            return {};
         }
-        else
+        QString s;
+        if (m_plot->getCurveTooltip(pos, s))
         {
-            value = QString::number((qint64)pos.y());
+            m_plot->clearTooltip();
         }
-        QwtText text(QString(" %1 : %2 ").arg(Util::formatTime((qint64)pos.x())).arg(value));
+        else // show default text
+        {
+            QString value;
+            if (m_plot->isSizeModel())
+            {
+                value = Util::formatByteSize(pos.y());
+            }
+            else
+            {
+                value = QString::number((qint64)pos.y());
+            }
+            s = QString(" %1 : %2 ").arg(Util::formatTime((qint64)pos.x())).arg(value);
+            m_plot->restoreTooltip();
+        }
+        QwtText text(s);
         text.setColor(Qt::white);
         QColor c = rubberBandPen().color();
         text.setBorderPen(QPen(c));
@@ -115,70 +132,10 @@ void ChartWidgetQwtPlot::setOptions(Options options)
     }
 }
 
-static QString getCurveTitle(QString label)
-{
-    const int MaxLineLength = 48;
-    const int LastLineExtra = 12; // take into account the label continuation " (max=...)"
-
-    int labelLength = label.size();
-    if (labelLength + LastLineExtra <= MaxLineLength)
-    {
-        return label.toHtmlEscaped();
-    }
-    static QRegularExpression delimBefore("[(<]");
-    static QRegularExpression delimAfter("[- .,)>\\/]");
-    QString result;
-    do
-    {
-        int i = -1;
-        int wrapAfter = 0;
-        int i1 = label.indexOf(delimBefore, MaxLineLength);
-        int i2 = label.indexOf(delimAfter, MaxLineLength - 1);
-        if (i1 >= 0)
-        {
-            if (i2 >= 0)
-            {
-                if (i2 < i1)
-                {
-                    i = i2;
-                    wrapAfter = 1;
-                }
-                else
-                {
-                    i = i1;
-                }
-            }
-            else
-            {
-                i = i1;
-            }
-        }
-        else
-        {
-            i = i2;
-            wrapAfter = 1;
-        }
-        if (i < 0)
-        {
-            break;
-        }
-        i += wrapAfter;
-        result += label.left(i).toHtmlEscaped();
-        label.remove(0, i);
-        if (label.isEmpty()) // special: avoid <br> at the end
-        {
-            return result;
-        }
-        result += "<br>";
-        labelLength -= i;
-    }
-    while (labelLength + LastLineExtra > MaxLineLength);
-    result += label.toHtmlEscaped();
-    return result;
-}
-
 void ChartWidgetQwtPlot::rebuild(bool resetZoomAndPan)
 {
+    const int MaxTitleLineLength = 48;
+
     detachItems();
 
     if (resetZoomAndPan)
@@ -227,10 +184,12 @@ void ChartWidgetQwtPlot::rebuild(bool resetZoomAndPan)
         QRectF bounds = adapter->boundingRect();
         qint64 maxCost = bounds.bottom();
 
-        QString title = getCurveTitle(m_model->getColumnLabel(column));
-        title += QString(" (max=<b>%1</b>)").arg(
-            m_isSizeModel ? Util::formatByteSize(maxCost) : QString::number(maxCost));
-        auto curve = new QwtPlotCurve(title);
+        QString titleEnd = QString(" (max=<b>%1</b>)").arg(m_isSizeModel
+            ? Util::formatByteSize(maxCost) : QString::number(maxCost));
+        int lastLineExtra = titleEnd.length() - 2 * 3; // minus the two "<b>" tags length
+        auto curve = new QwtPlotCurve(
+            Util::wrapLabel(m_model->getColumnLabel(column), MaxTitleLineLength, lastLineExtra) +
+            titleEnd);
         curve->setRenderHint(QwtPlotItem::RenderAntialiased, true);
         curve->setYAxis(QwtPlot::yRight);
 
@@ -293,5 +252,66 @@ void ChartWidgetQwtPlot::resetZoom()
     if (doReplot)
     {
         replot();
+    }
+}
+
+bool ChartWidgetQwtPlot::getCurveTooltip(const QPointF &position, QString &tooltip) const
+{
+    qint64 timestamp = position.x();
+    qreal cost = position.y();
+    if ((timestamp < 0) || (cost < 0))
+    {
+        return false;
+    }
+    int row = m_model->getRowForTimestamp(position.x());
+    if (row < 0)
+    {
+        return false;
+    }
+    // find a column which value (cost) for the row found is greater than or equal to
+    // 'cost' and at the same time this value is the smallest from all such values
+    qint64 minCostFound = std::numeric_limits<qint64>::max();
+    int columnFound = -1;
+    int column = 1;
+    if (!hasOption(ShowTotal))
+    {
+        column += 2;
+    }
+    int columns = m_model->columnCount();
+    for (; column < columns; column += 2)
+    {
+        qint64 columnCost = m_model->getCost(row, column);
+        if ((columnCost >= cost) && (columnCost <= minCostFound))
+        {
+            minCostFound = columnCost;
+            columnFound = column;
+        }
+    }
+    if (columnFound >= 0)
+    {
+//qDebug() << "timestamp: " << timestamp << " ms; row timestamp: " << m_model->getTimestamp(row) << " ms; cost="
+//         << cost << "; row=" << row << "; minCostFound=" << minCostFound;
+        tooltip = QString(" %1 ").arg(
+            m_model->data(m_model->index(row, columnFound), Qt::ToolTipRole).toString());
+        return true;
+    }
+    return false;
+}
+
+void ChartWidgetQwtPlot::clearTooltip()
+{
+    if (m_plotTooltip.isEmpty())
+    {
+        m_plotTooltip = parentWidget()->toolTip();
+    }
+    parentWidget()->setToolTip(QString());
+    QToolTip::hideText();
+}
+
+void ChartWidgetQwtPlot::restoreTooltip()
+{
+    if (!m_plotTooltip.isEmpty())
+    {
+        parentWidget()->setToolTip(m_plotTooltip);
     }
 }

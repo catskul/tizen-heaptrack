@@ -31,6 +31,8 @@
 #include <KLocalizedString>
 #endif
 
+#include <algorithm>
+
 #include <QBrush>
 #include <QDebug>
 #include <QPen>
@@ -165,7 +167,7 @@ QVariant ChartModel::data(const QModelIndex& index, int role) const
                             byteCost(), time);
             }
         } else {
-            const auto label = m_data.labels.value(column).toHtmlEscaped();
+            const auto label = Util::wrapLabel(m_data.labels.value(column), 96);
             switch (m_type) {
             case Allocations:
                 return i18n("<qt>%2 allocations after %3 from:<p "
@@ -214,9 +216,16 @@ void ChartModel::resetData(const ChartData& data)
     Q_ASSERT(m_data.labels.size() < ChartRows::MAX_NUM_COST);
     beginResetModel();
     m_data = data;
+    m_timestamps.clear();
+    const int rows = rowCount();
+    m_timestamps.reserve(rows);
+    for (int row = 0; row < rows; ++row)
+    {
+        m_timestamps.append(m_data.rows[row].timeStamp);
+    }
     m_columnDataSetBrushes.clear();
     m_columnDataSetPens.clear();
-    const auto columns = columnCount();
+    const int columns = columnCount();
     for (int i = 0; i < columns; ++i) {
         auto color = colorForColumn(i, columns);
 #ifdef QWT_FOUND
@@ -232,6 +241,7 @@ void ChartModel::clearData()
 {
     beginResetModel();
     m_data = {};
+    m_timestamps = {};
     m_columnDataSetBrushes = {};
     m_columnDataSetPens = {};
     endResetModel();
@@ -239,7 +249,12 @@ void ChartModel::clearData()
 
 qint64 ChartModel::getTimestamp(int row) const
 {
-    return m_data.rows[row].timeStamp;
+    return m_timestamps[row];
+}
+
+qint64 ChartModel::getCost(int row, int column) const
+{
+    return m_data.rows[row].cost[column / 2];
 }
 
 QString ChartModel::getColumnLabel(int column) const
@@ -255,4 +270,26 @@ const QPen& ChartModel::getColumnDataSetPen(int column) const
 const QBrush& ChartModel::getColumnDataSetBrush(int column) const
 {
     return m_columnDataSetBrushes[column];
+}
+
+int ChartModel::getRowForTimestamp(qint64 timestamp) const
+{
+    // check if 'timestamp' is not greater than the maximum available timestamp
+    int lastIndex = m_timestamps.size() - 1;
+    if (!((lastIndex >= 0) && (timestamp <= m_timestamps[lastIndex])))
+    {
+        return false;
+    }
+    int result;
+    // find the first element that is greater than 'timestamp'
+    auto up_it = std::upper_bound(m_timestamps.begin(), m_timestamps.end(), timestamp);
+    if (up_it != m_timestamps.end())
+    {
+        result = up_it - m_timestamps.begin() - 1;
+    }
+    else // all elements are not greater than 'timestamp'
+    {
+        result = lastIndex; // due to check in the beginning of the function
+    }
+    return result;
 }

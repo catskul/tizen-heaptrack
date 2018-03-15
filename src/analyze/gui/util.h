@@ -20,14 +20,16 @@
 #define UTIL_H
 
 #include <qglobal.h>
-
-class QString;
+#include <QString>
 
 namespace Util {
 
 QString formatTime(qint64 ms);
 
 QString formatByteSize(double size, int precision = 1);
+
+QString wrapLabel(QString label, int maxLineLength, int lastLineExtra = 0,
+                  const QString &delimiter = QString("<br>"));
 
 }
 

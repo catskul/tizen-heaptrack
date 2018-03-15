@@ -11,13 +11,13 @@ void ChartModel2QwtSeriesData::updateBoundingRect()
     int rows = m_model->rowCount();
     if (rows > 0)
     {
-        m_boundingRect.setLeft(m_model->data(m_model->index(0, 0)).toDouble());
-        m_boundingRect.setTop(m_model->data(m_model->index(0, m_column)).toDouble());
-        m_boundingRect.setRight(m_model->data(m_model->index(rows - 1, 0)).toDouble());
-        qreal maxCost = -1E9;
+        m_boundingRect.setLeft(m_model->getTimestamp(0));
+        m_boundingRect.setTop(m_model->getCost(0, m_column));
+        m_boundingRect.setRight(m_model->getTimestamp(rows - 1));
+        qint64 maxCost = -1;
         for (int row = 0; row < rows; ++row)
         {
-            qreal cost = m_model->data(m_model->index(row, m_column)).toDouble();
+            qint64 cost = m_model->getCost(row, m_column);
             if (cost > maxCost)
             {
                 maxCost = cost;
@@ -25,14 +25,16 @@ void ChartModel2QwtSeriesData::updateBoundingRect()
         }
         m_boundingRect.setBottom(maxCost);
     }
+    else
+    {
+        m_boundingRect = {};
+    }
 }
 
 QPointF ChartModel2QwtSeriesData::sample(size_t i) const
 {
     int row = (int)i;
-    qreal timeStamp = m_model->data(m_model->index(row, 0)).toDouble();
-    qreal cost = m_model->data(m_model->index(row, m_column)).toDouble();
-    return QPointF(timeStamp, cost);
+    return QPointF(m_model->getTimestamp(row), m_model->getCost(row, m_column));
 }
 
 QRectF ChartModel2QwtSeriesData::boundingRect() const

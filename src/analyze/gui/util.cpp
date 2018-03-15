@@ -18,6 +18,7 @@
 
 #include "util.h"
 
+#include <QRegularExpression>
 #include <QString>
 
 #ifndef NO_K_LIB
@@ -84,4 +85,64 @@ QString Util::formatByteSize(double size, int precision)
     result += suffix;
     return result;
 #endif
+}
+
+QString Util::wrapLabel(QString label, int maxLineLength, int lastLineExtra,
+    const QString& delimiter)
+{
+    int labelLength = label.size();
+    if (labelLength + lastLineExtra <= maxLineLength)
+    {
+        return label.toHtmlEscaped();
+    }
+    static QRegularExpression delimBefore("[(<]");
+    static QRegularExpression delimAfter("[- .,)>\\/]");
+    QString result;
+    do
+    {
+        int i = -1;
+        int wrapAfter = 0;
+        int i1 = label.indexOf(delimBefore, maxLineLength);
+        int i2 = label.indexOf(delimAfter, maxLineLength - 1);
+        if (i1 >= 0)
+        {
+            if (i2 >= 0)
+            {
+                if (i2 < i1)
+                {
+                    i = i2;
+                    wrapAfter = 1;
+                }
+                else
+                {
+                    i = i1;
+                }
+            }
+            else
+            {
+                i = i1;
+            }
+        }
+        else
+        {
+            i = i2;
+            wrapAfter = 1;
+        }
+        if (i < 0)
+        {
+            break;
+        }
+        i += wrapAfter;
+        result += label.left(i).toHtmlEscaped();
+        label.remove(0, i);
+        if (label.isEmpty()) // special: avoid <br> at the end
+        {
+            return result;
+        }
+        result += delimiter;
+        labelLength -= i;
+    }
+    while (labelLength + lastLineExtra > maxLineLength);
+    result += label.toHtmlEscaped();
+    return result;
 }
