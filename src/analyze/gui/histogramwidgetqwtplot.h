@@ -4,7 +4,6 @@
 #include <qwt_plot.h>
 
 class HistogramModel;
-class QwtPlotMultiBarChart;
 
 class HistogramWidgetQwtPlot : public QwtPlot
 {
@@ -16,8 +15,6 @@ public:
     void rebuild(bool resetZoomAndPan);
 
 private:
-    QwtPlotMultiBarChart *m_barChart;
-
     HistogramModel *m_model;
 };
 

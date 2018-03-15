@@ -196,15 +196,15 @@ void ChartWidget::setModel(ChartModel* model, bool minimalMode)
         setToolTip(i18n("<qt>Shows the number of instances allocated from specific functions over time.</qt>"));
         break;
     case ChartModel::Allocated:
-        setToolTip(i18n("<qt>Displays total memory allocated over time. "
+        setToolTip(i18n("<qt>Displays the total memory allocated over time. "
                         "This value ignores deallocations and just measures heap "
                         "allocation throughput.</qt>"));
         break;
     case ChartModel::Allocations:
-        setToolTip(i18n("<qt>Shows number of memory allocations over time.</qt>"));
+        setToolTip(i18n("<qt>Shows the number of memory allocations over time.</qt>"));
         break;
     case ChartModel::Temporary:
-        setToolTip(i18n("<qt>Shows number of temporary memory allocations over time. "
+        setToolTip(i18n("<qt>Shows the number of temporary memory allocations over time. "
                         "A temporary allocation is one that is followed immediately by its "
                         "corresponding deallocation, without other allocations happening "
                         "in-between.</qt>"));

@@ -200,10 +200,11 @@ void ChartWidgetQwtPlot::rebuild(bool resetZoomAndPan)
         return;
     }
 
-    int columns = m_model->columnCount();
-    int rows = m_model->rowCount();
-
     insertLegend(hasOption(ShowLegend) ? new QwtLegend() : nullptr);
+
+    auto grid = new QwtPlotGrid();
+    grid->setPen(QPen(Qt::lightGray));
+    grid->attach(this);
 
     setAxisTitle(QwtPlot::xBottom, m_model->headerData(0).toString());
     setAxisTitle(QwtPlot::yRight, m_model->headerData(1).toString());
@@ -213,14 +214,12 @@ void ChartWidgetQwtPlot::rebuild(bool resetZoomAndPan)
         setAxisScaleDraw(QwtPlot::yRight, new SizeScaleDraw());
     }
 
-    auto grid = new QwtPlotGrid();
-    grid->attach(this);
-
     int column = 1;
     if (!hasOption(ShowTotal))
     {
         column += 2;
     }
+    int columns = m_model->columnCount();
     for (; column < columns; column += 2)
     {
         auto adapter = new ChartModel2QwtSeriesData(m_model, column);
@@ -252,6 +251,7 @@ void ChartWidgetQwtPlot::rebuild(bool resetZoomAndPan)
 
     if (hasOption(ShowVLines))
     {
+        int rows = m_model->rowCount();
         for (int row = 1; row < rows; ++row)
         {
             auto marker = new QwtPlotMarker();

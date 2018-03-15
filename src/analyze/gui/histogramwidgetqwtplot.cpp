@@ -3,11 +3,31 @@
 #include "noklib.h"
 
 #include <qwt_column_symbol.h>
+#include <qwt_plot_grid.h>
 #include <qwt_plot_multi_barchart.h>
+#include <qwt_scale_draw.h>
+
+class HistogramScaleDraw: public QwtScaleDraw
+{
+public:
+    HistogramScaleDraw(QVector<QString>& rowNames) : m_rowNames(rowNames) { }
+
+    virtual QwtText label(double value) const
+    {
+        qint64 index = (qint64)value;
+        if ((index >= 0) && (index < m_rowNames.size()))
+        {
+            return m_rowNames[index];
+        }
+        return QwtScaleDraw::label(value);
+    }
+
+private:
+    QVector<QString> m_rowNames;
+};
 
 HistogramWidgetQwtPlot::HistogramWidgetQwtPlot(QWidget *parent)
-    : QwtPlot(parent),
-      m_barChart(nullptr)
+    : QwtPlot(parent), m_model(nullptr)
 {
     setCanvasBackground(Qt::white);
     enableAxis(QwtPlot::yRight);
@@ -19,25 +39,42 @@ HistogramWidgetQwtPlot::HistogramWidgetQwtPlot(QWidget *parent)
 void HistogramWidgetQwtPlot::rebuild(bool resetZoomAndPan)
 {
     detachItems();
-    m_barChart = nullptr;
 
     if (!m_model)
     {
         return;
     }
 
-    m_barChart = new QwtPlotMultiBarChart();
-    m_barChart->setSpacing(40); // TODO!! use dynamic spacing
-    m_barChart->setStyle(QwtPlotMultiBarChart::Stacked);
+    auto grid = new QwtPlotGrid();
+    grid->setPen(QPen(Qt::lightGray));
+    grid->attach(this);
 
-    int columns = m_model->columnCount();
-    int rows = m_model->rowCount();
+    setAxisAutoScale(QwtPlot::yRight);
 
-    int maxColumn = 0;
+    auto totalBarChart = new QwtPlotMultiBarChart();
+    totalBarChart->setStyle(QwtPlotMultiBarChart::Stacked);
+    totalBarChart->setLayoutHint(0.33);
+    totalBarChart->setLayoutPolicy(QwtPlotMultiBarChart::ScaleSamplesToAxes);
+
+    auto barChart = new QwtPlotMultiBarChart();
+    barChart->setStyle(QwtPlotMultiBarChart::Stacked);
+    barChart->setLayoutHint(totalBarChart->layoutHint());
+    barChart->setLayoutPolicy(QwtPlotMultiBarChart::ScaleSamplesToAxes);
+
+    QVector<QString> rowNames;
+    QVector<QVector<double>> totalSeries;
     QVector<QVector<double>> series;
+    int rows = m_model->rowCount();
+    int columns = m_model->columnCount();
+    int maxColumn = 0;
     for (int row = 0; row < rows; ++row)
     {
-        QString rowName = m_model->headerData(row, Qt::Vertical).toString();
+        rowNames.append(m_model->headerData(row, Qt::Vertical).toString());
+
+        QVector<double> totalValues;
+        totalValues.append(m_model->data(m_model->index(row, 0)).toDouble());
+        totalSeries.append(totalValues);
+
         QVector<double> values;
         for (int column = 1; column < columns; ++column)
         {
@@ -55,18 +92,32 @@ void HistogramWidgetQwtPlot::rebuild(bool resetZoomAndPan)
         series.append(values);
     }
 
-    for (int column = 1; column <= maxColumn; ++column)
+    for (int column = 0; column <= maxColumn; ++column)
     {
         auto symbol = new QwtColumnSymbol(QwtColumnSymbol::Box);
         symbol->setLineWidth(2);
         symbol->setPalette(QPalette(m_model->getColumnColor(column)));
-        m_barChart->setSymbol(column - 1, symbol);
+        if (column > 0)
+        {
+            barChart->setSymbol(column - 1, symbol);
+        }
+        else
+        {
+            totalBarChart->setSymbol(0, symbol);
+        }
     }
 
-    m_barChart->setSamples(series);
+    totalBarChart->setSamples(totalSeries);
+    barChart->setSamples(series);
 
-    setAxisAutoScale(QwtPlot::yRight);
-    m_barChart->setAxes(QwtPlot::xBottom, QwtPlot::yRight);
+    auto bottomScale = new HistogramScaleDraw(rowNames);
+    bottomScale->enableComponent(QwtScaleDraw::Backbone, false);
+    bottomScale->enableComponent(QwtScaleDraw::Ticks, false);
+    setAxisScaleDraw(QwtPlot::xBottom, bottomScale);
 
-    m_barChart->attach(this);
+    totalBarChart->setAxes(QwtPlot::xBottom, QwtPlot::yRight);
+    barChart->setAxes(QwtPlot::xBottom, QwtPlot::yRight);
+
+    totalBarChart->attach(this);
+    barChart->attach(this);
 }
