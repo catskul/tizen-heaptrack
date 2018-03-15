@@ -127,6 +127,7 @@ ChartWidget::ChartWidget(QWidget* parent)
 
 ChartWidget::~ChartWidget() = default;
 
+#ifdef QWT_FOUND
 void ChartWidget::createActions()
 {
     m_resetZoomAction = new QAction(i18n("Reset Zoom and Pan"), this);
@@ -170,6 +171,7 @@ void ChartWidget::createActions()
 #endif
     setFocusPolicy(Qt::StrongFocus);
 }
+#endif
 
 void ChartWidget::setModel(ChartModel* model, bool minimalMode)
 {

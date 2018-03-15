@@ -31,6 +31,8 @@
 #include <KLocalizedString>
 #endif
 
+#include "util.h"
+
 #include <QBrush>
 #include <QColor>
 #include <QPen>
@@ -86,12 +88,17 @@ QVariant HistogramModel::data(const QModelIndex& index, int role) const
         if (!column.location) {
             return {};
         }
+        QString tooltip;
         if (!column.location->file.isEmpty()) {
-            return i18n("%1 allocations from %2 at %3:%4 in %5", column.allocations, column.location->function,
-                        column.location->file, column.location->line, column.location->module);
+            tooltip = i18n("%1 allocations from %2 at %3:%4 in %5", column.allocations, column.location->function,
+                            column.location->file, column.location->line, column.location->module);
         }
-        return i18n("%1 allocations from %2 in %3", column.allocations, column.location->function,
-                    column.location->module);
+        else
+        {
+            tooltip = i18n("%1 allocations from %2 in %3", column.allocations, column.location->function,
+                           column.location->module);
+        }
+        return Util::wrapLabel(tooltip, 96);
     }
     return column.allocations;
 }

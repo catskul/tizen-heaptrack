@@ -31,13 +31,13 @@
 #include <KLocalizedString>
 #endif
 
-#include <algorithm>
+#include "util.h"
 
 #include <QBrush>
 #include <QDebug>
 #include <QPen>
 
-#include "util.h"
+#include <algorithm>
 
 namespace {
 QColor colorForColumn(int column, int columnCount)
