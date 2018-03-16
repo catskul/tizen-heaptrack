@@ -4,6 +4,7 @@
 #include <qwt_plot.h>
 
 class HistogramModel;
+class Picker;
 
 class HistogramWidgetQwtPlot : public QwtPlot
 {
@@ -16,6 +17,8 @@ public:
 
 private:
     HistogramModel *m_model;
+
+    Picker *m_picker;
 };
 
 #endif // HISTOGRAMWIDGETQWTPLOT_H

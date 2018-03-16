@@ -5,6 +5,7 @@
 #include <qwt_column_symbol.h>
 #include <qwt_plot_grid.h>
 #include <qwt_plot_multi_barchart.h>
+#include <qwt_plot_picker.h>
 #include <qwt_scale_draw.h>
 
 class HistogramScaleDraw: public QwtScaleDraw
@@ -26,8 +27,44 @@ private:
     QVector<QString> m_rowNames;
 };
 
+class Picker: public QwtPlotPicker
+{
+public:
+    Picker(HistogramWidgetQwtPlot *plot)
+        : QwtPlotPicker(QwtPlot::xBottom, QwtPlot::yRight, plot->canvas())
+    {
+        setTrackerMode(QwtPlotPicker::AlwaysOn);
+    }
+
+protected:
+    virtual QwtText trackerText(const QPoint &pos) const
+    {
+//        qDebug() << "Picker: (" << pos.x() << "; " << pos.y() << ")";
+        return QwtText(QString(" (%1, %2) ").arg(pos.x()).arg(pos.y()));
+    }
+/*    virtual QwtText trackerTextF(const QPointF &pos) const
+    {
+//        qDebug() << "Picker: (" << pos.x() << "; " << pos.y() << ")";
+        return QwtText(QString(" (%1, %2) ").arg(pos.x()).arg(pos.y()));
+    }*/
+};
+
+class MultiBarChart: public QwtPlotMultiBarChart
+{
+public:
+
+protected:
+    virtual void drawBar( QPainter *painter, int sampleIndex,
+        int barIndex, const QwtColumnRect &rect) const
+    {
+        qDebug() << "drawBar: (sampleIndex=" << sampleIndex << "; barIndex=" << barIndex
+                 << "; " << rect.toRect() << ")";
+        QwtPlotMultiBarChart::drawBar(painter, sampleIndex, barIndex, rect);
+    }
+};
+
 HistogramWidgetQwtPlot::HistogramWidgetQwtPlot(QWidget *parent)
-    : QwtPlot(parent), m_model(nullptr)
+    : QwtPlot(parent), m_model(nullptr), m_picker(new Picker(this))
 {
     setCanvasBackground(Qt::white);
     enableAxis(QwtPlot::yRight);
@@ -51,12 +88,12 @@ void HistogramWidgetQwtPlot::rebuild(bool resetZoomAndPan)
 
     setAxisAutoScale(QwtPlot::yRight);
 
-    auto totalBarChart = new QwtPlotMultiBarChart();
+    auto totalBarChart = new MultiBarChart();
     totalBarChart->setStyle(QwtPlotMultiBarChart::Stacked);
     totalBarChart->setLayoutHint(0.33);
     totalBarChart->setLayoutPolicy(QwtPlotMultiBarChart::ScaleSamplesToAxes);
 
-    auto barChart = new QwtPlotMultiBarChart();
+    auto barChart = new MultiBarChart();
     barChart->setStyle(QwtPlotMultiBarChart::Stacked);
     barChart->setLayoutHint(totalBarChart->layoutHint());
     barChart->setLayoutPolicy(QwtPlotMultiBarChart::ScaleSamplesToAxes);
