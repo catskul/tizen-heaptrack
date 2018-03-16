@@ -98,7 +98,11 @@ QVariant HistogramModel::data(const QModelIndex& index, int role) const
             tooltip = i18n("%1 allocations from %2 in %3", column.allocations, column.location->function,
                            column.location->module);
         }
-        return Util::wrapLabel(tooltip, 96);
+#ifdef QWT_FOUND
+        return Util::wrapLabel(tooltip, 96, 0, "&nbsp;<br>");
+#else
+        return tooltip.toHtmlEscaped(); // Qt wraps text in tooltips itself
+#endif
     }
     return column.allocations;
 }

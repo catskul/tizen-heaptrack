@@ -146,48 +146,54 @@ QVariant ChartModel::data(const QModelIndex& index, int role) const
             const auto formatted = Util::formatByteSize(cost, 1);
             if (cost > 1024) {
                 return i18nc("%1: the formatted byte size, e.g. \"1.2KB\", %2: the raw byte size, e.g. \"1300\"",
-                             "%1 (%2 bytes)", formatted, cost);
+                             "<b>%1</b> (%2 bytes)", formatted, cost);
             } else {
-                return formatted;
+                return QString("<b>%1</b>").arg(formatted);
             }
         };
         if (column == 0) {
             switch (m_type) {
             case Allocations:
-                return i18n("<qt>%1 allocations in total after %2</qt>", cost, time);
+                return i18n("<qt><b>%1</b> allocations in total after <b>%2</b></qt>", cost, time);
             case Temporary:
-                return i18n("<qt>%1 temporary allocations in total after %2</qt>", cost, time);
+                return i18n("<qt><b>%1</b> temporary allocations in total after <b>%2</b></qt>", cost, time);
             case Instances:
-                return i18n("<qt>%1 number of instances in total after %2</qt>", cost, time);
+                return i18n("<qt><b>%1</b> number of instances in total after <b>%2</b></qt>", cost, time);
             case Consumed:
-                return i18n("<qt>%1 consumed in total after %2</qt>",
+                return i18n("<qt>%1 consumed in total after <b>%2</b></qt>",
                             byteCost(), time);
             case Allocated:
-                return i18n("<qt>%1 allocated in total after %2</qt>",
+                return i18n("<qt>%1 allocated in total after <b>%2</b></qt>",
                             byteCost(), time);
             }
         } else {
-            const auto label = Util::wrapLabel(m_data.labels.value(column), 96);
+            auto label = m_data.labels.value(column);
+#ifdef QWT_FOUND
+            label = Util::wrapLabel(label, 96, 0, "&nbsp;<br>");
+#else
+            label = label.toHtmlEscaped(); // Qt wraps text in tooltips itself
+#endif
+            Util::wrapLabel(label, 96);
             switch (m_type) {
             case Allocations:
-                return i18n("<qt>%2 allocations after %3 from:<p "
-                            "style='margin-left:10px;'>%1</p></qt>",
+                return i18n("<qt><b>%2</b> allocations after <b>%3</b> from: "
+                            "<p style='margin-left:10px;'>%1</p></qt>",
                             label, cost, time);
             case Temporary:
-                return i18n("<qt>%2 temporary allocations after %3 from:<p "
-                            "style='margin-left:10px'>%1</p></qt>",
+                return i18n("<qt><b>%2</b> temporary allocations after <b>%3</b> from: "
+                            "<p style='margin-left:10px'>%1</p></qt>",
                             label, cost, time);
             case Instances:
-                return i18n("<qt>%2 number of instances after %3 from:<p "
-                            "style='margin-left:10px'>%1</p></qt>",
+                return i18n("<qt><b>%2</b> number of instances after <b>%3</b> from: "
+                            "<p style='margin-left:10px'>%1</p></qt>",
                             label, cost, time);
             case Consumed:
-                return i18n("<qt>%2 consumed after %3 from:<p "
-                            "style='margin-left:10px'>%1</p></qt>",
+                return i18n("<qt><b>%2</b> consumed after <b>%3</b> from: "
+                            "<p style='margin-left:10px'>%1</p></qt>",
                             label, byteCost(), time);
             case Allocated:
-                return i18n("<qt>%2 allocated after %3 from:<p "
-                            "style='margin-left:10px'>%1</p></qt>",
+                return i18n("<qt><b>%2</b> allocated after <b>%3</b> from: "
+                            "<p style='margin-left:10px'>%1</p></qt>",
                             label, byteCost(), time);
             }
         }

@@ -46,7 +46,7 @@ public:
 protected:
     virtual QwtText trackerTextF(const QPointF &pos) const
     {
-//qDebug() << "pos.x=" << pos.x() << "; pos.y=" << pos.y();
+//        qDebug() << "Zoomer: (" << pos.x() << "; " << pos.y() << ")";
         if ((pos.x() < 0) || (pos.y() < 0))
         {
             return {};
@@ -54,6 +54,7 @@ protected:
         QString s;
         if (m_plot->getCurveTooltip(pos, s))
         {
+            s = "<p style='margin-left:4px'>" + s + "</p> ";
             m_plot->clearTooltip();
         }
         else // show default text
@@ -71,6 +72,7 @@ protected:
             m_plot->restoreTooltip();
         }
         QwtText text(s);
+        text.setRenderFlags(text.renderFlags() & ~Qt::AlignHorizontal_Mask | Qt::AlignLeft);
         text.setColor(Qt::white);
         QColor c = rubberBandPen().color();
         text.setBorderPen(QPen(c));
@@ -291,8 +293,7 @@ bool ChartWidgetQwtPlot::getCurveTooltip(const QPointF &position, QString &toolt
     {
 //qDebug() << "timestamp: " << timestamp << " ms; row timestamp: " << m_model->getTimestamp(row) << " ms; cost="
 //         << cost << "; row=" << row << "; minCostFound=" << minCostFound;
-        tooltip = QString(" %1 ").arg(
-            m_model->data(m_model->index(row, columnFound), Qt::ToolTipRole).toString());
+        tooltip = m_model->data(m_model->index(row, columnFound), Qt::ToolTipRole).toString();
         return true;
     }
     return false;
