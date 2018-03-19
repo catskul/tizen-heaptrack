@@ -173,7 +173,6 @@ QVariant ChartModel::data(const QModelIndex& index, int role) const
 #else
             label = label.toHtmlEscaped(); // Qt wraps text in tooltips itself
 #endif
-            Util::wrapLabel(label, 96);
             switch (m_type) {
             case Allocations:
                 return i18n("<qt><b>%2</b> allocations after <b>%3</b> from: "
@@ -188,11 +187,11 @@ QVariant ChartModel::data(const QModelIndex& index, int role) const
                             "<p style='margin-left:10px'>%1</p></qt>",
                             label, cost, time);
             case Consumed:
-                return i18n("<qt><b>%2</b> consumed after <b>%3</b> from: "
+                return i18n("<qt>%2 consumed after <b>%3</b> from: "
                             "<p style='margin-left:10px'>%1</p></qt>",
                             label, byteCost(), time);
             case Allocated:
-                return i18n("<qt><b>%2</b> allocated after <b>%3</b> from: "
+                return i18n("<qt>%2 allocated after <b>%3</b> from: "
                             "<p style='margin-left:10px'>%1</p></qt>",
                             label, byteCost(), time);
             }
@@ -270,7 +269,12 @@ QString ChartModel::getColumnLabel(int column) const
 
 const QPen& ChartModel::getColumnDataSetPen(int column) const
 {
+#ifdef QWT_FOUND
+    static QPen blackPen;
+    return blackPen;
+#else
     return m_columnDataSetPens[column];
+#endif
 }
 
 const QBrush& ChartModel::getColumnDataSetBrush(int column) const
@@ -278,17 +282,17 @@ const QBrush& ChartModel::getColumnDataSetBrush(int column) const
     return m_columnDataSetBrushes[column];
 }
 
-int ChartModel::getRowForTimestamp(qint64 timestamp) const
+int ChartModel::getRowForTimestamp(qreal timestamp) const
 {
     // check if 'timestamp' is not greater than the maximum available timestamp
     int lastIndex = m_timestamps.size() - 1;
     if (!((lastIndex >= 0) && (timestamp <= m_timestamps[lastIndex])))
     {
-        return false;
+        return -1;
     }
     int result;
     // find the first element that is greater than 'timestamp'
-    auto up_it = std::upper_bound(m_timestamps.begin(), m_timestamps.end(), timestamp);
+    auto up_it = std::upper_bound(m_timestamps.begin(), m_timestamps.end(), (qint64)timestamp);
     if (up_it != m_timestamps.end())
     {
         result = up_it - m_timestamps.begin() - 1;

@@ -83,7 +83,7 @@ QVariant HistogramModel::data(const QModelIndex& index, int role) const
     const auto& column = row.columns[index.column()];
     if (role == Qt::ToolTipRole) {
         if (index.column() == 0) {
-            return i18n("%1 allocations in total", column.allocations);
+            return i18n("<b>%1</b> allocations in total", column.allocations);
         }
         if (!column.location) {
             return {};
@@ -99,10 +99,17 @@ QVariant HistogramModel::data(const QModelIndex& index, int role) const
                            column.location->module);
         }
 #ifdef QWT_FOUND
-        return Util::wrapLabel(tooltip, 96, 0, "&nbsp;<br>");
+        tooltip = Util::wrapLabel(tooltip, 96, 0, "&nbsp;<br>");
 #else
-        return tooltip.toHtmlEscaped(); // Qt wraps text in tooltips itself
+        tooltip = tooltip.toHtmlEscaped(); // Qt wraps text in tooltips itself
 #endif
+        // enclose first word in <b> and </b> tags
+        int i = tooltip.indexOf(' ');
+        if (i >= 0)
+        {
+            tooltip = "<b>" + tooltip.left(i) + "</b>" + tooltip.mid(i);
+        }
+        return tooltip;
     }
     return column.allocations;
 }

@@ -13,7 +13,9 @@ public:
 
     void setModel(HistogramModel *model) { m_model = model; }
 
-    void rebuild(bool resetZoomAndPan);
+    HistogramModel *model() const { return m_model; }
+
+    void rebuild();
 
 private:
     HistogramModel *m_model;

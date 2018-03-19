@@ -39,7 +39,8 @@ public:
         : QwtPlotZoomer(QwtPlot::xBottom, QwtPlot::yRight, plot->canvas()),
           m_plot(plot)
     {
-        setRubberBandPen(QColor(Qt::darkGreen));
+//        setRubberBandPen(QColor(Qt::darkGreen));
+        setRubberBandPen(QColor(0, 0x60, 0));
         setTrackerMode(QwtPlotPicker::AlwaysOn);
     }
 
@@ -259,17 +260,18 @@ void ChartWidgetQwtPlot::resetZoom()
 
 bool ChartWidgetQwtPlot::getCurveTooltip(const QPointF &position, QString &tooltip) const
 {
-    qint64 timestamp = position.x();
+    qreal timestamp = position.x();
     qreal cost = position.y();
     if ((timestamp < 0) || (cost < 0))
     {
         return false;
     }
-    int row = m_model->getRowForTimestamp(position.x());
+    int row = m_model->getRowForTimestamp(timestamp);
     if (row < 0)
     {
         return false;
     }
+    qint64 rowTimestamp = m_model->getTimestamp(row); // rowTimestamp <= timestamp
     // find a column which value (cost) for the row found is greater than or equal to
     // 'cost' and at the same time this value is the smallest from all such values
     qint64 minCostFound = std::numeric_limits<qint64>::max();
@@ -280,13 +282,34 @@ bool ChartWidgetQwtPlot::getCurveTooltip(const QPointF &position, QString &toolt
         column += 2;
     }
     int columns = m_model->columnCount();
+    int rowCount = m_model->rowCount();
     for (; column < columns; column += 2)
     {
         qint64 columnCost = m_model->getCost(row, column);
-        if ((columnCost >= cost) && (columnCost <= minCostFound))
+        if (columnCost <= minCostFound)
         {
-            minCostFound = columnCost;
-            columnFound = column;
+            qreal intermediateCost = columnCost;
+            if ((rowTimestamp < timestamp) && (row + 1 < rowCount))
+            {
+                // solve linear equation to find line-approximated 'intermediateCost'
+                qreal x1, y1, x2, y2;
+                x1 = rowTimestamp;
+                y1 = columnCost;
+                x2 = m_model->getTimestamp(row + 1);
+                y2 = m_model->getCost(row + 1, column);
+                qreal dx = x2 - x1;
+                if (dx > 1e-9) // avoid division by zero or near-zero
+                {
+                    qreal a = (y2 - y1) / dx;
+                    qreal b = (x2 * y1 - x1 * y2) / dx;
+                    intermediateCost = a * timestamp + b;
+                }
+            }
+            if (cost <= intermediateCost)
+            {
+                minCostFound = columnCost;
+                columnFound = column;
+            }
         }
     }
     if (columnFound >= 0)

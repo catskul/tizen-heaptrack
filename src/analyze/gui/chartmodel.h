@@ -82,7 +82,7 @@ public:
     // nearest to 'timestamp' to the left or is equal to 'timestamp') - if 'timestamp' is
     // not less than the minimum timestamp and not greater than the maximum timestamp
     // of all rows, otherwise return -1
-    int getRowForTimestamp(qint64 timestamp) const;
+    int getRowForTimestamp(qreal timestamp) const;
 
 public slots:
     void resetData(const ChartData& data);

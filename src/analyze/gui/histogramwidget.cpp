@@ -212,7 +212,7 @@ void HistogramWidget::setModel(HistogramModel *model)
 #if defined(QWT_FOUND)
 void HistogramWidget::modelReset()
 {
-    m_plot->rebuild(true);
+    m_plot->rebuild();
 }
 #endif
 
