@@ -269,12 +269,7 @@ QString ChartModel::getColumnLabel(int column) const
 
 const QPen& ChartModel::getColumnDataSetPen(int column) const
 {
-#ifdef QWT_FOUND
-    static QPen blackPen;
-    return blackPen;
-#else
     return m_columnDataSetPens[column];
-#endif
 }
 
 const QBrush& ChartModel::getColumnDataSetBrush(int column) const

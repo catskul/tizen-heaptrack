@@ -52,10 +52,19 @@ protected:
         {
             return {};
         }
-        QString s;
-        if (m_plot->getCurveTooltip(pos, s))
+        QwtText text;
+        text.setRenderFlags(text.renderFlags() & ~Qt::AlignHorizontal_Mask | Qt::AlignLeft);
+        text.setBorderRadius(6);
+        QString tooltip;
+        if (m_plot->getCurveTooltip(pos, tooltip))
         {
-            s = "<p style='margin-left:4px'>" + s + "</p> ";
+            text.setText("<p style='margin-left:4px'>" + tooltip + "</p> ");
+            text.setColor(Qt::white);
+            QPen bandPen = rubberBandPen();
+            text.setBorderPen(bandPen);
+            QColor c = bandPen.color();
+            c.setAlpha(170);
+            text.setBackgroundBrush(c);
             m_plot->clearTooltip();
         }
         else // show default text
@@ -69,17 +78,16 @@ protected:
             {
                 value = QString::number((qint64)pos.y());
             }
-            s = QString(" %1 : %2 ").arg(Util::formatTime((qint64)pos.x())).arg(value);
+            text.setText(QString("<p style='margin-left:4px'><b>%1 : %2</b></p> ")
+                         .arg(Util::formatTime((qint64)pos.x())).arg(value));
+            text.setColor(Qt::yellow);
+            static QPen bluePen(QColor(0, 0, 0xA0));
+            text.setBorderPen(bluePen);
+            QColor c = bluePen.color();
+            c.setAlpha(190);
+            text.setBackgroundBrush(c);
             m_plot->restoreTooltip();
         }
-        QwtText text(s);
-        text.setRenderFlags(text.renderFlags() & ~Qt::AlignHorizontal_Mask | Qt::AlignLeft);
-        text.setColor(Qt::white);
-        QColor c = rubberBandPen().color();
-        text.setBorderPen(QPen(c));
-        text.setBorderRadius(6);
-        c.setAlpha(170);
-        text.setBackgroundBrush(c);
         return text;
     }
 private:
@@ -130,8 +138,9 @@ void ChartWidgetQwtPlot::setOptions(Options options)
     if (m_options != options)
     {
         bool oldShowTotal = hasOption(ShowTotal);
+        bool oldShowUnresolved = hasOption(ShowUnresolved);
         m_options = options;
-        rebuild(oldShowTotal != hasOption(ShowTotal));
+        rebuild(oldShowTotal != hasOption(ShowTotal) || (oldShowUnresolved != hasOption(ShowUnresolved)));
     }
 }
 
@@ -182,6 +191,12 @@ void ChartWidgetQwtPlot::rebuild(bool resetZoomAndPan)
     int columns = m_model->columnCount();
     for (; column < columns; column += 2)
     {
+        QString columnLabel = m_model->getColumnLabel(column);
+        if (!hasOption(ShowUnresolved) && columnLabel.startsWith("<unresolved function>"))
+        {
+            continue;
+        }
+
         auto adapter = new ChartModel2QwtSeriesData(m_model, column);
 
         QRectF bounds = adapter->boundingRect();
@@ -191,12 +206,16 @@ void ChartWidgetQwtPlot::rebuild(bool resetZoomAndPan)
             ? Util::formatByteSize(maxCost) : QString::number(maxCost));
         int lastLineExtra = titleEnd.length() - 2 * 3; // minus the two "<b>" tags length
         auto curve = new QwtPlotCurve(
-            Util::wrapLabel(m_model->getColumnLabel(column), MaxTitleLineLength, lastLineExtra) +
+            Util::wrapLabel(columnLabel, MaxTitleLineLength, lastLineExtra) +
             titleEnd);
         curve->setRenderHint(QwtPlotItem::RenderAntialiased, true);
         curve->setYAxis(QwtPlot::yRight);
 
-        curve->setPen(m_model->getColumnDataSetPen(column - 1));
+        static QPen blackPen;
+
+        curve->setPen(hasOption(ShowCurveBorders)
+                      ? blackPen : m_model->getColumnDataSetPen(column - 1));
+
         curve->setBrush(m_model->getColumnDataSetBrush(column - 1));
 
         curve->setSamples(adapter);
@@ -274,7 +293,7 @@ bool ChartWidgetQwtPlot::getCurveTooltip(const QPointF &position, QString &toolt
     qint64 rowTimestamp = m_model->getTimestamp(row); // rowTimestamp <= timestamp
     // find a column which value (cost) for the row found is greater than or equal to
     // 'cost' and at the same time this value is the smallest from all such values
-    qint64 minCostFound = std::numeric_limits<qint64>::max();
+    qreal minCostFound = std::numeric_limits<qreal>::max();
     int columnFound = -1;
     int column = 1;
     if (!hasOption(ShowTotal))
@@ -285,31 +304,33 @@ bool ChartWidgetQwtPlot::getCurveTooltip(const QPointF &position, QString &toolt
     int rowCount = m_model->rowCount();
     for (; column < columns; column += 2)
     {
-        qint64 columnCost = m_model->getCost(row, column);
-        if (columnCost <= minCostFound)
+        if (!hasOption(ShowUnresolved) &&
+            m_model->getColumnLabel(column).startsWith("<unresolved function>"))
         {
-            qreal intermediateCost = columnCost;
-            if ((rowTimestamp < timestamp) && (row + 1 < rowCount))
+            continue;
+        }
+        qint64 columnCost = m_model->getCost(row, column);
+        qreal intermediateCost = columnCost;
+        if ((rowTimestamp < timestamp) && (row + 1 < rowCount))
+        {
+            // solve linear equation to find line-approximated 'intermediateCost'
+            qreal x1, y1, x2, y2;
+            x1 = rowTimestamp;
+            y1 = columnCost;
+            x2 = m_model->getTimestamp(row + 1);
+            y2 = m_model->getCost(row + 1, column);
+            qreal dx = x2 - x1;
+            if (dx > 1e-9) // avoid division by zero or near-zero
             {
-                // solve linear equation to find line-approximated 'intermediateCost'
-                qreal x1, y1, x2, y2;
-                x1 = rowTimestamp;
-                y1 = columnCost;
-                x2 = m_model->getTimestamp(row + 1);
-                y2 = m_model->getCost(row + 1, column);
-                qreal dx = x2 - x1;
-                if (dx > 1e-9) // avoid division by zero or near-zero
-                {
-                    qreal a = (y2 - y1) / dx;
-                    qreal b = (x2 * y1 - x1 * y2) / dx;
-                    intermediateCost = a * timestamp + b;
-                }
+                qreal a = (y2 - y1) / dx;
+                qreal b = (x2 * y1 - x1 * y2) / dx;
+                intermediateCost = a * timestamp + b;
             }
-            if (cost <= intermediateCost)
-            {
-                minCostFound = columnCost;
-                columnFound = column;
-            }
+        }
+        if ((cost <= intermediateCost) && (intermediateCost <= minCostFound))
+        {
+            minCostFound = intermediateCost;
+            columnFound = column;
         }
     }
     if (columnFound >= 0)

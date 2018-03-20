@@ -74,7 +74,9 @@ private:
 private slots:
     void resetZoom();
     void toggleShowTotal(bool checked);
+    void toggleShowUnresolved(bool checked);
     void toggleShowLegend(bool checked);
+    void toggleShowCurveBorders(bool checked);
     void toggleShowSymbols(bool checked);
     void toggleShowVLines(bool checked);
 private:
@@ -84,9 +86,11 @@ private:
 
     QAction* m_resetZoomAction;
     QAction* m_showTotalAction;
+    QAction* m_showUnresolvedAction;
     QAction* m_showLegendAction;
     QAction* m_showSymbolsAction;
     QAction* m_showVLinesAction;
+    QAction* m_showCurveBorders;
 
     static ChartWidgetQwtPlot::Options globalOptions;
 #endif // QWT_FOUND, KChart_FOUND

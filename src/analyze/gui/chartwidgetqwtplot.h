@@ -16,9 +16,11 @@ public:
     {
         None = 0,
         ShowTotal = 0x01,
+        ShowUnresolved = 0x02,
         ShowLegend = 0x10,
-        ShowSymbols = 0x20,
-        ShowVLines = 0x40
+        ShowCurveBorders = 0x20,
+        ShowSymbols = 0x40,
+        ShowVLines = 0x80
     };
 
     explicit ChartWidgetQwtPlot(QWidget *parent, Options options);
