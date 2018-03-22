@@ -55,7 +55,11 @@ public:
     QSize sizeHint() const override;
 
 #if defined(QWT_FOUND)
-    void updateIfOptionsChanged();
+    void updateOnSelected(QWidget *mainWindow);
+
+    static ChartWidgetQwtPlot::Options GlobalOptions;
+    static QWidget* HelpWindow;
+    static QWidget* MainWindow;
 
 public slots:
     void modelReset();
@@ -79,8 +83,12 @@ private slots:
     void toggleShowCurveBorders(bool checked);
     void toggleShowSymbols(bool checked);
     void toggleShowVLines(bool checked);
+    void toggleShowHelp(bool checked);
+    void exportChart();
 private:
     void createActions();
+
+    void showHelp();
 
     ChartWidgetQwtPlot* m_plot;
 
@@ -90,9 +98,9 @@ private:
     QAction* m_showLegendAction;
     QAction* m_showSymbolsAction;
     QAction* m_showVLinesAction;
-    QAction* m_showCurveBorders;
-
-    static ChartWidgetQwtPlot::Options globalOptions;
+    QAction* m_showCurveBordersAction;
+    QAction* m_exportChartAction;
+    QAction* m_showHelpAction;
 #endif // QWT_FOUND, KChart_FOUND
 #ifdef SHOW_TABLES
     QTableView* m_tableViewTotal;

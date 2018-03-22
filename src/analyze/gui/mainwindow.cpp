@@ -39,6 +39,7 @@
 #include <QDesktopServices>
 #include <QFileDialog>
 #include <QMenu>
+#include <QMoveEvent>
 #include <QStatusBar>
 
 #include "../accumulatedtracedata.h"
@@ -695,8 +696,12 @@ void MainWindow::setupStacks()
 #ifdef QWT_FOUND
         const auto chartWidget = dynamic_cast<ChartWidget*>(widget);
         if (chartWidget) {
-            chartWidget->updateIfOptionsChanged();
+            chartWidget->updateOnSelected(this);
             chartWidget->setFocus(); // to handle keyboard events in the widget
+        }
+        else if (ChartWidget::HelpWindow != nullptr)
+        {
+            ChartWidget::HelpWindow->hide();
         }
 #endif
     };
@@ -705,3 +710,14 @@ void MainWindow::setupStacks()
 
     m_ui->stacksDock->setVisible(false);
 }
+
+#if defined(QWT_FOUND)
+void MainWindow::moveEvent(QMoveEvent *event)
+{
+    if (ChartWidget::HelpWindow != nullptr)
+    {
+        ChartWidget::HelpWindow->move(ChartWidget::HelpWindow->pos() +
+                                      (event->pos() - event->oldPos()));
+    }
+}
+#endif

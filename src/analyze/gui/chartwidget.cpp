@@ -18,6 +18,9 @@
 
 #include "chartwidget.h"
 
+#include <QMainWindow>
+#include <QTextEdit>
+#include <QToolTip>
 #include <QVBoxLayout>
 
 #if defined(KChart_FOUND)
@@ -35,6 +38,8 @@
 #include <QAction>
 #include <QContextMenuEvent>
 #include <QMenu>
+#include <QMessageBox>
+#include <QFileDialog>
 #endif
 
 #ifdef NO_K_LIB
@@ -84,17 +89,67 @@ public:
 };
 }
 #elif defined(QWT_FOUND)
-ChartWidgetQwtPlot::Options ChartWidget::globalOptions(
+class HelpWidget : public QMainWindow
+{
+    Q_OBJECT
+public:
+    explicit HelpWidget(QWidget *parent) : QMainWindow(parent)
+    {
+        setWindowTitle("Chart Help");
+        setWindowFlags(Qt::Tool);
+        setAttribute(Qt::WA_ShowWithoutActivating);
+        setAttribute(Qt::WA_DeleteOnClose);
+        setGeometry(0, 0, 292, 164);
+        setMinimumSize(100, 70);
+        setMaximumSize(400, 280);
+        setPalette(QToolTip::palette());
+        setWindowOpacity(0.9);
+        setAutoFillBackground(true);
+        auto textEdit = new QTextEdit(this);
+        textEdit->setReadOnly(true);
+        textEdit->setContextMenuPolicy(Qt::NoContextMenu);
+        textEdit->viewport()->setAutoFillBackground(false);
+        setCentralWidget(textEdit);
+        textEdit->setHtml(
+            "<p>Use <u>Context Menu</u> (right click inside the chart to open) to control different chart options.</p>" \
+            "<p>Use <u>left mouse button</u> to <b>zoom in</b> to selection: press the button, drag " \
+            "to make a rectangular selection, release.</p>" \
+            "<p>Use <u>left mouse button</u> with modifier keys to:</p>" \
+            "<ul>" \
+            "<li><b>zoom out</b> (one step back) - <b>&lt;Shift&gt;</b>+click;" \
+            "<li><b>reset zoom</b> - <b>&lt;Ctrl&gt;</b>+click;" \
+            "<li><b>move (pan)</b> the chart  - <b>&lt;Alt&gt;</b>+drag." \
+            "</ul>");
+    }
+
+    virtual ~HelpWidget()
+    {
+        ChartWidget::HelpWindow = nullptr;
+    }
+protected:
+    virtual void closeEvent(QCloseEvent *event) override
+    {
+        QMainWindow::closeEvent(event);
+        ChartWidget::GlobalOptions = ChartWidgetQwtPlot::setOption(ChartWidget::GlobalOptions,
+            ChartWidgetQwtPlot::ShowHelp, false);
+    }
+};
+
+ChartWidgetQwtPlot::Options ChartWidget::GlobalOptions(
+    ChartWidgetQwtPlot::ShowHelp |
     ChartWidgetQwtPlot::ShowTotal | ChartWidgetQwtPlot::ShowUnresolved |
     ChartWidgetQwtPlot::ShowLegend | ChartWidgetQwtPlot::ShowCurveBorders);
-#endif
+
+QWidget* ChartWidget::HelpWindow;
+QWidget* ChartWidget::MainWindow;
+#endif // QWT_FOUND
 
 ChartWidget::ChartWidget(QWidget* parent)
     : QWidget(parent)
 #if defined(KChart_FOUND)
     , m_chart(new Chart(this))
 #elif defined(QWT_FOUND)
-    , m_plot(new ChartWidgetQwtPlot(this, globalOptions))
+    , m_plot(new ChartWidgetQwtPlot(this, GlobalOptions))
 #endif
 #ifdef SHOW_TABLES
     , m_tableViewTotal(new QTableView(this))
@@ -130,6 +185,16 @@ ChartWidget::ChartWidget(QWidget* parent)
 ChartWidget::~ChartWidget() = default;
 
 #ifdef QWT_FOUND
+void ChartWidget::updateOnSelected(QWidget *mainWindow)
+{
+    MainWindow = mainWindow;
+    m_plot->setOptions(GlobalOptions);
+    if (m_plot->hasOption(ChartWidgetQwtPlot::ShowHelp))
+    {
+        showHelp();
+    }
+}
+
 void ChartWidget::createActions()
 {
     m_resetZoomAction = new QAction(i18n("Reset Zoom and Pan"), this);
@@ -151,10 +216,10 @@ void ChartWidget::createActions()
     m_showLegendAction->setCheckable(true);
     connect(m_showLegendAction, &QAction::triggered, this, &ChartWidget::toggleShowLegend);
 
-    m_showCurveBorders = new QAction(i18n("Show Curve &Borders"), this);
-    m_showCurveBorders->setStatusTip(i18n("Show curve borders (as black lines)"));
-    m_showCurveBorders->setCheckable(true);
-    connect(m_showCurveBorders, &QAction::triggered, this, &ChartWidget::toggleShowCurveBorders);
+    m_showCurveBordersAction = new QAction(i18n("Show Curve &Borders"), this);
+    m_showCurveBordersAction->setStatusTip(i18n("Show curve borders (as black lines)"));
+    m_showCurveBordersAction->setCheckable(true);
+    connect(m_showCurveBordersAction, &QAction::triggered, this, &ChartWidget::toggleShowCurveBorders);
 
     m_showSymbolsAction = new QAction(i18n("Show &Symbols"), this);
     m_showSymbolsAction->setStatusTip(i18n("Show symbols (the chart data points)"));
@@ -166,6 +231,15 @@ void ChartWidget::createActions()
     m_showVLinesAction->setCheckable(true);
     connect(m_showVLinesAction, &QAction::triggered, this, &ChartWidget::toggleShowVLines);
 
+    m_exportChartAction = new QAction(i18n("&Export Chart..."), this);
+    m_exportChartAction->setStatusTip(i18n("Export the current chart to a file."));
+    connect(m_exportChartAction, &QAction::triggered, this, &ChartWidget::exportChart);
+
+    m_showHelpAction = new QAction(i18n("Show Chart &Help"), this);
+    m_showHelpAction->setStatusTip(i18n("Show a window with breif help information inside the chart."));
+    m_showHelpAction->setCheckable(true);
+    connect(m_showHelpAction, &QAction::triggered, this, &ChartWidget::toggleShowHelp);
+
     // shortcuts don't work under Windows (Qt 5.10.0) so using a workaround (manual processing
     // in keyPressEvent)
 
@@ -173,17 +247,19 @@ void ChartWidget::createActions()
     m_showTotalAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_T));
     m_showUnresolvedAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_U));
     m_showLegendAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_L));
-    m_showCurveBorders->setShortcut(QKeySequence(Qt::ALT | Qt::Key_B));
+    m_showCurveBordersAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_B));
     m_showSymbolsAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_S));
     m_showVLinesAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_V));
+    m_exportChartAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_E));
 #if QT_VERSION >= 0x050A00
     m_resetZoomAction->setShortcutVisibleInContextMenu(true);
     m_showTotalAction->setShortcutVisibleInContextMenu(true);
     m_showUnresolvedAction->setShortcutVisibleInContextMenu(true);
     m_showLegendAction->setShortcutVisibleInContextMenu(true);
-    m_showCurveBorders->setShortcutVisibleInContextMenu(true);
     m_showSymbolsAction->setShortcutVisibleInContextMenu(true);
     m_showVLinesAction->setShortcutVisibleInContextMenu(true);
+    m_showCurveBordersAction->setShortcutVisibleInContextMenu(true);
+    m_exportChartAction->setShortcutVisibleInContextMenu(true);
 #endif
     setFocusPolicy(Qt::StrongFocus);
 }
@@ -332,12 +408,17 @@ void ChartWidget::contextMenuEvent(QContextMenuEvent *event)
     menu.addSeparator();
     m_showLegendAction->setChecked(m_plot->hasOption(ChartWidgetQwtPlot::ShowLegend));
     menu.addAction(m_showLegendAction);
-    m_showCurveBorders->setChecked(m_plot->hasOption(ChartWidgetQwtPlot::ShowCurveBorders));
-    menu.addAction(m_showCurveBorders);
+    m_showCurveBordersAction->setChecked(m_plot->hasOption(ChartWidgetQwtPlot::ShowCurveBorders));
+    menu.addAction(m_showCurveBordersAction);
     m_showSymbolsAction->setChecked(m_plot->hasOption(ChartWidgetQwtPlot::ShowSymbols));
     menu.addAction(m_showSymbolsAction);
     m_showVLinesAction->setChecked(m_plot->hasOption(ChartWidgetQwtPlot::ShowVLines));
     menu.addAction(m_showVLinesAction);
+    menu.addSeparator();
+    menu.addAction(m_exportChartAction);
+    menu.addSeparator();
+    m_showHelpAction->setChecked(ChartWidgetQwtPlot::hasOption(GlobalOptions, ChartWidgetQwtPlot::ShowHelp));
+    menu.addAction(m_showHelpAction);
     menu.exec(event->globalPos());
 }
 #endif
@@ -369,6 +450,9 @@ void ChartWidget::keyPressEvent(QKeyEvent *event)
         case Qt::Key_V:
             toggleShowVLines(!m_plot->hasOption(ChartWidgetQwtPlot::ShowVLines));
             break;
+        case Qt::Key_E:
+            exportChart();
+            break;
         default:
             event->ignore();
             return;
@@ -381,11 +465,6 @@ void ChartWidget::keyPressEvent(QKeyEvent *event)
     }
 }
 
-void ChartWidget::updateIfOptionsChanged()
-{
-    m_plot->setOptions(globalOptions);
-}
-
 void ChartWidget::resetZoom()
 {
     m_plot->resetZoom();
@@ -393,32 +472,75 @@ void ChartWidget::resetZoom()
 
 void ChartWidget::toggleShowTotal(bool checked)
 {
-    globalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowTotal, checked);
+    GlobalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowTotal, checked);
 }
 
 void ChartWidget::toggleShowUnresolved(bool checked)
 {
-    globalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowUnresolved, checked);
+    GlobalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowUnresolved, checked);
 }
 
 void ChartWidget::toggleShowLegend(bool checked)
 {
-    globalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowLegend, checked);
+    GlobalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowLegend, checked);
 }
 
 void ChartWidget::toggleShowCurveBorders(bool checked)
 {
-    globalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowCurveBorders, checked);
+    GlobalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowCurveBorders, checked);
 }
 
 void ChartWidget::toggleShowSymbols(bool checked)
 {
-    globalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowSymbols, checked);
+    GlobalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowSymbols, checked);
 }
 
 void ChartWidget::toggleShowVLines(bool checked)
 {
-    globalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowVLines, checked);
+    GlobalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowVLines, checked);
+}
+
+void ChartWidget::toggleShowHelp(bool checked)
+{
+    if (checked)
+    {
+        showHelp();
+    }
+    else
+    {
+        if (HelpWindow != nullptr)
+        {
+            delete HelpWindow;
+            HelpWindow = nullptr;
+        }
+    }
+    GlobalOptions = ChartWidgetQwtPlot::setOption(GlobalOptions, ChartWidgetQwtPlot::ShowHelp, checked);
+}
+
+void ChartWidget::showHelp()
+{
+    if (HelpWindow == nullptr)
+    {
+        HelpWindow = new HelpWidget(MainWindow);
+        QPoint p = mapToGlobal(pos());
+        HelpWindow->move(p.x() + 32, p.y() + 32);
+    }
+    HelpWindow->show();
+}
+
+void ChartWidget::exportChart()
+{
+    QString saveFilename = QFileDialog::getSaveFileName(this, "Save Chart As",
+        m_plot->model()->headerData(1, Qt::Horizontal).toString(),
+        "PNG (*.png);; TIFF (*.tif *.tiff);; JPEG (*.jpg *.jpeg)");
+    if (!saveFilename.isEmpty())
+    {
+        if (!m_plot->grab().save(saveFilename))
+        {
+            QMessageBox::warning(this, "Error",
+                QString("Cannot save the chart to \"%1\".").arg(saveFilename), QMessageBox::Ok);
+        }
+    }
 }
 #endif // QWT_FOUND
 

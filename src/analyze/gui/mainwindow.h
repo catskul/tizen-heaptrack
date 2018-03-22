@@ -19,6 +19,8 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include "gui_config.h"
+
 #include <QMainWindow>
 
 #ifndef NO_K_LIB
@@ -48,6 +50,10 @@ public slots:
 signals:
     void clearData();
 
+#if defined(QWT_FOUND)
+protected:
+    virtual void moveEvent(QMoveEvent *event) override;
+#endif
 private:
     void showError(const QString& message);
     void setupStacks();

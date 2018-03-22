@@ -15,8 +15,9 @@ public:
     enum Options
     {
         None = 0,
-        ShowTotal = 0x01,
-        ShowUnresolved = 0x02,
+        ShowHelp = 0x01,
+        ShowTotal = 0x02,
+        ShowUnresolved = 0x04,
         ShowLegend = 0x10,
         ShowCurveBorders = 0x20,
         ShowSymbols = 0x40,
@@ -27,11 +28,17 @@ public:
 
     void setModel(ChartModel* model);
 
+    ChartModel* model() const { return m_model; }
+
     bool isSizeModel() const { return m_isSizeModel; }
 
     Options options() const { return m_options; }
 
-    bool hasOption(Options option) const { return (m_options & option) != 0; }
+    static bool hasOption(Options options, Options option) { return (options & option) != 0; }
+
+    bool hasOption(Options option) const { return hasOption(m_options, option); }
+
+    static Options setOption(Options options, Options option, bool isOn);
 
     Options setOption(Options option, bool isOn);
 

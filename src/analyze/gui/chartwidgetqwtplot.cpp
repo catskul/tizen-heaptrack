@@ -102,15 +102,13 @@ ChartWidgetQwtPlot::ChartWidgetQwtPlot(QWidget *parent, Options options)
     enableAxis(QwtPlot::yRight);
     enableAxis(QwtPlot::yLeft, false);
 
-    // TODO!! show help about zooming and panning
-
-    // LeftButton for the zooming
+    // LeftButton for zooming
     // Shift+LeftButton: zoom out by 1
     // Ctrl+LeftButton: zoom out to full size
     m_zoomer->setMousePattern(QwtEventPattern::MouseSelect2, Qt::LeftButton, Qt::ControlModifier);
     m_zoomer->setMousePattern(QwtEventPattern::MouseSelect3, Qt::LeftButton, Qt::ShiftModifier);
 
-    // Alt+LeftButton for the panning
+    // Alt+LeftButton for panning
     auto panner = new QwtPlotPanner(canvas());
     panner->setMouseButton(Qt::LeftButton, Qt::AltModifier);
 
@@ -127,9 +125,14 @@ void ChartWidgetQwtPlot::setModel(ChartModel* model)
           model->type() == ChartModel::Temporary);
 }
 
+ChartWidgetQwtPlot::Options ChartWidgetQwtPlot::setOption(Options options, Options option, bool isOn)
+{
+    return (isOn ? (options | option) : Options(options & ~option));
+}
+
 ChartWidgetQwtPlot::Options ChartWidgetQwtPlot::setOption(Options option, bool isOn)
 {
-    setOptions(isOn ? (m_options | option) : Options(m_options & ~option));
+    setOptions(setOption(m_options, option, isOn));
     return m_options;
 }
 
