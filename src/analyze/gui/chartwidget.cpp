@@ -37,9 +37,11 @@
 #elif defined(QWT_FOUND)
 #include <QAction>
 #include <QContextMenuEvent>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QMenu>
 #include <QMessageBox>
-#include <QFileDialog>
+#include <QRegularExpression>
 #endif
 
 #ifdef NO_K_LIB
@@ -530,11 +532,29 @@ void ChartWidget::showHelp()
 
 void ChartWidget::exportChart()
 {
+    QString selectedFilter;
     QString saveFilename = QFileDialog::getSaveFileName(this, "Save Chart As",
         m_plot->model()->headerData(1, Qt::Horizontal).toString(),
-        "PNG (*.png);; TIFF (*.tif *.tiff);; JPEG (*.jpg *.jpeg)");
+        "PNG (*.png);; BMP (*.bmp);; JPEG (*.jpg *.jpeg)", &selectedFilter);
     if (!saveFilename.isEmpty())
     {
+        QFileInfo fi(saveFilename);
+        if (fi.suffix().isEmpty()) // can be on some platforms
+        {
+            int i = selectedFilter.indexOf("*.");
+            if (i >= 0)
+            {
+                static QRegularExpression delimiters("[ )]");
+                i += 2;
+                int j = selectedFilter.indexOf(delimiters, i);
+                if (j > i)
+                {
+                    --i;
+                    QString suffix = selectedFilter.mid(i, j - i);
+                    saveFilename += suffix;
+                }
+            }
+        }
         if (!m_plot->grab().save(saveFilename))
         {
             QMessageBox::warning(this, "Error",
