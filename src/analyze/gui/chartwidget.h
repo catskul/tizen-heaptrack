@@ -20,6 +20,9 @@
 #define CHARTWIDGET_H
 
 #include "gui_config.h"
+#include "contextmenuqwt.h"
+
+#include <memory>
 
 #include <QWidget>
 
@@ -57,7 +60,7 @@ public:
 #if defined(QWT_FOUND)
     void updateOnSelected(QWidget *mainWindow);
 
-    static ChartWidgetQwtPlot::Options GlobalOptions;
+    static ChartOptions::Options GlobalOptions;
     static QWidget* HelpWindow;
     static QWidget* MainWindow;
 
@@ -77,13 +80,13 @@ private:
 #elif defined(QWT_FOUND)
 private slots:
     void resetZoom();
-    void toggleShowTotal(bool checked);
-    void toggleShowUnresolved(bool checked);
-    void toggleShowLegend(bool checked);
-    void toggleShowCurveBorders(bool checked);
-    void toggleShowSymbols(bool checked);
-    void toggleShowVLines(bool checked);
-    void toggleShowHelp(bool checked);
+    void toggleShowTotal();
+    void toggleShowUnresolved();
+    void toggleShowLegend();
+    void toggleShowCurveBorders();
+    void toggleShowSymbols();
+    void toggleShowVLines();
+    void toggleShowHelp();
     void exportChart();
 private:
     void createActions();
@@ -91,16 +94,7 @@ private:
     void showHelp();
 
     ChartWidgetQwtPlot* m_plot;
-
-    QAction* m_resetZoomAction;
-    QAction* m_showTotalAction;
-    QAction* m_showUnresolvedAction;
-    QAction* m_showLegendAction;
-    QAction* m_showSymbolsAction;
-    QAction* m_showVLinesAction;
-    QAction* m_showCurveBordersAction;
-    QAction* m_exportChartAction;
-    QAction* m_showHelpAction;
+    std::unique_ptr<ContextMenuQwt> m_contextMenuQwt;
 #endif // QWT_FOUND, KChart_FOUND
 #ifdef SHOW_TABLES
     QTableView* m_tableViewTotal;

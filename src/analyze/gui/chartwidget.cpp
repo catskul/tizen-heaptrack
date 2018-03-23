@@ -132,15 +132,14 @@ protected:
     virtual void closeEvent(QCloseEvent *event) override
     {
         QMainWindow::closeEvent(event);
-        ChartWidget::GlobalOptions = ChartWidgetQwtPlot::setOption(ChartWidget::GlobalOptions,
-            ChartWidgetQwtPlot::ShowHelp, false);
+        ChartWidget::GlobalOptions = ChartOptions::setOption(ChartWidget::GlobalOptions, ChartOptions::ShowHelp, false);
     }
 };
 
-ChartWidgetQwtPlot::Options ChartWidget::GlobalOptions(
-    ChartWidgetQwtPlot::ShowHelp |
-    ChartWidgetQwtPlot::ShowTotal | ChartWidgetQwtPlot::ShowUnresolved |
-    ChartWidgetQwtPlot::ShowLegend | ChartWidgetQwtPlot::ShowCurveBorders);
+ChartOptions::Options ChartWidget::GlobalOptions(
+    ChartOptions::ShowHelp |
+    ChartOptions::ShowTotal | ChartOptions::ShowUnresolved |
+    ChartOptions::ShowLegend | ChartOptions::ShowCurveBorders);
 
 QWidget* ChartWidget::HelpWindow;
 QWidget* ChartWidget::MainWindow;
@@ -152,6 +151,7 @@ ChartWidget::ChartWidget(QWidget* parent)
     , m_chart(new Chart(this))
 #elif defined(QWT_FOUND)
     , m_plot(new ChartWidgetQwtPlot(this, GlobalOptions))
+    , m_contextMenuQwt(new ContextMenuQwt(this, false))
 #endif
 #ifdef SHOW_TABLES
     , m_tableViewTotal(new QTableView(this))
@@ -199,70 +199,16 @@ void ChartWidget::updateOnSelected(QWidget *mainWindow)
 
 void ChartWidget::createActions()
 {
-    m_resetZoomAction = new QAction(i18n("Reset Zoom and Pan"), this);
-    m_resetZoomAction->setStatusTip(i18n("Reset the chart zoom and pan"));
-    connect(m_resetZoomAction, &QAction::triggered, this, &ChartWidget::resetZoom);
+    connect(m_contextMenuQwt->resetZoomAction(), &QAction::triggered, this, &ChartWidget::resetZoom);
+    connect(m_contextMenuQwt->showTotalAction(), &QAction::triggered, this, &ChartWidget::toggleShowTotal);
+    connect(m_contextMenuQwt->showUnresolvedAction(), &QAction::triggered, this, &ChartWidget::toggleShowUnresolved);
+    connect(m_contextMenuQwt->showLegendAction(), &QAction::triggered, this, &ChartWidget::toggleShowLegend);
+    connect(m_contextMenuQwt->showCurveBordersAction(), &QAction::triggered, this, &ChartWidget::toggleShowCurveBorders);
+    connect(m_contextMenuQwt->showSymbolsAction(), &QAction::triggered, this, &ChartWidget::toggleShowSymbols);
+    connect(m_contextMenuQwt->showVLinesAction(), &QAction::triggered, this, &ChartWidget::toggleShowVLines);
+    connect(m_contextMenuQwt->exportChartAction(), &QAction::triggered, this, &ChartWidget::exportChart);
+    connect(m_contextMenuQwt->showHelpAction(), &QAction::triggered, this, &ChartWidget::toggleShowHelp);
 
-    m_showTotalAction = new QAction(i18n("Show &Total"), this);
-    m_showTotalAction->setStatusTip(i18n("Show the total amount curve"));
-    m_showTotalAction->setCheckable(true);
-    connect(m_showTotalAction, &QAction::triggered, this, &ChartWidget::toggleShowTotal);
-
-    m_showUnresolvedAction = new QAction(i18n("Show &Unresolved"), this);
-    m_showUnresolvedAction->setStatusTip(i18n("Show unresolved functions' curves"));
-    m_showUnresolvedAction->setCheckable(true);
-    connect(m_showUnresolvedAction, &QAction::triggered, this, &ChartWidget::toggleShowUnresolved);
-
-    m_showLegendAction = new QAction(i18n("Show &Legend"), this);
-    m_showLegendAction->setStatusTip(i18n("Show the chart legend"));
-    m_showLegendAction->setCheckable(true);
-    connect(m_showLegendAction, &QAction::triggered, this, &ChartWidget::toggleShowLegend);
-
-    m_showCurveBordersAction = new QAction(i18n("Show Curve &Borders"), this);
-    m_showCurveBordersAction->setStatusTip(i18n("Show curve borders (as black lines)"));
-    m_showCurveBordersAction->setCheckable(true);
-    connect(m_showCurveBordersAction, &QAction::triggered, this, &ChartWidget::toggleShowCurveBorders);
-
-    m_showSymbolsAction = new QAction(i18n("Show &Symbols"), this);
-    m_showSymbolsAction->setStatusTip(i18n("Show symbols (the chart data points)"));
-    m_showSymbolsAction->setCheckable(true);
-    connect(m_showSymbolsAction, &QAction::triggered, this, &ChartWidget::toggleShowSymbols);
-
-    m_showVLinesAction = new QAction(i18n("Show &Vertical Lines"), this);
-    m_showVLinesAction->setStatusTip(i18n("Show vertical lines corresponding to timestamps"));
-    m_showVLinesAction->setCheckable(true);
-    connect(m_showVLinesAction, &QAction::triggered, this, &ChartWidget::toggleShowVLines);
-
-    m_exportChartAction = new QAction(i18n("&Export Chart..."), this);
-    m_exportChartAction->setStatusTip(i18n("Export the current chart to a file."));
-    connect(m_exportChartAction, &QAction::triggered, this, &ChartWidget::exportChart);
-
-    m_showHelpAction = new QAction(i18n("Show Chart &Help"), this);
-    m_showHelpAction->setStatusTip(i18n("Show a window with breif help information inside the chart."));
-    m_showHelpAction->setCheckable(true);
-    connect(m_showHelpAction, &QAction::triggered, this, &ChartWidget::toggleShowHelp);
-
-    // shortcuts don't work under Windows (Qt 5.10.0) so using a workaround (manual processing
-    // in keyPressEvent)
-
-    m_resetZoomAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_R));
-    m_showTotalAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_T));
-    m_showUnresolvedAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_U));
-    m_showLegendAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_L));
-    m_showCurveBordersAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_B));
-    m_showSymbolsAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_S));
-    m_showVLinesAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_V));
-    m_exportChartAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_E));
-#if QT_VERSION >= 0x050A00
-    m_resetZoomAction->setShortcutVisibleInContextMenu(true);
-    m_showTotalAction->setShortcutVisibleInContextMenu(true);
-    m_showUnresolvedAction->setShortcutVisibleInContextMenu(true);
-    m_showLegendAction->setShortcutVisibleInContextMenu(true);
-    m_showSymbolsAction->setShortcutVisibleInContextMenu(true);
-    m_showVLinesAction->setShortcutVisibleInContextMenu(true);
-    m_showCurveBordersAction->setShortcutVisibleInContextMenu(true);
-    m_exportChartAction->setShortcutVisibleInContextMenu(true);
-#endif
     setFocusPolicy(Qt::StrongFocus);
 }
 #endif
@@ -401,70 +347,16 @@ void ChartWidget::modelReset()
 void ChartWidget::contextMenuEvent(QContextMenuEvent *event)
 {
     QMenu menu(this);
-    menu.addAction(m_resetZoomAction);
-    menu.addSeparator();
-    m_showTotalAction->setChecked(m_plot->hasOption(ChartWidgetQwtPlot::ShowTotal));
-    menu.addAction(m_showTotalAction);
-    m_showUnresolvedAction->setChecked(m_plot->hasOption(ChartWidgetQwtPlot::ShowUnresolved));
-    menu.addAction(m_showUnresolvedAction);
-    menu.addSeparator();
-    m_showLegendAction->setChecked(m_plot->hasOption(ChartWidgetQwtPlot::ShowLegend));
-    menu.addAction(m_showLegendAction);
-    m_showCurveBordersAction->setChecked(m_plot->hasOption(ChartWidgetQwtPlot::ShowCurveBorders));
-    menu.addAction(m_showCurveBordersAction);
-    m_showSymbolsAction->setChecked(m_plot->hasOption(ChartWidgetQwtPlot::ShowSymbols));
-    menu.addAction(m_showSymbolsAction);
-    m_showVLinesAction->setChecked(m_plot->hasOption(ChartWidgetQwtPlot::ShowVLines));
-    menu.addAction(m_showVLinesAction);
-    menu.addSeparator();
-    menu.addAction(m_exportChartAction);
-    menu.addSeparator();
-    m_showHelpAction->setChecked(ChartWidgetQwtPlot::hasOption(GlobalOptions, ChartWidgetQwtPlot::ShowHelp));
-    menu.addAction(m_showHelpAction);
+    m_plot->setOption(ChartWidgetQwtPlot::ShowHelp,
+                      ChartWidgetQwtPlot::hasOption(GlobalOptions, ChartWidgetQwtPlot::ShowHelp));
+    m_contextMenuQwt->initializeMenu(menu, m_plot->options());
     menu.exec(event->globalPos());
 }
 #endif
 
 void ChartWidget::keyPressEvent(QKeyEvent *event)
 {
-    if (event->modifiers() & Qt::AltModifier)
-    {
-        switch (event->key())
-        {
-        case Qt::Key_R:
-            resetZoom();
-            break;
-        case Qt::Key_T:
-            toggleShowTotal(!m_plot->hasOption(ChartWidgetQwtPlot::ShowTotal));
-            break;
-        case Qt::Key_U:
-            toggleShowUnresolved(!m_plot->hasOption(ChartWidgetQwtPlot::ShowUnresolved));
-            break;
-        case Qt::Key_L:
-            toggleShowLegend(!m_plot->hasOption(ChartWidgetQwtPlot::ShowLegend));
-            break;
-        case Qt::Key_B:
-            toggleShowCurveBorders(!m_plot->hasOption(ChartWidgetQwtPlot::ShowCurveBorders));
-            break;
-        case Qt::Key_S:
-            toggleShowSymbols(!m_plot->hasOption(ChartWidgetQwtPlot::ShowSymbols));
-            break;
-        case Qt::Key_V:
-            toggleShowVLines(!m_plot->hasOption(ChartWidgetQwtPlot::ShowVLines));
-            break;
-        case Qt::Key_E:
-            exportChart();
-            break;
-        default:
-            event->ignore();
-            return;
-        }
-        event->accept();
-    }
-    else
-    {
-        event->ignore();
-    }
+    m_contextMenuQwt->handleKeyPress(event, m_plot->options());
 }
 
 void ChartWidget::resetZoom()
@@ -472,38 +364,39 @@ void ChartWidget::resetZoom()
     m_plot->resetZoom();
 }
 
-void ChartWidget::toggleShowTotal(bool checked)
+void ChartWidget::toggleShowTotal()
 {
-    GlobalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowTotal, checked);
+    GlobalOptions = m_plot->toggleOption(ChartWidgetQwtPlot::ShowTotal);
 }
 
-void ChartWidget::toggleShowUnresolved(bool checked)
+void ChartWidget::toggleShowUnresolved()
 {
-    GlobalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowUnresolved, checked);
+    GlobalOptions = m_plot->toggleOption(ChartWidgetQwtPlot::ShowUnresolved);
 }
 
-void ChartWidget::toggleShowLegend(bool checked)
+void ChartWidget::toggleShowLegend()
 {
-    GlobalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowLegend, checked);
+    GlobalOptions = m_plot->toggleOption(ChartWidgetQwtPlot::ShowLegend);
 }
 
-void ChartWidget::toggleShowCurveBorders(bool checked)
+void ChartWidget::toggleShowCurveBorders()
 {
-    GlobalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowCurveBorders, checked);
+    GlobalOptions = m_plot->toggleOption(ChartWidgetQwtPlot::ShowCurveBorders);
 }
 
-void ChartWidget::toggleShowSymbols(bool checked)
+void ChartWidget::toggleShowSymbols()
 {
-    GlobalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowSymbols, checked);
+    GlobalOptions = m_plot->toggleOption(ChartWidgetQwtPlot::ShowSymbols);
 }
 
-void ChartWidget::toggleShowVLines(bool checked)
+void ChartWidget::toggleShowVLines()
 {
-    GlobalOptions = m_plot->setOption(ChartWidgetQwtPlot::ShowVLines, checked);
+    GlobalOptions = m_plot->toggleOption(ChartWidgetQwtPlot::ShowVLines);
 }
 
-void ChartWidget::toggleShowHelp(bool checked)
+void ChartWidget::toggleShowHelp()
 {
+    bool checked = !ChartOptions::hasOption(GlobalOptions, ChartOptions::ShowHelp);
     if (checked)
     {
         showHelp();
@@ -516,7 +409,7 @@ void ChartWidget::toggleShowHelp(bool checked)
             HelpWindow = nullptr;
         }
     }
-    GlobalOptions = ChartWidgetQwtPlot::setOption(GlobalOptions, ChartWidgetQwtPlot::ShowHelp, checked);
+    GlobalOptions = ChartOptions::setOption(GlobalOptions, ChartOptions::ShowHelp, checked);
 }
 
 void ChartWidget::showHelp()

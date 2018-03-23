@@ -94,8 +94,13 @@ private:
     ChartWidgetQwtPlot *m_plot;
 };
 
+ChartOptions::Options ChartOptions::setOption(Options options, Options option, bool isOn)
+{
+    return (isOn ? (options | option) : Options(options & ~option));
+}
+
 ChartWidgetQwtPlot::ChartWidgetQwtPlot(QWidget *parent, Options options)
-    : QwtPlot(parent), m_model(nullptr), m_isSizeModel(false), m_options(options),
+    : QwtPlot(parent), m_model(nullptr), m_isSizeModel(false), ChartOptions(options),
       m_zoomer(new Zoomer(this))
 {
     setCanvasBackground(Qt::white);
@@ -125,15 +130,15 @@ void ChartWidgetQwtPlot::setModel(ChartModel* model)
           model->type() == ChartModel::Temporary);
 }
 
-ChartWidgetQwtPlot::Options ChartWidgetQwtPlot::setOption(Options options, Options option, bool isOn)
+ChartOptions::Options ChartWidgetQwtPlot::setOption(Options option, bool isOn)
 {
-    return (isOn ? (options | option) : Options(options & ~option));
+    setOptions(ChartOptions::setOption(m_options, option, isOn));
+    return m_options;
 }
 
-ChartWidgetQwtPlot::Options ChartWidgetQwtPlot::setOption(Options option, bool isOn)
+ChartOptions::Options ChartWidgetQwtPlot::toggleOption(Options option)
 {
-    setOptions(setOption(m_options, option, isOn));
-    return m_options;
+    return setOption(option, !hasOption(option));
 }
 
 void ChartWidgetQwtPlot::setOptions(Options options)

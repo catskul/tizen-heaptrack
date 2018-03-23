@@ -9,7 +9,7 @@
 class ChartModel;
 class Zoomer;
 
-class ChartWidgetQwtPlot : public QwtPlot
+class ChartOptions
 {
 public:
     enum Options
@@ -24,6 +24,23 @@ public:
         ShowVLines = 0x80
     };
 
+    explicit ChartOptions(Options options) { m_options = options; }
+
+    static bool hasOption(Options options, Options option) { return (options & option) != 0; }
+
+    static Options setOption(Options options, Options option, bool isOn);
+
+    Options options() const { return m_options; }
+
+    bool hasOption(Options option) const { return hasOption(m_options, option); }
+
+protected:
+    Options m_options;
+};
+
+class ChartWidgetQwtPlot : public QwtPlot, public ChartOptions
+{
+public:
     explicit ChartWidgetQwtPlot(QWidget *parent, Options options);
 
     void setModel(ChartModel* model);
@@ -32,15 +49,9 @@ public:
 
     bool isSizeModel() const { return m_isSizeModel; }
 
-    Options options() const { return m_options; }
-
-    static bool hasOption(Options options, Options option) { return (options & option) != 0; }
-
-    bool hasOption(Options option) const { return hasOption(m_options, option); }
-
-    static Options setOption(Options options, Options option, bool isOn);
-
     Options setOption(Options option, bool isOn);
+
+    Options toggleOption(Options option);
 
     void setOptions(Options options);
 
@@ -60,8 +71,6 @@ private:
     ChartModel *m_model;
 
     bool m_isSizeModel;
-
-    Options m_options;
 
     QPen m_vLinePen;
 

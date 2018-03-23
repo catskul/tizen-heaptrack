@@ -85,11 +85,13 @@ QWT_CHART {
     SOURCES += \
         analyze/gui/chartmodel2qwtseriesdata.cpp \
         analyze/gui/chartwidgetqwtplot.cpp \
+        analyze/gui/contextmenuqwt.cpp \
         analyze/gui/histogramwidgetqwtplot.cpp
 
     HEADERS += \
         analyze/gui/chartmodel2qwtseriesdata.h \
         analyze/gui/chartwidgetqwtplot.h \
+        analyze/gui/contextmenuqwt.h \
         analyze/gui/histogramwidgetqwtplot.h
 }
 
