@@ -214,12 +214,12 @@ void HistogramWidget::setModel(HistogramModel *model)
 #endif
 }
 
+#ifdef QWT_FOUND
 void HistogramWidget::updateOnSelected()
 {
     m_plot->setOptions(ChartOptions::GlobalOptions);
 }
 
-#ifdef QWT_FOUND
 void HistogramWidget::modelReset()
 {
     m_plot->rebuild();

@@ -20,7 +20,6 @@
 #define HISTOGRAMWIDGET_H
 
 #include "gui_config.h"
-#include "contextmenuqwt.h"
 
 #include <memory>
 #include <QWidget>
@@ -39,6 +38,7 @@ class BarDiagram;
 }
 #elif defined(QWT_FOUND)
 #include "histogramwidgetqwtplot.h"
+#include "contextmenuqwt.h"
 #endif
 
 class HistogramModel;
@@ -52,9 +52,9 @@ public:
 
     void setModel(HistogramModel* model);
 
+#ifdef QWT_FOUND
     void updateOnSelected();
 
-#ifdef QWT_FOUND
 public slots:
     void modelReset();
 protected:

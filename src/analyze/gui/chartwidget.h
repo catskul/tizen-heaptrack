@@ -20,7 +20,6 @@
 #define CHARTWIDGET_H
 
 #include "gui_config.h"
-#include "contextmenuqwt.h"
 
 #include <memory>
 #include <QWidget>
@@ -40,6 +39,7 @@ class Chart;
 }
 #elif defined(QWT_FOUND)
 #include "chartwidgetqwtplot.h"
+#include "contextmenuqwt.h"
 class QAction;
 #endif
 
