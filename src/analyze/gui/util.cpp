@@ -25,7 +25,15 @@
 #include <KFormat>
 #endif
 
-QString Util::formatTime(qint64 ms)
+#ifdef QWT_FOUND
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QMessageBox>
+#endif
+
+namespace Util {
+
+QString formatTime(qint64 ms)
 {
     if (ms > 60000) {
         // minutes
@@ -36,7 +44,7 @@ QString Util::formatTime(qint64 ms)
     }
 }
 
-QString Util::formatByteSize(double size, int precision)
+QString formatByteSize(double size, int precision)
 {
 #ifndef NO_K_LIB
     static KFormat format;
@@ -87,7 +95,7 @@ QString Util::formatByteSize(double size, int precision)
 #endif
 }
 
-QString Util::wrapLabel(QString label, int maxLineLength, int lastLineExtra,
+QString wrapLabel(QString label, int maxLineLength, int lastLineExtra,
     const QString& delimiter)
 {
     int labelLength = label.size();
@@ -146,3 +154,46 @@ QString Util::wrapLabel(QString label, int maxLineLength, int lastLineExtra,
     result += label.toHtmlEscaped();
     return result;
 }
+
+#ifdef QWT_FOUND
+bool isUnresolvedFunction(const QString &functionName)
+{
+    return functionName.startsWith("<unresolved function>");
+}
+
+bool exportChart(QWidget *parent, QWidget &chartWidget, const QString &chartName)
+{
+    QString selectedFilter;
+    QString saveFilename = QFileDialog::getSaveFileName(parent, "Save Chart As",
+        chartName, "PNG (*.png);; BMP (*.bmp);; JPEG (*.jpg *.jpeg)", &selectedFilter);
+    if (!saveFilename.isEmpty())
+    {
+        QFileInfo fi(saveFilename);
+        if (fi.suffix().isEmpty()) // can be on some platforms
+        {
+            int i = selectedFilter.indexOf("*.");
+            if (i >= 0)
+            {
+                static QRegularExpression delimiters("[ )]");
+                i += 2;
+                int j = selectedFilter.indexOf(delimiters, i);
+                if (j > i)
+                {
+                    --i;
+                    QString suffix = selectedFilter.mid(i, j - i);
+                    saveFilename += suffix;
+                }
+            }
+        }
+        if (chartWidget.grab().save(saveFilename))
+        {
+            return true;
+        }
+    }
+    QMessageBox::warning(parent, "Error",
+        QString("Cannot save the chart to \"%1\".").arg(saveFilename), QMessageBox::Ok);
+    return false;
+}
+#endif
+
+} // namespace Util

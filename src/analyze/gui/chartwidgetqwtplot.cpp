@@ -16,6 +16,11 @@
 
 #include <limits>
 
+ChartOptions::Options ChartOptions::GlobalOptions(
+    ChartOptions::ShowHelp |
+    ChartOptions::ShowTotal | ChartOptions::ShowUnresolved |
+    ChartOptions::ShowLegend | ChartOptions::ShowCurveBorders);
+
 class TimeScaleDraw: public QwtScaleDraw
 {
     virtual QwtText label(double value) const
@@ -99,6 +104,17 @@ ChartOptions::Options ChartOptions::setOption(Options options, Options option, b
     return (isOn ? (options | option) : Options(options & ~option));
 }
 
+ChartOptions::Options ChartOptions::setOption(Options option, bool isOn)
+{
+    setOptions(ChartOptions::setOption(m_options, option, isOn));
+    return m_options;
+}
+
+ChartOptions::Options ChartOptions::toggleOption(Options option)
+{
+    return setOption(option, !hasOption(option));
+}
+
 ChartWidgetQwtPlot::ChartWidgetQwtPlot(QWidget *parent, Options options)
     : QwtPlot(parent), m_model(nullptr), m_isSizeModel(false), ChartOptions(options),
       m_zoomer(new Zoomer(this))
@@ -128,17 +144,6 @@ void ChartWidgetQwtPlot::setModel(ChartModel* model)
         !(model->type() == ChartModel::Allocations ||
           model->type() == ChartModel::Instances ||
           model->type() == ChartModel::Temporary);
-}
-
-ChartOptions::Options ChartWidgetQwtPlot::setOption(Options option, bool isOn)
-{
-    setOptions(ChartOptions::setOption(m_options, option, isOn));
-    return m_options;
-}
-
-ChartOptions::Options ChartWidgetQwtPlot::toggleOption(Options option)
-{
-    return setOption(option, !hasOption(option));
 }
 
 void ChartWidgetQwtPlot::setOptions(Options options)
@@ -200,7 +205,8 @@ void ChartWidgetQwtPlot::rebuild(bool resetZoomAndPan)
     for (; column < columns; column += 2)
     {
         QString columnLabel = m_model->getColumnLabel(column);
-        if (!hasOption(ShowUnresolved) && columnLabel.startsWith("<unresolved function>"))
+        if (!hasOption(ShowUnresolved) &&
+            Util::isUnresolvedFunction(columnLabel)) // column label starts with a function name
         {
             continue;
         }
@@ -313,7 +319,7 @@ bool ChartWidgetQwtPlot::getCurveTooltip(const QPointF &position, QString &toolt
     for (; column < columns; column += 2)
     {
         if (!hasOption(ShowUnresolved) &&
-            m_model->getColumnLabel(column).startsWith("<unresolved function>"))
+            Util::isUnresolvedFunction(m_model->getColumnLabel(column))) // column label starts with a function name
         {
             continue;
         }

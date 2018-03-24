@@ -148,3 +148,10 @@ QColor HistogramModel::getColumnColor(int column) const
 {
     return colorForColumn(column, columnCount());
 }
+
+LocationData::Ptr HistogramModel::getLocationData(int row, int column) const
+{
+    const auto& rowData = m_data.at(row);
+    const auto& columnData = rowData.columns[column];
+    return columnData.location;
+}

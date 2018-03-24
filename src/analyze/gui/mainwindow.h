@@ -50,7 +50,7 @@ public slots:
 signals:
     void clearData();
 
-#if defined(QWT_FOUND)
+#ifdef QWT_FOUND
 protected:
     virtual void moveEvent(QMoveEvent *event) override;
 #endif

@@ -17,6 +17,7 @@
  */
 
 #include "histogramwidget.h"
+#include "chartwidget.h"
 
 #include <QSortFilterProxyModel>
 #include <QVBoxLayout>
@@ -32,6 +33,8 @@
 #include <KChartGridAttributes>
 #include <KChartHeaderFooter>
 #include <KChartLegend>
+#elif defined(QWT_FOUND)
+#include <QMenu>
 #endif
 
 #ifdef NO_K_LIB
@@ -63,7 +66,6 @@ public:
 
     const QString customizedLabel(const QString& label) const override
     {
-//!!        KFormat format(QLocale::system());
         return Util::formatByteSize(label.toDouble(), 1);
     }
 };
@@ -102,7 +104,8 @@ HistogramWidget::HistogramWidget(QWidget* parent)
     , m_total(new BarDiagram(this))
     , m_detailed(new BarDiagram(this))
 #elif defined(QWT_FOUND)
-    , m_plot(new HistogramWidgetQwtPlot(this))
+    , m_plot(new HistogramWidgetQwtPlot(this, ChartOptions::GlobalOptions))
+    , m_contextMenuQwt(new ContextMenuQwt(this, true))
 #endif
 #ifdef SHOW_TABLES
     , m_tableViewTotal(new QTableView(this))
@@ -114,6 +117,8 @@ HistogramWidget::HistogramWidget(QWidget* parent)
     layout->addWidget(m_chart);
 #elif defined(QWT_FOUND)
     layout->addWidget(m_plot);
+
+    connectContextMenu();
 #endif
 #ifdef SHOW_TABLES
     auto hLayout = new QHBoxLayout();
@@ -209,11 +214,51 @@ void HistogramWidget::setModel(HistogramModel *model)
 #endif
 }
 
-#if defined(QWT_FOUND)
+void HistogramWidget::updateOnSelected()
+{
+    m_plot->setOptions(ChartOptions::GlobalOptions);
+}
+
+#ifdef QWT_FOUND
 void HistogramWidget::modelReset()
 {
     m_plot->rebuild();
 }
+
+void HistogramWidget::connectContextMenu()
+{
+    connect(m_contextMenuQwt->showTotalAction(), &QAction::triggered, this, &HistogramWidget::toggleShowTotal);
+    connect(m_contextMenuQwt->showUnresolvedAction(), &QAction::triggered, this, &HistogramWidget::toggleShowUnresolved);
+    connect(m_contextMenuQwt->exportChartAction(), &QAction::triggered, this, [=]() {
+        Util::exportChart(this, *m_plot, "Allocation Histogram");
+    });
+
+    setFocusPolicy(Qt::StrongFocus);
+}
+
+#ifndef QT_NO_CONTEXTMENU
+void HistogramWidget::contextMenuEvent(QContextMenuEvent *event)
+{
+    QMenu menu(this);
+    m_contextMenuQwt->initializeMenu(menu, m_plot->options());
+    menu.exec(event->globalPos());
+}
 #endif
+
+void HistogramWidget::keyPressEvent(QKeyEvent *event)
+{
+    m_contextMenuQwt->handleKeyPress(event);
+}
+
+void HistogramWidget::toggleShowTotal()
+{
+    ChartOptions::GlobalOptions = m_plot->toggleOption(ChartOptions::ShowTotal);
+}
+
+void HistogramWidget::toggleShowUnresolved()
+{
+    ChartOptions::GlobalOptions = m_plot->toggleOption(ChartOptions::ShowUnresolved);
+}
+#endif // QWT_FOUND
 
 #include "histogramwidget.moc"

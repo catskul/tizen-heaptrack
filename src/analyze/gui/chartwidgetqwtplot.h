@@ -24,6 +24,8 @@ public:
         ShowVLines = 0x80
     };
 
+    static Options GlobalOptions;
+
     explicit ChartOptions(Options options) { m_options = options; }
 
     static bool hasOption(Options options, Options option) { return (options & option) != 0; }
@@ -34,8 +36,17 @@ public:
 
     bool hasOption(Options option) const { return hasOption(m_options, option); }
 
+    Options setOption(Options option, bool isOn);
+
+    Options toggleOption(Options option);
+
+    virtual void setOptions(Options options) = 0;
+
 protected:
     Options m_options;
+
+private:
+    ChartOptions() { }
 };
 
 class ChartWidgetQwtPlot : public QwtPlot, public ChartOptions
@@ -49,11 +60,7 @@ public:
 
     bool isSizeModel() const { return m_isSizeModel; }
 
-    Options setOption(Options option, bool isOn);
-
-    Options toggleOption(Options option);
-
-    void setOptions(Options options);
+    virtual void setOptions(Options options) override;
 
     void rebuild(bool resetZoomAndPan);
 

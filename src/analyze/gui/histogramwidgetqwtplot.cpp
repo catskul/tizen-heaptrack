@@ -1,6 +1,7 @@
 #include "histogramwidgetqwtplot.h"
 #include "histogrammodel.h"
 #include "noklib.h"
+#include "util.h"
 
 #include <math.h>
 
@@ -41,6 +42,12 @@ public:
         const int BarCount = 9;
         m_barRects.reserve(BarCount);
         m_barLeftRight.reserve(BarCount);
+    }
+
+    void clear()
+    {
+        m_barRects.clear();
+        m_barLeftRight.clear();
     }
 
     void setBarSize(int sampleIndex, int barIndex, const QwtColumnRect &qwtRect)
@@ -116,6 +123,13 @@ public:
         setTrackerMode(QwtPlotPicker::AlwaysOn);
     }
 
+    virtual void reset() override
+    {
+        QwtPlotPicker::reset();
+        m_totalBarSizes.clear();
+        m_barSizes.clear();
+    }
+
     BarSizes m_totalBarSizes;
     BarSizes m_barSizes;
 
@@ -123,7 +137,6 @@ protected:
     virtual QwtText trackerText(const QPoint &pos) const
     {
 //        qDebug() << "Picker: (" << pos.x() << "; " << pos.y() << ")";
-//        QString s = QString(" (%1, %2) ").arg(pos.x()).arg(pos.y());
         HistogramModel *model = m_plot->model();
         if (!model)
         {
@@ -133,13 +146,14 @@ protected:
         QString s;
         if (m_barSizes.findBar(pos, sampleIndex, barIndex))
         {
-//            s = QString("<br> Sample: %1. Bar: %2").arg(sampleIndex).arg(barIndex);
-            s = model->data(model->index(sampleIndex, barIndex + 1), Qt::ToolTipRole).toString();
+            s = m_plot->getBarText(false, sampleIndex, barIndex);
+//            s += QString("<br> Sample: %1. Bar: %2").arg(sampleIndex).arg(barIndex);
         }
-        else if (m_totalBarSizes.findBar(pos, sampleIndex, barIndex))
+        else if (m_plot->hasOption(ChartOptions::ShowTotal) &&
+                 m_totalBarSizes.findBar(pos, sampleIndex, barIndex))
         {
-//            s = QString("<br> (Total) Sample: %1. Bar: %2").arg(sampleIndex).arg(barIndex);
-            s = model->data(model->index(sampleIndex, 0), Qt::ToolTipRole).toString();
+            s = m_plot->getBarText(true, sampleIndex, barIndex);
+//            s += QString("<br> (Total) Sample: %1. Bar: %2").arg(sampleIndex).arg(barIndex);
         }
         else
         {
@@ -172,8 +186,7 @@ protected:
     virtual void drawBar( QPainter *painter, int sampleIndex,
         int barIndex, const QwtColumnRect &rect) const
     {
-//        qDebug() << "drawBar: (sampleIndex=" << sampleIndex << "; barIndex=" << barIndex
-//                 << "; " << rect.toRect() << ")";
+//        qDebug() << "drawBar: (sampleIndex=" << sampleIndex << "; barIndex=" << barIndex << "; " << rect.toRect() << ")";
         QwtPlotMultiBarChart::drawBar(painter, sampleIndex, barIndex, rect);
 
         m_barSizes->setBarSize(sampleIndex, barIndex, rect);
@@ -183,8 +196,8 @@ private:
     BarSizes *m_barSizes;
 };
 
-HistogramWidgetQwtPlot::HistogramWidgetQwtPlot(QWidget *parent)
-    : QwtPlot(parent), m_model(nullptr), m_picker(new Picker(this))
+HistogramWidgetQwtPlot::HistogramWidgetQwtPlot(QWidget *parent, Options options)
+    : QwtPlot(parent), ChartOptions(options), m_model(nullptr), m_picker(new Picker(this))
 {
     setCanvasBackground(Qt::white);
     enableAxis(QwtPlot::yRight);
@@ -193,9 +206,21 @@ HistogramWidgetQwtPlot::HistogramWidgetQwtPlot(QWidget *parent)
     setAxisTitle(QwtPlot::xBottom, i18n("Requested Allocation Size"));
 }
 
+void HistogramWidgetQwtPlot::setOptions(Options options)
+{
+    if (m_options != options)
+    {
+        m_options = options;
+        rebuild();
+    }
+}
+
 void HistogramWidgetQwtPlot::rebuild()
 {
+    const double BarLayoutHint = 0.33;
+
     detachItems();
+    m_picker->reset();
 
     if (!m_model)
     {
@@ -208,14 +233,18 @@ void HistogramWidgetQwtPlot::rebuild()
 
     setAxisAutoScale(QwtPlot::yRight);
 
-    auto totalBarChart = new MultiBarChart(&m_picker->m_totalBarSizes);
-    totalBarChart->setStyle(QwtPlotMultiBarChart::Stacked);
-    totalBarChart->setLayoutHint(0.33);
-    totalBarChart->setLayoutPolicy(QwtPlotMultiBarChart::ScaleSamplesToAxes);
+    MultiBarChart *totalBarChart = nullptr;
+    if (hasOption(ShowTotal))
+    {
+        totalBarChart = new MultiBarChart(&m_picker->m_totalBarSizes);
+        totalBarChart->setStyle(QwtPlotMultiBarChart::Stacked);
+        totalBarChart->setLayoutHint(BarLayoutHint);
+        totalBarChart->setLayoutPolicy(QwtPlotMultiBarChart::ScaleSamplesToAxes);
+    }
 
     auto barChart = new MultiBarChart(&m_picker->m_barSizes);
     barChart->setStyle(QwtPlotMultiBarChart::Stacked);
-    barChart->setLayoutHint(totalBarChart->layoutHint());
+    barChart->setLayoutHint(BarLayoutHint);
     barChart->setLayoutPolicy(QwtPlotMultiBarChart::ScaleSamplesToAxes);
 
     QVector<QString> rowNames;
@@ -228,15 +257,26 @@ void HistogramWidgetQwtPlot::rebuild()
     {
         rowNames.append(m_model->headerData(row, Qt::Vertical).toString());
 
-        QVector<double> totalValues;
-        totalValues.append(m_model->data(m_model->index(row, 0)).toDouble());
-        totalSeries.append(totalValues);
+        if (totalBarChart)
+        {
+            QVector<double> totalValues;
+            totalValues.append(m_model->data(m_model->index(row, 0)).toDouble());
+            totalSeries.append(totalValues);
+        }
 
         QVector<double> values;
         for (int column = 1; column < columns; ++column)
         {
+            if (!hasOption(ShowUnresolved))
+            {
+                LocationData::Ptr locData = m_model->getLocationData(row, column);
+                if (locData && Util::isUnresolvedFunction(locData->function))
+                {
+                    continue;
+                }
+            }
             double allocations = m_model->data(m_model->index(row, column)).toDouble();
-            if ((allocations == 0) && (column > 1))
+            if (allocations == 0) // columns are sorted by allocations descending
             {
                 break;
             }
@@ -246,10 +286,14 @@ void HistogramWidgetQwtPlot::rebuild()
                 maxColumn = column;
             }
         }
+        if (values.isEmpty())
+        {
+            values.append(0);
+        }
         series.append(values);
     }
 
-    for (int column = 0; column <= maxColumn; ++column)
+    for (int column = (totalBarChart ? 0 : 1); column <= maxColumn; ++column)
     {
         auto symbol = new QwtColumnSymbol(QwtColumnSymbol::Box);
         symbol->setLineWidth(2);
@@ -264,7 +308,13 @@ void HistogramWidgetQwtPlot::rebuild()
         }
     }
 
-    totalBarChart->setSamples(totalSeries);
+    if (totalBarChart)
+    {
+        totalBarChart->setSamples(totalSeries);
+        totalBarChart->setAxes(QwtPlot::xBottom, QwtPlot::yRight);
+        totalBarChart->attach(this);
+    }
+
     barChart->setSamples(series);
 
     auto bottomScale = new HistogramScaleDraw(rowNames);
@@ -272,9 +322,45 @@ void HistogramWidgetQwtPlot::rebuild()
     bottomScale->enableComponent(QwtScaleDraw::Ticks, false);
     setAxisScaleDraw(QwtPlot::xBottom, bottomScale);
 
-    totalBarChart->setAxes(QwtPlot::xBottom, QwtPlot::yRight);
     barChart->setAxes(QwtPlot::xBottom, QwtPlot::yRight);
 
-    totalBarChart->attach(this);
     barChart->attach(this);
+
+    replot();
+}
+
+QString HistogramWidgetQwtPlot::getBarText(bool isTotal, int sampleIndex, int barIndex) const
+{
+    QString result;
+    if (isTotal)
+    {
+        result = m_model->data(m_model->index(sampleIndex, 0), Qt::ToolTipRole).toString();
+    }
+    else
+    {
+        if (hasOption(ShowUnresolved))
+        {
+            result = m_model->data(m_model->index(sampleIndex, barIndex + 1), Qt::ToolTipRole).toString();
+        }
+        else // skip unresolved functions
+        {
+            int indexOfResolved = 0;
+            int columns = m_model->columnCount();
+            for (int column = 1; column < columns; ++column)
+            {
+                LocationData::Ptr locData = m_model->getLocationData(sampleIndex, column);
+                if (locData && Util::isUnresolvedFunction(locData->function))
+                {
+                    continue;
+                }
+                if (indexOfResolved == barIndex)
+                {
+                    result = m_model->data(m_model->index(sampleIndex, column), Qt::ToolTipRole).toString();
+                    break;
+                }
+                ++indexOfResolved;
+            }
+        }
+    }
+    return result;
 }

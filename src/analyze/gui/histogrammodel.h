@@ -66,6 +66,8 @@ public:
 
     QColor getColumnColor(int column) const;
 
+    LocationData::Ptr getLocationData(int row, int column) const;
+
 private:
     HistogramData m_data;
 };

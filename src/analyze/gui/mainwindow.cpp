@@ -699,9 +699,15 @@ void MainWindow::setupStacks()
             chartWidget->updateOnSelected(this);
             chartWidget->setFocus(); // to handle keyboard events in the widget
         }
-        else if (ChartWidget::HelpWindow != nullptr)
-        {
-            ChartWidget::HelpWindow->hide();
+        else {
+            if (ChartWidget::HelpWindow != nullptr) {
+                ChartWidget::HelpWindow->hide();
+            }
+            const auto histogramWidget = dynamic_cast<HistogramWidget*>(widget);
+            if (histogramWidget) {
+                histogramWidget->updateOnSelected();
+                histogramWidget->setFocus();
+            }
         }
 #endif
     };
@@ -711,7 +717,7 @@ void MainWindow::setupStacks()
     m_ui->stacksDock->setVisible(false);
 }
 
-#if defined(QWT_FOUND)
+#ifdef QWT_FOUND
 void MainWindow::moveEvent(QMoveEvent *event)
 {
     if (ChartWidget::HelpWindow != nullptr)

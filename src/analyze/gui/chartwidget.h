@@ -23,7 +23,6 @@
 #include "contextmenuqwt.h"
 
 #include <memory>
-
 #include <QWidget>
 
 //!! for debugging
@@ -57,17 +56,16 @@ public:
 
     QSize sizeHint() const override;
 
-#if defined(QWT_FOUND)
+#ifdef QWT_FOUND
     void updateOnSelected(QWidget *mainWindow);
 
-    static ChartOptions::Options GlobalOptions;
     static QWidget* HelpWindow;
     static QWidget* MainWindow;
 
 public slots:
     void modelReset();
-#ifndef QT_NO_CONTEXTMENU
 protected:
+#ifndef QT_NO_CONTEXTMENU
     virtual void contextMenuEvent(QContextMenuEvent *event) override;
 #endif
     // workaround for handling the context menu shortcuts
@@ -87,9 +85,8 @@ private slots:
     void toggleShowSymbols();
     void toggleShowVLines();
     void toggleShowHelp();
-    void exportChart();
 private:
-    void createActions();
+    void connectContextMenu();
 
     void showHelp();
 

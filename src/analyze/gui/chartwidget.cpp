@@ -37,11 +37,7 @@
 #elif defined(QWT_FOUND)
 #include <QAction>
 #include <QContextMenuEvent>
-#include <QFileDialog>
-#include <QFileInfo>
 #include <QMenu>
-#include <QMessageBox>
-#include <QRegularExpression>
 #endif
 
 #ifdef NO_K_LIB
@@ -132,14 +128,9 @@ protected:
     virtual void closeEvent(QCloseEvent *event) override
     {
         QMainWindow::closeEvent(event);
-        ChartWidget::GlobalOptions = ChartOptions::setOption(ChartWidget::GlobalOptions, ChartOptions::ShowHelp, false);
+        ChartOptions::GlobalOptions = ChartOptions::setOption(ChartOptions::GlobalOptions, ChartOptions::ShowHelp, false);
     }
 };
-
-ChartOptions::Options ChartWidget::GlobalOptions(
-    ChartOptions::ShowHelp |
-    ChartOptions::ShowTotal | ChartOptions::ShowUnresolved |
-    ChartOptions::ShowLegend | ChartOptions::ShowCurveBorders);
 
 QWidget* ChartWidget::HelpWindow;
 QWidget* ChartWidget::MainWindow;
@@ -150,7 +141,7 @@ ChartWidget::ChartWidget(QWidget* parent)
 #if defined(KChart_FOUND)
     , m_chart(new Chart(this))
 #elif defined(QWT_FOUND)
-    , m_plot(new ChartWidgetQwtPlot(this, GlobalOptions))
+    , m_plot(new ChartWidgetQwtPlot(this, ChartOptions::GlobalOptions))
     , m_contextMenuQwt(new ContextMenuQwt(this, false))
 #endif
 #ifdef SHOW_TABLES
@@ -164,7 +155,7 @@ ChartWidget::ChartWidget(QWidget* parent)
 #elif defined(QWT_FOUND)
     layout->addWidget(m_plot);
 
-    createActions();
+    connectContextMenu();
 #endif
 #ifdef SHOW_TABLES
     auto hLayout = new QHBoxLayout();
@@ -190,14 +181,14 @@ ChartWidget::~ChartWidget() = default;
 void ChartWidget::updateOnSelected(QWidget *mainWindow)
 {
     MainWindow = mainWindow;
-    m_plot->setOptions(GlobalOptions);
-    if (m_plot->hasOption(ChartWidgetQwtPlot::ShowHelp))
+    m_plot->setOptions(ChartOptions::GlobalOptions);
+    if (m_plot->hasOption(ChartOptions::ShowHelp))
     {
         showHelp();
     }
 }
 
-void ChartWidget::createActions()
+void ChartWidget::connectContextMenu()
 {
     connect(m_contextMenuQwt->resetZoomAction(), &QAction::triggered, this, &ChartWidget::resetZoom);
     connect(m_contextMenuQwt->showTotalAction(), &QAction::triggered, this, &ChartWidget::toggleShowTotal);
@@ -206,7 +197,9 @@ void ChartWidget::createActions()
     connect(m_contextMenuQwt->showCurveBordersAction(), &QAction::triggered, this, &ChartWidget::toggleShowCurveBorders);
     connect(m_contextMenuQwt->showSymbolsAction(), &QAction::triggered, this, &ChartWidget::toggleShowSymbols);
     connect(m_contextMenuQwt->showVLinesAction(), &QAction::triggered, this, &ChartWidget::toggleShowVLines);
-    connect(m_contextMenuQwt->exportChartAction(), &QAction::triggered, this, &ChartWidget::exportChart);
+    connect(m_contextMenuQwt->exportChartAction(), &QAction::triggered, this, [=]() {
+        Util::exportChart(this, *m_plot, m_plot->model()->headerData(1, Qt::Horizontal).toString());
+    });
     connect(m_contextMenuQwt->showHelpAction(), &QAction::triggered, this, &ChartWidget::toggleShowHelp);
 
     setFocusPolicy(Qt::StrongFocus);
@@ -347,8 +340,8 @@ void ChartWidget::modelReset()
 void ChartWidget::contextMenuEvent(QContextMenuEvent *event)
 {
     QMenu menu(this);
-    m_plot->setOption(ChartWidgetQwtPlot::ShowHelp,
-                      ChartWidgetQwtPlot::hasOption(GlobalOptions, ChartWidgetQwtPlot::ShowHelp));
+    m_plot->setOption(ChartOptions::ShowHelp,
+                      ChartOptions::hasOption(ChartOptions::GlobalOptions, ChartOptions::ShowHelp));
     m_contextMenuQwt->initializeMenu(menu, m_plot->options());
     menu.exec(event->globalPos());
 }
@@ -356,7 +349,7 @@ void ChartWidget::contextMenuEvent(QContextMenuEvent *event)
 
 void ChartWidget::keyPressEvent(QKeyEvent *event)
 {
-    m_contextMenuQwt->handleKeyPress(event, m_plot->options());
+    m_contextMenuQwt->handleKeyPress(event);
 }
 
 void ChartWidget::resetZoom()
@@ -366,37 +359,37 @@ void ChartWidget::resetZoom()
 
 void ChartWidget::toggleShowTotal()
 {
-    GlobalOptions = m_plot->toggleOption(ChartWidgetQwtPlot::ShowTotal);
+    ChartOptions::GlobalOptions = m_plot->toggleOption(ChartOptions::ShowTotal);
 }
 
 void ChartWidget::toggleShowUnresolved()
 {
-    GlobalOptions = m_plot->toggleOption(ChartWidgetQwtPlot::ShowUnresolved);
+    ChartOptions::GlobalOptions = m_plot->toggleOption(ChartOptions::ShowUnresolved);
 }
 
 void ChartWidget::toggleShowLegend()
 {
-    GlobalOptions = m_plot->toggleOption(ChartWidgetQwtPlot::ShowLegend);
+    ChartOptions::GlobalOptions = m_plot->toggleOption(ChartOptions::ShowLegend);
 }
 
 void ChartWidget::toggleShowCurveBorders()
 {
-    GlobalOptions = m_plot->toggleOption(ChartWidgetQwtPlot::ShowCurveBorders);
+    ChartOptions::GlobalOptions = m_plot->toggleOption(ChartOptions::ShowCurveBorders);
 }
 
 void ChartWidget::toggleShowSymbols()
 {
-    GlobalOptions = m_plot->toggleOption(ChartWidgetQwtPlot::ShowSymbols);
+    ChartOptions::GlobalOptions = m_plot->toggleOption(ChartOptions::ShowSymbols);
 }
 
 void ChartWidget::toggleShowVLines()
 {
-    GlobalOptions = m_plot->toggleOption(ChartWidgetQwtPlot::ShowVLines);
+    ChartOptions::GlobalOptions = m_plot->toggleOption(ChartOptions::ShowVLines);
 }
 
 void ChartWidget::toggleShowHelp()
 {
-    bool checked = !ChartOptions::hasOption(GlobalOptions, ChartOptions::ShowHelp);
+    bool checked = !ChartOptions::hasOption(ChartOptions::GlobalOptions, ChartOptions::ShowHelp);
     if (checked)
     {
         showHelp();
@@ -409,7 +402,8 @@ void ChartWidget::toggleShowHelp()
             HelpWindow = nullptr;
         }
     }
-    GlobalOptions = ChartOptions::setOption(GlobalOptions, ChartOptions::ShowHelp, checked);
+    ChartOptions::GlobalOptions = ChartOptions::setOption(ChartOptions::GlobalOptions,
+        ChartOptions::ShowHelp, checked);
 }
 
 void ChartWidget::showHelp()
@@ -421,39 +415,6 @@ void ChartWidget::showHelp()
         HelpWindow->move(p.x() + 32, p.y() + 32);
     }
     HelpWindow->show();
-}
-
-void ChartWidget::exportChart()
-{
-    QString selectedFilter;
-    QString saveFilename = QFileDialog::getSaveFileName(this, "Save Chart As",
-        m_plot->model()->headerData(1, Qt::Horizontal).toString(),
-        "PNG (*.png);; BMP (*.bmp);; JPEG (*.jpg *.jpeg)", &selectedFilter);
-    if (!saveFilename.isEmpty())
-    {
-        QFileInfo fi(saveFilename);
-        if (fi.suffix().isEmpty()) // can be on some platforms
-        {
-            int i = selectedFilter.indexOf("*.");
-            if (i >= 0)
-            {
-                static QRegularExpression delimiters("[ )]");
-                i += 2;
-                int j = selectedFilter.indexOf(delimiters, i);
-                if (j > i)
-                {
-                    --i;
-                    QString suffix = selectedFilter.mid(i, j - i);
-                    saveFilename += suffix;
-                }
-            }
-        }
-        if (!m_plot->grab().save(saveFilename))
-        {
-            QMessageBox::warning(this, "Error",
-                QString("Cannot save the chart to \"%1\".").arg(saveFilename), QMessageBox::Ok);
-        }
-    }
 }
 #endif // QWT_FOUND
 

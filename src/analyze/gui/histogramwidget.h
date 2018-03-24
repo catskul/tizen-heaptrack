@@ -20,7 +20,9 @@
 #define HISTOGRAMWIDGET_H
 
 #include "gui_config.h"
+#include "contextmenuqwt.h"
 
+#include <memory>
 #include <QWidget>
 
 //!! for debugging
@@ -50,10 +52,18 @@ public:
 
     void setModel(HistogramModel* model);
 
-#if defined(QWT_FOUND)
+    void updateOnSelected();
+
+#ifdef QWT_FOUND
 public slots:
     void modelReset();
+protected:
+#ifndef QT_NO_CONTEXTMENU
+    virtual void contextMenuEvent(QContextMenuEvent *event) override;
 #endif
+    // workaround for handling the context menu shortcuts
+    virtual void keyPressEvent(QKeyEvent *event) override;
+#endif // QWT_FOUND
 
 private:
 #if defined(KChart_FOUND)
@@ -61,7 +71,15 @@ private:
     KChart::BarDiagram* m_total;
     KChart::BarDiagram* m_detailed;
 #elif defined(QWT_FOUND)
+private slots:
+    void toggleShowTotal();
+    void toggleShowUnresolved();
+
+    void connectContextMenu();
+
+private:
     HistogramWidgetQwtPlot* m_plot;
+    std::unique_ptr<ContextMenuQwt> m_contextMenuQwt;
 #endif
 #ifdef SHOW_TABLES
     QTableView* m_tableViewTotal;
