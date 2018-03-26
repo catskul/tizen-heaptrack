@@ -58,7 +58,7 @@ protected:
             return {};
         }
         QwtText text;
-        text.setRenderFlags(text.renderFlags() & ~Qt::AlignHorizontal_Mask | Qt::AlignLeft);
+        text.setRenderFlags((text.renderFlags() & ~Qt::AlignHorizontal_Mask) | Qt::AlignLeft);
         text.setBorderRadius(6);
         QString tooltip;
         if (m_plot->getCurveTooltip(pos, tooltip))

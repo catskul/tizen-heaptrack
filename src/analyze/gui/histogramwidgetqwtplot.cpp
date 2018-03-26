@@ -160,7 +160,7 @@ protected:
             return {};
         }
         QwtText text("<p style='margin-left:4px'>" + s + "</p> ");
-        text.setRenderFlags(text.renderFlags() & ~Qt::AlignHorizontal_Mask | Qt::AlignLeft);
+        text.setRenderFlags((text.renderFlags() & ~Qt::AlignHorizontal_Mask) | Qt::AlignLeft);
         text.setColor(Qt::white);
 //        QColor c(Qt::darkGreen);
         QColor c(0, 0x60, 0);

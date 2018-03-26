@@ -174,6 +174,7 @@ void ContextMenuQwt::handleKeyPress(QKeyEvent *event)
             {
                 m_showVLinesAction->activate(QAction::Trigger);
             }
+            break;
         case Qt::Key_B:
             if (m_showCurveBordersAction)
             {

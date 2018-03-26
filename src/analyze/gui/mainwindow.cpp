@@ -732,7 +732,7 @@ void MainWindow::setupStacks()
 static void selectFile(QWidget *parent, QLineEdit *fileNameEdit)
 {
     QString fileName = QFileDialog::getOpenFileName(parent, "Select Data File",
-        "", "GZ (*.gz);; All files (*)");
+        "", "GZip files (*.gz);; All files (*)");
     if (!fileName.isEmpty())
     {
         fileNameEdit->setText(fileName);
