@@ -135,8 +135,13 @@ USE_CHART {
 
 NO_K_LIB {
     HEADERS += \
-        analyze/gui/noklib.h
+        analyze/gui/noklib.h \
+        analyze/gui/aboutdialog.h
+
+    SOURCES += \
+        analyze/gui/aboutdialog.cpp
 
     FORMS += \
-        analyze/gui/mainwindow_noklib.ui
+        analyze/gui/mainwindow_noklib.ui \
+        analyze/gui/aboutdialog.ui
 }
