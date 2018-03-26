@@ -33,6 +33,14 @@ const CLSID CLSID_Profiler = {
     0x4C0B,
     {0xB3, 0x54, 0x56, 0x63, 0x90, 0xB2, 0x15, 0xCA}};
 
+#ifdef __i686__
+#define ELT_PARAMETER
+#define SetupHooks	SetEnterLeaveFunctionHooks3
+#else // __i686__
+#define ELT_PARAMETER , COR_PRF_ELT_INFO eltInfo
+#define SetupHooks	SetEnterLeaveFunctionHooks3WithInfo
+#endif // __i686__
+
 extern "C" {
 #ifdef __llvm__
 __attribute__((used))
@@ -284,8 +292,7 @@ void encodeWChar(WCHAR *orig, char *encoded) {
   encoded[i] = 0;
 }
 
-void __stdcall OnFunctionEnter(FunctionIDOrClientID functionID,
-                     COR_PRF_ELT_INFO eltInfo) {
+void __stdcall OnFunctionEnter(FunctionIDOrClientID functionID ELT_PARAMETER) {
   ICorProfilerInfo3 *info;
   HRESULT hr = g_pICorProfilerInfoUnknown->QueryInterface(IID_ICorProfilerInfo3,
                                                           (void **)&info);
@@ -313,8 +320,8 @@ void __stdcall OnFunctionEnter(FunctionIDOrClientID functionID,
   info->Release();
 }
 
-void __stdcall OnFunctionLeave(FunctionIDOrClientID functionID,
-                     COR_PRF_ELT_INFO eltInfo) {
+void __stdcall OnFunctionLeave(FunctionIDOrClientID functionID
+		      ELT_PARAMETER) {
   PopShadowStack();
 }
 
@@ -328,8 +335,7 @@ HRESULT STDMETHODCALLTYPE Profiler::Initialize(IUnknown *pICorProfilerInfoUnk) {
         COR_PRF_ENABLE_FUNCTION_RETVAL | COR_PRF_ENABLE_FRAME_INFO |
         COR_PRF_ENABLE_STACK_SNAPSHOT | COR_PRF_MONITOR_CLASS_LOADS |
         COR_PRF_ENABLE_OBJECT_ALLOCATED | COR_PRF_MONITOR_OBJECT_ALLOCATED | COR_PRF_MONITOR_GC);
-    info->SetEnterLeaveFunctionHooks3WithInfo(OnFunctionEnter, OnFunctionLeave,
-                                              NULL);
+    info->SetupHooks(OnFunctionEnter, OnFunctionLeave, NULL);
     info->Release();
     info = NULL;
   }
