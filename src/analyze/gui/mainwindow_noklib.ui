@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1473</width>
-    <height>896</height>
+    <width>1196</width>
+    <height>796</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -28,8 +28,7 @@
      <number>0</number>
     </property>
     <item>
-     <widget class="QLabel" name="messages">
-     </widget>
+     <widget class="QLabel" name="messages"/>
     </item>
     <item>
      <widget class="QStackedWidget" name="pages">
@@ -835,8 +834,8 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1473</width>
-     <height>22</height>
+     <width>1196</width>
+     <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_File">
@@ -844,8 +843,20 @@
      <string>&amp;File</string>
     </property>
    </widget>
+   <widget class="QMenu" name="menu_Help">
+    <property name="title">
+     <string>&amp;Help</string>
+    </property>
+    <addaction name="aboutAction"/>
+   </widget>
    <addaction name="menu_File"/>
+   <addaction name="menu_Help"/>
   </widget>
+  <action name="aboutAction">
+   <property name="text">
+    <string>&amp;About</string>
+   </property>
+  </action>
  </widget>
  <customwidgets>
   <customwidget>

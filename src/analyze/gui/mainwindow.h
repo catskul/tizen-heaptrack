@@ -50,6 +50,10 @@ public slots:
 signals:
     void clearData();
 
+#ifdef NO_K_LIB
+public slots:
+    void about();
+#endif
 #ifdef QWT_FOUND
 protected:
     virtual void moveEvent(QMoveEvent *event) override;

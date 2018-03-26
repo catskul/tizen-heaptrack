@@ -23,6 +23,7 @@
 #ifdef NO_K_LIB
 #include "noklib.h"
 #include <ui_mainwindow_noklib.h>
+#include "aboutdialog.h"
 #include <QAbstractButton>
 #else
 #include <ui_mainwindow.h>
@@ -476,6 +477,9 @@ MainWindow::MainWindow(QWidget* parent)
                 m_ui->tabWidget->setTabEnabled(m_ui->tabWidget->indexOf(sizesTab), true);
                 });
     }
+#endif // USE_CHART
+#ifdef NO_K_LIB
+    connect(m_ui->aboutAction, &QAction::triggered, this, &MainWindow::about);
 #endif
 
     auto costDelegate = new CostDelegate(this);
@@ -716,6 +720,14 @@ void MainWindow::setupStacks()
 
     m_ui->stacksDock->setVisible(false);
 }
+
+#ifdef NO_K_LIB
+void MainWindow::about()
+{
+    AboutDialog dlg(this);
+    dlg.exec();
+}
+#endif
 
 #ifdef QWT_FOUND
 void MainWindow::moveEvent(QMoveEvent *event)
