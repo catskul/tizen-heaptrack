@@ -144,4 +144,7 @@ NO_K_LIB {
     FORMS += \
         analyze/gui/mainwindow_noklib.ui \
         analyze/gui/aboutdialog.ui
+
+    RESOURCES += \
+        analyze/gui/gui.qrc
 }

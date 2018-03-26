@@ -52,6 +52,8 @@ signals:
 
 #ifdef NO_K_LIB
 public slots:
+    void selectOpenFile();
+    void selectCompareToFile();
     void about();
 #endif
 #ifdef QWT_FOUND

@@ -25,6 +25,7 @@
 #include <ui_mainwindow_noklib.h>
 #include "aboutdialog.h"
 #include <QAbstractButton>
+#include <QFileDialog>
 #else
 #include <ui_mainwindow.h>
 #include <KConfigGroup>
@@ -496,6 +497,7 @@ MainWindow::MainWindow(QWidget* parent)
     setupObjectTreeModel(objectTreeModel, m_ui->objectTreeResults, m_ui->filterClass, m_ui->filterGC);
 
     auto validateInputFile = [this](const QString& path, bool allowEmpty) -> bool {
+        m_ui->messages->hide();
         if (path.isEmpty()) {
             return allowEmpty;
         }
@@ -531,19 +533,24 @@ MainWindow::MainWindow(QWidget* parent)
     m_ui->buttonBox->setEnabled(true);
 
     auto validateInputAndLoadFile = [this, validateInputFile]() {
-       const auto path = m_ui->openFile->text();
+       const auto path = m_ui->openFileEdit->text();
        if (!validateInputFile(path, false)) {
            return;
        }
        Q_ASSERT(!path.isEmpty());
-       const auto base = m_ui->compareTo->text();
+       const auto base = m_ui->compareToEdit->text();
        if (!validateInputFile(base, true)) {
            return;
        }
+       QApplication::setOverrideCursor(Qt::WaitCursor);
        loadFile(path, base);
+       QApplication::restoreOverrideCursor();
     };
 
     connect(m_ui->buttonBox, &QDialogButtonBox::clicked, this, validateInputAndLoadFile);
+
+    connect(m_ui->openFileButton1, &QPushButton::clicked, this, &MainWindow::selectOpenFile);
+    connect(m_ui->openFileButton2, &QPushButton::clicked, this, &MainWindow::selectCompareToFile);
 #endif
 
     setupStacks();
@@ -722,6 +729,26 @@ void MainWindow::setupStacks()
 }
 
 #ifdef NO_K_LIB
+static void selectFile(QWidget *parent, QLineEdit *fileNameEdit)
+{
+    QString fileName = QFileDialog::getOpenFileName(parent, "Select Data File",
+        "", "GZ (*.gz);; All files (*)");
+    if (!fileName.isEmpty())
+    {
+        fileNameEdit->setText(fileName);
+    }
+}
+
+void MainWindow::selectOpenFile()
+{
+    selectFile(this, m_ui->openFileEdit);
+}
+
+void MainWindow::selectCompareToFile()
+{
+    selectFile(this, m_ui->compareToEdit);
+}
+
 void MainWindow::about()
 {
     AboutDialog dlg(this);

@@ -53,38 +53,49 @@
            <string>Open Heaptrack Data</string>
           </property>
           <layout class="QFormLayout" name="formLayout">
-           <item row="1" column="1">
-            <widget class="QLineEdit" name="openFile">
-             <property name="toolTip">
-              <string>&lt;qt&gt;&lt;p&gt;This field specifies the primary heaptrack data file. These files are called &lt;tt&gt;heaptrack.$APP.$PID.gz&lt;/tt&gt;. You can produce such a file by profiling your application, e.g. via:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;heaptrack &amp;lt;yourapplication&amp;gt; ...&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Or, alternatively, you can attach to a running process via&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;heaptrack --pid $(pidof &amp;lt;yourapplication&amp;gt;)&lt;/code&gt;&lt;/pre&gt;&lt;/qt&gt;</string>
-             </property>
-             <property name="text">
-              <string>heaptrack.*.*.gz (PLEASE ENTER path/to/heaptrack.$APP.$PID.gz)</string>
-             </property>
-            </widget>
-           </item>
-           <item row="2" column="1">
-            <widget class="QLineEdit" name="compareTo">
-             <property name="toolTip">
-              <string>&lt;qt&gt;You can optionally specify a second heaptrack data file to compare to. If set, this file will be used as a base and its cost gets subtracted from the primary data costs.&lt;/qt&gt;</string>
-             </property>
-             <property name="text">
-              <string>heaptrack.*.*.gz (PLEASE ENTER path/to/heaptrack.$APP.$PID.gz) [OPTIONAL]</string>
-             </property>
-            </widget>
-           </item>
            <item row="1" column="0">
             <widget class="QLabel" name="openFileLabel">
              <property name="text">
               <string>Profile &amp;Data:</string>
              </property>
              <property name="buddy">
-              <cstring>openFile</cstring>
+              <cstring>openFileEdit</cstring>
              </property>
             </widget>
+           </item>
+           <item row="1" column="1">
+            <layout class="QHBoxLayout" name="horizontalLayout_1">
+             <item>
+              <widget class="QLineEdit" name="openFileEdit">
+               <property name="toolTip">
+                <string>&lt;qt&gt;&lt;p&gt;This field specifies the primary heaptrack data file. These files are called &lt;tt&gt;heaptrack.$APP.$PID.gz&lt;/tt&gt;. You can produce such a file by profiling your application, e.g. via:&lt;/p&gt;
+     &lt;pre&gt;&lt;code&gt;heaptrack &amp;lt;yourapplication&amp;gt; ...&lt;/code&gt;&lt;/pre&gt;
+     &lt;p&gt;Or, alternatively, you can attach to a running process via&lt;/p&gt;
+     &lt;pre&gt;&lt;code&gt;heaptrack --pid $(pidof &amp;lt;yourapplication&amp;gt;)&lt;/code&gt;&lt;/pre&gt;&lt;/qt&gt;</string>
+               </property>
+               <property name="text">
+                <string>heaptrack.*.*.gz (PLEASE ENTER OR SELECT path/to/heaptrack.$APP.$PID.gz)</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="openFileButton1">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="gui.qrc">
+                 <normaloff>:/icons/fileopen.png</normaloff>:/icons/fileopen.png</iconset>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </item>
            <item row="2" column="0">
             <widget class="QLabel" name="compareToLabel">
@@ -92,9 +103,37 @@
               <string>Compare to:</string>
              </property>
              <property name="buddy">
-              <cstring>compareTo</cstring>
+              <cstring>compareToEdit</cstring>
              </property>
             </widget>
+           </item>
+           <item row="2" column="1">
+            <layout class="QHBoxLayout" name="horizontalLayout_8">
+             <item>
+              <widget class="QLineEdit" name="compareToEdit">
+               <property name="toolTip">
+                <string>&lt;qt&gt;You can optionally specify a second heaptrack data file to compare to. If set, this file will be used as a base and its cost gets subtracted from the primary data costs.&lt;/qt&gt;</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="openFileButton2">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="icon">
+                <iconset resource="gui.qrc">
+                 <normaloff>:/icons/fileopen.png</normaloff>:/icons/fileopen.png</iconset>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </item>
           </layout>
          </widget>
@@ -531,7 +570,7 @@
            <layout class="QVBoxLayout" name="verticalLayout">
             <item>
              <widget class="QWidget" name="widget" native="true">
-              <layout class="QHBoxLayout" name="horizontalLayout">
+              <layout class="QHBoxLayout" name="horizontalLayout_9">
                <property name="spacing">
                 <number>6</number>
                </property>
@@ -866,6 +905,8 @@
    <container>1</container>
   </customwidget>
  </customwidgets>
- <resources/>
+ <resources>
+  <include location="gui.qrc"/>
+ </resources>
  <connections/>
 </ui>
