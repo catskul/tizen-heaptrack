@@ -36,6 +36,7 @@
 #include <KChartLegend>
 #elif defined(QWT_FOUND)
 #include <algorithm>
+#include <math.h>
 #include <QAction>
 #include <QContextMenuEvent>
 #include <QMenu>
