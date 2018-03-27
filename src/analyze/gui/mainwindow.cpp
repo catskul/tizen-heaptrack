@@ -63,6 +63,10 @@
 #include "chartwidget.h"
 #include "histogrammodel.h"
 #include "histogramwidget.h"
+#if QWT_FOUND
+#include "aboutdata.h"
+#include <QSettings>
+#endif
 #endif
 
 using namespace std;
@@ -240,10 +244,22 @@ MainWindow::MainWindow(QWidget* parent)
     , m_config(KSharedConfig::openConfig(QStringLiteral("heaptrack_gui")))
 #endif
 {
-#if defined(QWT_FOUND) && (QT_VERSION >= 0x050A00)
+#ifdef QWT_FOUND
+    QSettings settings(QSettings::UserScope, AboutData::Organization, AboutData::applicationName());
+    settings.beginGroup("Charts");
+    QVariant value = settings.value("Options");
+    bool ok;
+    int options = value.toInt(&ok);
+    if (ok)
+    {
+        ChartOptions::GlobalOptions = ChartOptions::Options(options);
+    }
+    settings.endGroup();
+#if QT_VERSION >= 0x050A00
     // seems it doesn't help under Windows (Qt 5.10.0)
     QCoreApplication::setAttribute(Qt::AA_DontShowShortcutsInContextMenus, false);
 #endif
+#endif // QWT_FOUND
 
     m_ui->setupUi(this);
 
@@ -617,11 +633,18 @@ MainWindow::MainWindow(QWidget* parent)
 
 MainWindow::~MainWindow()
 {
-#ifndef NO_K_LIB // TODO!! find a replacement for KSharedConfig
+#ifdef NO_K_LIB
+#ifdef QWT_FOUND
+    QSettings settings(QSettings::UserScope, AboutData::Organization, AboutData::applicationName());
+    settings.beginGroup("Charts");
+    settings.setValue("Options", ChartOptions::GlobalOptions);
+    settings.endGroup();
+#endif // QWT_FOUND
+#else
     auto state = saveState(MAINWINDOW_VERSION);
     auto group = m_config->group(Config::Groups::MainWindow);
     group.writeEntry(Config::Entries::State, state);
-#endif
+#endif // NO_K_LIB
 }
 
 void MainWindow::loadFile(const QString& file, const QString& diffBase)

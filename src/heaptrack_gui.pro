@@ -9,6 +9,9 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 INCLUDEPATH += $$PWD/analyze/gui
 
+# build heaptrack for Samsung Tizen OS
+DEFINES += SAMSUNG_TIZEN_BRANCH
+
 win32 {
     CONFIG += NO_K_LIB NO_K_CHART
 
@@ -43,6 +46,7 @@ unix {
 
 SOURCES += \
     analyze/accumulatedtracedata.cpp \
+    analyze/gui/aboutdata.cpp \
     analyze/gui/gui.cpp \
     analyze/gui/callercalleemodel.cpp \
     analyze/gui/costdelegate.cpp \
@@ -55,11 +59,11 @@ SOURCES += \
     analyze/gui/topproxy.cpp \
     analyze/gui/treemodel.cpp \
     analyze/gui/treeproxy.cpp \
-    analyze/gui/util.cpp \
-    analyze/gui/aboutdata.cpp
+    analyze/gui/util.cpp
 
 HEADERS += \
     analyze/accumulatedtracedata.h \
+    analyze/gui/aboutdata.h \
     analyze/gui/callercalleemodel.h \
     analyze/gui/costdelegate.h \
     analyze/gui/flamegraph.h \
@@ -75,8 +79,7 @@ HEADERS += \
     analyze/gui/treemodel.h \
     analyze/gui/treeproxy.h \
     analyze/gui/util.h \
-    util/config.h \
-    analyze/gui/aboutdata.h
+    util/config.h
 
 QWT_CHART {
     # QMAKEFEATURES and QWT_ROOT environment variables must be set (e.g. to d:\Qwt\Qwt-6.2).
