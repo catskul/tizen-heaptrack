@@ -189,9 +189,9 @@ bool exportChart(QWidget *parent, QWidget &chartWidget, const QString &chartName
         {
             return true;
         }
+        QMessageBox::warning(parent, "Error",
+            QString("Cannot save the chart to \"%1\".").arg(saveFilename), QMessageBox::Ok);
     }
-    QMessageBox::warning(parent, "Error",
-        QString("Cannot save the chart to \"%1\".").arg(saveFilename), QMessageBox::Ok);
     return false;
 }
 #endif
