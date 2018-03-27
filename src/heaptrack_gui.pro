@@ -55,7 +55,8 @@ SOURCES += \
     analyze/gui/topproxy.cpp \
     analyze/gui/treemodel.cpp \
     analyze/gui/treeproxy.cpp \
-    analyze/gui/util.cpp
+    analyze/gui/util.cpp \
+    analyze/gui/aboutdata.cpp
 
 HEADERS += \
     analyze/accumulatedtracedata.h \
@@ -74,7 +75,8 @@ HEADERS += \
     analyze/gui/treemodel.h \
     analyze/gui/treeproxy.h \
     analyze/gui/util.h \
-    util/config.h
+    util/config.h \
+    analyze/gui/aboutdata.h
 
 QWT_CHART {
     # QMAKEFEATURES and QWT_ROOT environment variables must be set (e.g. to d:\Qwt\Qwt-6.2).

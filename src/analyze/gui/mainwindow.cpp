@@ -241,7 +241,7 @@ MainWindow::MainWindow(QWidget* parent)
 #endif
 {
 #if defined(QWT_FOUND) && (QT_VERSION >= 0x050A00)
-    // TODO!! seems it doesn't help under Windows (Qt 5.10.0)
+    // seems it doesn't help under Windows (Qt 5.10.0)
     QCoreApplication::setAttribute(Qt::AA_DontShowShortcutsInContextMenus, false);
 #endif
 

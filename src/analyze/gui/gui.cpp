@@ -26,6 +26,7 @@
 #include <KLocalizedString>
 #endif
 
+#include "aboutdata.h"
 #include "../accumulatedtracedata.h"
 #include "../allocationdata.h"
 #include "mainwindow.h"
@@ -37,10 +38,13 @@ int main(int argc, char** argv)
 #ifndef NO_K_LIB
     KLocalizedString::setApplicationDomain("heaptrack");
 
-    KAboutData aboutData(QStringLiteral("heaptrack_gui"), i18n("Heaptrack GUI"), QStringLiteral("0.1"),
-                         i18n("A visualizer for heaptrack data files."), KAboutLicense::LGPL,
-                         i18n("Copyright 2015, Milian Wolff <mail@milianw.de>"), QString(),
-                         QStringLiteral("mail@milianw.de"));
+    const auto LicenseType = KAboutLicense::LGPL;
+
+    typedef AboutData A;
+
+    KAboutData aboutData(A::ComponentName, A::DisplayName, A::Version, A::ShortDescription,
+                         LicenseType, A::CopyrightStatement, QString(),
+                         QString(), A::BugAddress);
 
     aboutData.addAuthor(i18n("Milian Wolff"), i18n("Original author, maintainer"), QStringLiteral("mail@milianw.de"),
                         QStringLiteral("http://milianw.de"));
