@@ -3,6 +3,8 @@
 
 #include "aboutdata.h"
 
+#include <QFontMetrics>
+
 AboutDialog::AboutDialog(QWidget *parent) :
     QDialog(parent),
     ui(new Ui::AboutDialog)
@@ -12,8 +14,10 @@ AboutDialog::AboutDialog(QWidget *parent) :
 
     setWindowTitle("About " + AboutData::DisplayName);
 
-    ui->label->setText(QString(
-        "<h2>A visualizer for heaptrack data files.</h2>" \
+    ui->textEdit->viewport()->setAutoFillBackground(false);
+
+    ui->textEdit->setHtml(QString(
+        "<h2>A visualizer for heaptrack data files</h2>" \
         "<p>Copyright 2015, Milian Wolff " \
         "&lt;<a href=mailto:mail@milianw.de>mail@milianw.de</a>&gt;</p>" \
         "<p>GNU LESSER GENERAL PUBLIC LICENSE v.2.1</p>" \
@@ -25,6 +29,14 @@ AboutDialog::AboutDialog(QWidget *parent) :
         "(<a href=http://www.doublejdesign.co.uk>www.doublejdesign.co.uk</a>)</p>")
         .arg(AboutData::Organization)
     );
+
+    QFontMetrics fm(ui->textEdit->font());
+    QRect rect = fm.boundingRect("The application is based in part on the work of the Qwt project (qwt.sf.net)");
+    int m = ui->verticalLayout->margin();
+    int h = ui->buttonBox->height();
+    int textWidth = (int)round(rect.width() * 1.03);
+    int textHeight = (int)round(rect.height() * 1.03 * 14);
+    resize(std::max(420, 2 * m + textWidth), std::max(252, 2 * m + h + textHeight));
 }
 
 AboutDialog::~AboutDialog()
