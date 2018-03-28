@@ -18,17 +18,28 @@ AboutDialog::AboutDialog(QWidget *parent) :
     ui->textEdit->viewport()->setAutoFillBackground(false);
 
     ui->textEdit->setHtml(QString(
-        "<h2>A visualizer for heaptrack data files</h2>" \
-        "<p>Copyright 2015, Milian Wolff " \
-        "&lt;<a href=mailto:mail@milianw.de>mail@milianw.de</a>&gt;</p>" \
+        "<h2>%1 v.%2</h2>" \
+        "<p>%3</p>")
+      .arg(AboutData::DisplayName).arg(AboutData::Version)
+      .arg(AboutData::ShortDescription)
+        +
+#ifdef SAMSUNG_TIZEN_BRANCH
+        QString(
+        "<p>Based on Heaptrack memory profiler created by Milian Wolff " \
+        "&lt;<a href=mailto:mail@milianw.de>mail@milianw.de</a>&gt;</p>") +
+#endif
+        QString(
+        "<p>%4</p>")
+        .arg(AboutData::CopyrightStatement) +
+        QString(
         "<p>GNU LESSER GENERAL PUBLIC LICENSE v.2.1</p>" \
-        "<p>Original author, maintainer: Milian Wolff</p>" \
-        "<p>Copyright 2018, %1</p>" \
         "<p>The application is based in part on the work of the Qwt project " \
-        "(<a href=http://qwt.sf.net>qwt.sf.net</a>)</p>" \
+        "(<a href=http://qwt.sf.net>qwt.sf.net</a>)</p>")
+#ifdef WINDOWS
+        + QString(
         "<p>Application icon (free for commercial use): Jack Cai " \
         "(<a href=http://www.doublejdesign.co.uk>www.doublejdesign.co.uk</a>)</p>")
-        .arg(AboutData::Organization)
+#endif
     );
 
     QFontMetrics fm(ui->textEdit->font());

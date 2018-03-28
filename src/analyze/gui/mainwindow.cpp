@@ -386,8 +386,9 @@ MainWindow::MainWindow(QWidget* parent)
                                              Util::formatByteSize(data.CoreCLRPart.peak, 1),
                                              Util::formatByteSize(data.nonCoreCLRPart.peak, 1),
                                              Util::formatByteSize(data.unknownPart.peak, 1))
-                       << i18n("<dt><b>peak RSS</b> (including heaptrack "
-                               "overhead):</dt><dd>%1</dd>",
+                       << i18n("<dt><b>peak RSS</b> (including %1 "
+                               "overhead):</dt><dd>%2</dd>",
+                               AboutData::ShortName,
                                Util::formatByteSize(data.peakRSS, 1))
                        << i18n("<dt><b>total memory leaked</b>:</dt><dd>%1</dd>"
                                "</dt><dd>%2 (CoreCLR), %3 (non-CoreCLR), %4 (unknown)</dd>",
@@ -408,8 +409,9 @@ MainWindow::MainWindow(QWidget* parent)
                                              Util::formatByteSize(data.nonCoreCLRPart.peak, 1),
                                              Util::formatByteSize(data.untrackedPart.peak, 1),
                                              Util::formatByteSize(data.unknownPart.peak, 1))
-                       << i18n("<dt><b>peak RSS</b> (including heaptrack "
-                               "overhead):</dt><dd>%1</dd>",
+                       << i18n("<dt><b>peak RSS</b> (including %1 "
+                               "overhead):</dt><dd>%2</dd>",
+                               AboutData::ShortName,
                                Util::formatByteSize(data.peakRSS, 1))
                        << i18n("<dt><b>total memory leaked</b>:</dt><dd>%1</dd>"
                                "</dt><dd>%2 (CoreCLR), %3 (non-CoreCLR), %4 (sbrk heap), %5 (unknown)</dd>",
@@ -428,8 +430,9 @@ MainWindow::MainWindow(QWidget* parent)
                                          "after %2s</dd>",
                                          Util::formatByteSize(data.cost.peak, 1),
                                          peakTimeS)
-                   << i18n("<dt><b>peak RSS</b> (including heaptrack "
-                           "overhead):</dt><dd>%1</dd>",
+                   << i18n("<dt><b>peak RSS</b> (including %1 "
+                           "overhead):</dt><dd>%2</dd>",
+                           AboutData::ShortName,
                            Util::formatByteSize(data.peakRSS, 1))
                    << i18n("<dt><b>total memory leaked</b>:</dt><dd>%1</dd>",
                            Util::formatByteSize(data.cost.leaked, 1))
@@ -604,7 +607,7 @@ MainWindow::MainWindow(QWidget* parent)
         m_ui->widget_12->hide();
     }
 
-    setWindowTitle(i18n("Heaptrack"));
+    setWindowTitle(AboutData::ShortName);
     // closing the current file shows the stack page to open a new one
 #ifdef NO_K_LIB
     m_openAction = new QAction(i18n("&Open..."), this);
@@ -653,11 +656,12 @@ void MainWindow::loadFile(const QString& file, const QString& diffBase)
     m_closeAction->setEnabled(false);
     m_ui->loadingLabel->setText(i18n("Loading file %1, please wait...", file));
     if (diffBase.isEmpty()) {
-        setWindowTitle(i18nc("%1: file name that is open", "Heaptrack - %1", QFileInfo(file).fileName()));
+        setWindowTitle(i18nc("%1: application name; %2: file name that is open", "%1 - %2",
+                             AboutData::ShortName, QFileInfo(file).fileName()));
         m_diffMode = false;
     } else {
-        setWindowTitle(i18nc("%1, %2: file names that are open", "Heaptrack - %1 compared to %2",
-                             QFileInfo(file).fileName(), QFileInfo(diffBase).fileName()));
+        setWindowTitle(i18nc("%1: application name; %2, %3: file names that are open", "%1 - %2 compared to %3",
+                             AboutData::ShortName, QFileInfo(file).fileName(), QFileInfo(diffBase).fileName()));
         m_diffMode = true;
     }
     m_ui->pages->setCurrentWidget(m_ui->loadingPage);

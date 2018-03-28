@@ -2,7 +2,7 @@ QT       += core gui
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-TARGET = heaptrack_gui_qt
+TARGET = heaptrack_gui
 TEMPLATE = app
 
 DEFINES += QT_DEPRECATED_WARNINGS
@@ -10,7 +10,12 @@ DEFINES += QT_DEPRECATED_WARNINGS
 INCLUDEPATH += $$PWD/analyze/gui
 
 # build heaptrack for Samsung Tizen OS
-DEFINES += SAMSUNG_TIZEN_BRANCH
+CONFIG += SAMSUNG_TIZEN_BRANCH
+
+SAMSUNG_TIZEN_BRANCH {
+    DEFINES += SAMSUNG_TIZEN_BRANCH
+    TARGET = TizenMemoryProfiler
+}
 
 win32 {
     CONFIG += NO_K_LIB NO_K_CHART
@@ -18,7 +23,7 @@ win32 {
 #   comment the next line to not use QWT (i.e. don't show charts)
     CONFIG += QWT_CHART
 
-    DEFINES += NO_K_LIB NO_K_CHART
+    DEFINES += NO_K_LIB NO_K_CHART WINDOWS
     INCLUDEPATH += $$(BOOST_LIB)
     LIBS += -L$$(BOOST_LIB)/stage/lib
 

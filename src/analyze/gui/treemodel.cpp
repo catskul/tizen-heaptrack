@@ -149,7 +149,7 @@ QVariant TreeModel::headerData(int section, Qt::Orientation orientation, int rol
                         "called. Function symbol and file "
                         "information "
                         "may be unknown when debug information was missing when "
-                        "heaptrack was run.</qt>");
+                        "the memory profiler was run.</qt>");
         case NUM_COLUMNS:
             break;
         }

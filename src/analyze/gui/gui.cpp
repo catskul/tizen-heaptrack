@@ -18,6 +18,7 @@
 
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QMessageBox>
 
 #ifdef NO_K_LIB
 #include "noklib.h"
@@ -36,7 +37,7 @@ int main(int argc, char** argv)
     QApplication app(argc, argv);
 
 #ifndef NO_K_LIB
-    KLocalizedString::setApplicationDomain("heaptrack");
+    KLocalizedString::setApplicationDomain(AboutData::ShortName);
 
     const auto LicenseType = KAboutLicense::LGPL;
 
@@ -105,7 +106,12 @@ int main(int argc, char** argv)
         + (isShowPrivateClean ? 1 : 0)
         + (isShowShared ? 1 : 0) != 1) {
 
-        qFatal("One of --malloc, --managed, --private_dirty, --private_clean or --shared options is necessary. Please, use exactly only one of the options for each start of GUI.");
+        const auto msg = "One of --malloc, --managed, --private_dirty, --private_clean or --shared options is necessary. " \
+                         "Please, use exactly only one of the options for each start of GUI.";
+
+        QMessageBox::critical(nullptr, AboutData::DisplayName + " Error", msg, QMessageBox::Ok);
+
+        qFatal(msg);
 
         return 1;
     } else if (isShowMalloc)

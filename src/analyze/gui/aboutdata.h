@@ -8,6 +8,7 @@ class AboutData
 public:
     const static QString& Organization;
     const static QString& ComponentName;
+    const static QString& ShortName;
     const static QString& DisplayName;
     const static QString& Version;
     const static QString& ShortDescription;
