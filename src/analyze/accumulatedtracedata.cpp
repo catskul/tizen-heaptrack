@@ -25,6 +25,7 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
+#include <boost/iostreams/filter/newline.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
 
 #include "util/config.h"
@@ -146,6 +147,7 @@ bool AccumulatedTraceData::read(const std::string& inputFile, const ParsePass pa
     }
 
     boost::iostreams::filtering_istream in;
+    in.push(boost::iostreams::newline_filter(boost::iostreams::newline::posix)); // fix possible newline issues
     if (isCompressed) {
         in.push(boost::iostreams::gzip_decompressor());
     }
