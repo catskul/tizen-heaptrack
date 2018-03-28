@@ -51,6 +51,8 @@ signals:
     void clearData();
 
 #ifdef NO_K_LIB
+protected:
+    virtual void closeEvent(QCloseEvent *event) override;
 public slots:
     void selectOpenFile();
     void selectCompareToFile();
@@ -66,7 +68,7 @@ private:
 
     QScopedPointer<Ui::MainWindow> m_ui;
     Parser* m_parser;
-#ifndef NO_K_LIB // TODO!! find a replacement for KSharedConfig
+#ifndef NO_K_LIB
     KSharedConfig::Ptr m_config;
 #endif
     bool m_diffMode = false;

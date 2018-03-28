@@ -240,12 +240,18 @@ MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , m_ui(new Ui::MainWindow)
     , m_parser(new Parser(this))
-#ifndef NO_K_LIB // TODO!! find a replacement for KSharedConfig
+#ifndef NO_K_LIB
     , m_config(KSharedConfig::openConfig(QStringLiteral("heaptrack_gui")))
 #endif
 {
-#ifdef QWT_FOUND
+    m_ui->setupUi(this);
+
+#ifdef NO_K_LIB
     QSettings settings(QSettings::UserScope, AboutData::Organization, AboutData::applicationName());
+    restoreGeometry(settings.value("mainWindowGeometry").toByteArray());
+    // create docks, toolbars, etc…
+    restoreState(settings.value("mainWindowState").toByteArray());
+#ifdef QWT_FOUND
     settings.beginGroup("Charts");
     QVariant value = settings.value("Options");
     bool ok;
@@ -260,14 +266,11 @@ MainWindow::MainWindow(QWidget* parent)
     QCoreApplication::setAttribute(Qt::AA_DontShowShortcutsInContextMenus, false);
 #endif
 #endif // QWT_FOUND
-
-    m_ui->setupUi(this);
-
-#ifndef NO_K_LIB // TODO!! find a replacement for KSharedConfig
+#else
     auto group = m_config->group(Config::Groups::MainWindow);
     auto state = group.readEntry(Config::Entries::State, QByteArray());
     restoreState(state, MAINWINDOW_VERSION);
-#endif
+#endif // NO_K_LIB
 
     m_ui->pages->setCurrentWidget(m_ui->openPage);
     // TODO: proper progress report
@@ -636,14 +639,7 @@ MainWindow::MainWindow(QWidget* parent)
 
 MainWindow::~MainWindow()
 {
-#ifdef NO_K_LIB
-#ifdef QWT_FOUND
-    QSettings settings(QSettings::UserScope, AboutData::Organization, AboutData::applicationName());
-    settings.beginGroup("Charts");
-    settings.setValue("Options", ChartOptions::GlobalOptions);
-    settings.endGroup();
-#endif // QWT_FOUND
-#else
+#ifndef NO_K_LIB
     auto state = saveState(MAINWINDOW_VERSION);
     auto group = m_config->group(Config::Groups::MainWindow);
     group.writeEntry(Config::Entries::State, state);
@@ -756,6 +752,19 @@ void MainWindow::setupStacks()
 }
 
 #ifdef NO_K_LIB
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    QMainWindow::closeEvent(event);
+    QSettings settings(QSettings::UserScope, AboutData::Organization, AboutData::applicationName());
+    settings.setValue("mainWindowGeometry", saveGeometry());
+    settings.setValue("mainWindowState", saveState());
+#ifdef QWT_FOUND
+    settings.beginGroup("Charts");
+    settings.setValue("Options", ChartOptions::GlobalOptions);
+    settings.endGroup();
+#endif // QWT_FOUND
+}
+
 static void selectFile(QWidget *parent, QLineEdit *fileNameEdit)
 {
     QString fileName = QFileDialog::getOpenFileName(parent, "Select Data File",
