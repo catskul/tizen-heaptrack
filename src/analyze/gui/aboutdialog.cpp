@@ -3,6 +3,7 @@
 
 #include "aboutdata.h"
 
+#include <math.h>
 #include <QFontMetrics>
 
 AboutDialog::AboutDialog(QWidget *parent) :
