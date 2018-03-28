@@ -37,7 +37,7 @@ int main(int argc, char** argv)
     QApplication app(argc, argv);
 
 #ifndef NO_K_LIB
-    KLocalizedString::setApplicationDomain(AboutData::ShortName);
+    KLocalizedString::setApplicationDomain(AboutData::ShortName.toStdString().c_str());
 
     const auto LicenseType = KAboutLicense::LGPL;
 

@@ -54,6 +54,7 @@ unix {
 SOURCES += \
     analyze/accumulatedtracedata.cpp \
     analyze/gui/aboutdata.cpp \
+    analyze/gui/aboutdialog.cpp \
     analyze/gui/gui.cpp \
     analyze/gui/callercalleemodel.cpp \
     analyze/gui/costdelegate.cpp \
@@ -71,6 +72,7 @@ SOURCES += \
 HEADERS += \
     analyze/accumulatedtracedata.h \
     analyze/gui/aboutdata.h \
+    analyze/gui/aboutdialog.h \
     analyze/gui/callercalleemodel.h \
     analyze/gui/costdelegate.h \
     analyze/gui/flamegraph.h \
@@ -147,11 +149,7 @@ USE_CHART {
 
 NO_K_LIB {
     HEADERS += \
-        analyze/gui/noklib.h \
-        analyze/gui/aboutdialog.h
-
-    SOURCES += \
-        analyze/gui/aboutdialog.cpp
+        analyze/gui/noklib.h
 
     FORMS += \
         analyze/gui/mainwindow_noklib.ui \

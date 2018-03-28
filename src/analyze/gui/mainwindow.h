@@ -46,6 +46,7 @@ public slots:
     void loadFile(const QString& path, const QString& diffBase = {});
     void openNewFile();
     void closeFile();
+    void about();
 
 signals:
     void clearData();
@@ -56,7 +57,6 @@ protected:
 public slots:
     void selectOpenFile();
     void selectCompareToFile();
-    void about();
 #endif
 #ifdef QWT_FOUND
 protected:

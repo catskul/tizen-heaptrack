@@ -23,7 +23,6 @@
 #ifdef NO_K_LIB
 #include "noklib.h"
 #include <ui_mainwindow_noklib.h>
-#include "aboutdialog.h"
 #include <QAbstractButton>
 #include <QFileDialog>
 #else
@@ -34,6 +33,8 @@
 #include <KStandardAction>
 #endif
 
+#include "aboutdata.h"
+#include "aboutdialog.h"
 #include "util.h"
 
 #include <QAction>
@@ -64,7 +65,6 @@
 #include "histogrammodel.h"
 #include "histogramwidget.h"
 #if QWT_FOUND
-#include "aboutdata.h"
 #include <QSettings>
 #endif
 #endif
@@ -501,9 +501,8 @@ MainWindow::MainWindow(QWidget* parent)
                 });
     }
 #endif // USE_CHART
-#ifdef NO_K_LIB
+
     connect(m_ui->aboutAction, &QAction::triggered, this, &MainWindow::about);
-#endif
 
     auto costDelegate = new CostDelegate(this);
 
@@ -684,6 +683,12 @@ void MainWindow::closeFile()
     emit clearData();
 }
 
+void MainWindow::about()
+{
+    AboutDialog dlg(this);
+    dlg.exec();
+}
+
 void MainWindow::showError(const QString& message)
 {
     m_ui->messages->setText(message);
@@ -783,12 +788,6 @@ void MainWindow::selectOpenFile()
 void MainWindow::selectCompareToFile()
 {
     selectFile(this, m_ui->compareToEdit);
-}
-
-void MainWindow::about()
-{
-    AboutDialog dlg(this);
-    dlg.exec();
 }
 #endif
 
