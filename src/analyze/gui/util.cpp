@@ -185,7 +185,7 @@ bool exportChart(QWidget *parent, QWidget &chartWidget, const QString &chartName
                 }
             }
         }
-        if (chartWidget.grab().save(saveFilename))
+        if (chartWidget.grab().save(saveFilename, nullptr, 90))
         {
             return true;
         }
