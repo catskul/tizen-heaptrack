@@ -21,6 +21,8 @@ win32 {
     DEFINES += NO_K_LIB NO_K_CHART
     INCLUDEPATH += $$(BOOST_LIB)
     LIBS += -L$$(BOOST_LIB)/stage/lib
+
+    RC_ICONS += analyze/gui/icons/if_diagram_v2-14_37134.ico
 }
 
 unix {

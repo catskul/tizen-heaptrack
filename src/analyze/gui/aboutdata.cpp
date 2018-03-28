@@ -7,11 +7,11 @@
 #endif
 
 #ifdef SAMSUNG_TIZEN_BRANCH
-const QString& AboutData::Organization = "Samsung";
+const QString& AboutData::Organization = "Samsung Electronics";
 
 const QString& AboutData::CopyrightStatement =
         i18n("Copyright 2015, Milian Wolff <mail@milianw.de>. " \
-             "Copyright 2018, Samsung.");
+             "Copyright 2018, Samsung Electronics.");
 
 const QString& AboutData::BugAddress = "TODO"; // TODO!!
 #else
