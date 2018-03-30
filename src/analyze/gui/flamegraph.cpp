@@ -39,12 +39,15 @@
 
 #ifdef NO_K_LIB
 #include "noklib.h"
+#ifdef THREAD_WEAVER
+#include <threadweaver.h>
+#endif // THREAD_WEAVER
 #else
 #include <KColorScheme>
 #include <KLocalizedString>
 #include <KStandardAction>
 #include <ThreadWeaver/ThreadWeaver>
-#endif
+#endif // NO_K_LIB
 
 #include "util.h"
 
@@ -746,7 +749,7 @@ void FlameGraph::showData()
     bool collapseRecursion = m_collapseRecursion;
     auto source = m_costSource->currentData().value<CostType>();
     auto threshold = m_costThreshold;
-#ifdef NO_K_LIB
+#ifndef THREAD_WEAVER
     setData(parseData(data, source, threshold, collapseRecursion));
 #else
     using namespace ThreadWeaver;

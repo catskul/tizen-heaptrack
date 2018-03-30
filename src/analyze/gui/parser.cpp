@@ -20,10 +20,13 @@
 
 #ifdef NO_K_LIB
 #include "noklib.h"
+#ifdef THREAD_WEAVER
+#include <threadweaver.h>
+#endif // THREAD_WEAVER
 #else
 #include <KLocalizedString>
 #include <ThreadWeaver/ThreadWeaver>
-#endif
+#endif // NO_K_LIB
 
 #include <QDebug>
 
@@ -855,7 +858,7 @@ Parser::~Parser() = default;
 
 void Parser::parse(const QString& path, const QString& diffBase)
 {
-#ifdef NO_K_LIB
+#ifndef THREAD_WEAVER
     parseJob(path, diffBase);
 #else
     ThreadWeaver::stream() << ThreadWeaver::make_job([this, path, diffBase]() {
@@ -940,7 +943,7 @@ void Parser::parseJob(const QString& path, const QString& diffBase)
 
     const auto diffMode = data->stringCache.diffMode;
     emit progressMessageAvailable(i18n("building charts..."));
-#ifndef NO_K_LIB
+#ifdef THREAD_WEAVER
     using namespace ThreadWeaver;
     auto parallel = new Collection;
     *parallel << make_job([this, mergedAllocations]()
@@ -949,19 +952,19 @@ void Parser::parseJob(const QString& path, const QString& diffBase)
         const auto topDownData = toTopDownData(mergedAllocations);
         emit topDownDataAvailable(topDownData);
     }
-#ifndef NO_K_LIB
+#ifdef THREAD_WEAVER
     ) << make_job([this, mergedAllocations, diffMode]()
 #endif
     {
         const auto callerCalleeData = toCallerCalleeData(mergedAllocations, diffMode);
         emit callerCalleeDataAvailable(callerCalleeData);
     }
-#ifndef NO_K_LIB
+#ifdef THREAD_WEAVER
     );
 #endif
     if (!data->stringCache.diffMode) {
         // only build charts when we are not diffing
-#ifndef NO_K_LIB
+#ifdef THREAD_WEAVER
         *parallel << make_job([this, data, stdPath]()
 #endif
         {
@@ -975,12 +978,12 @@ void Parser::parseJob(const QString& path, const QString& diffBase)
             emit allocatedChartDataAvailable(data->allocatedChartData);
             emit temporaryChartDataAvailable(data->temporaryChartData);
         }
-#ifndef NO_K_LIB
+#ifdef THREAD_WEAVER
         );
 #endif
     }
 
-#ifdef NO_K_LIB
+#ifndef THREAD_WEAVER
     emit finished();
 #else
     auto sequential = new Sequence;

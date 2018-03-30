@@ -18,23 +18,59 @@ SAMSUNG_TIZEN_BRANCH {
 }
 
 win32 {
-    CONFIG += NO_K_LIB NO_K_CHART
+    # Third-party libraries used:
+    # QWT: http://qwt.sourceforge.net (SVN: https://svn.code.sf.net/p/qwt/code/trunk)
+    # ThreadWeaver: https://cgit.kde.org/threadweaver.git (git://anongit.kde.org/threadweaver.git)
 
-#   comment the next line to not use QWT (i.e. don't show charts)
+    # comment the next line to not use QWT library (charts will not be displayed in this case)
     CONFIG += QWT_CHART
+
+    # comment the next line to not use ThreadWeaver library (used to parse data files faster)
+    CONFIG += THREAD_WEAVER
+
+    CONFIG += NO_K_LIB NO_K_CHART
 
     DEFINES += NO_K_LIB NO_K_CHART WINDOWS
     INCLUDEPATH += $$(BOOST_LIB)
     LIBS += -L$$(BOOST_LIB)/stage/lib
 
     RC_ICONS += analyze/gui/icons/if_diagram_v2-14_37134.ico
+
+    CONFIG(debug, debug|release) {
+        TARGET = $${TARGET}Dbg
+        DESTDIR = ../bin/debug
+    }
+    else {
+        DESTDIR = ../bin/release
+    }
+}
+
+THREAD_WEAVER {
+    DEFINES += THREAD_WEAVER
+    win32 {
+        # ThreadWeaver shall be built beforehand (load ThreadWeaver.pro, edit it if necessary, and build)
+
+        # change the variable if ThreadWeaver headers are located in another directory
+        THREAD_WEAVE_HEADER_PATH = ../../kf5/threadweaver/src/
+
+        INCLUDEPATH += $$THREAD_WEAVE_HEADER_PATH ThreadWeaver
+        CONFIG(debug, debug|release) {
+            win32-msvc:LIBS += $${DESTDIR}/threadweaverd.lib
+        }
+        else {
+            win32-msvc:LIBS += $${DESTDIR}/threadweaver.lib
+        }
+    }
+    unix {
+        QT += ThreadWeaver
+    }
 }
 
 unix {
     CONFIG *= USE_CHART
     DEFINES *= USE_CHART
 
-#   uncomment the next line to use QWT instead of KChart
+    # uncomment the next line to use QWT instead of KChart
 #   CONFIG += QWT_CHART
 
     QWT_CHART {
@@ -45,6 +81,15 @@ unix {
     }
 
     LIBS += -lboost_program_options -lboost_iostreams -lpthread
+}
+
+QWT_CHART {
+    # QMAKEFEATURES and QWT_ROOT environment variables must be set (e.g. to d:\Qwt\Qwt-6.2).
+    # This is the directory where qwt.prf and qwt*.pri files reside.
+    # Windows: file qwt.dll must exist in $${DESTDIR}\release and qwtd.dll in $${DESTDIR}\debug
+    # to be able to run the application.
+    CONFIG *= USE_CHART QWT
+    DEFINES *= USE_CHART QWT
 }
 
 #Test only!
@@ -91,11 +136,6 @@ HEADERS += \
     util/config.h
 
 QWT_CHART {
-    # QMAKEFEATURES and QWT_ROOT environment variables must be set (e.g. to d:\Qwt\Qwt-6.2).
-    # This is the directory where qwt.prf and qwt*.pri files reside.
-    CONFIG *= USE_CHART QWT
-    DEFINES *= USE_CHART QWT
-
     SOURCES += \
         analyze/gui/chartmodel2qwtseriesdata.cpp \
         analyze/gui/chartwidgetqwtplot.cpp \
@@ -137,7 +177,8 @@ USE_CHART {
 
     QT += KItemModels
 
-    QT += ThreadWeaver
+    QT *= ThreadWeaver
+    DEFINES *= THREAD_WEAVER
 }
 
 !NO_K_CHART {
