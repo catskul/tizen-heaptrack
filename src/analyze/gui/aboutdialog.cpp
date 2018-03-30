@@ -2,6 +2,7 @@
 #include "ui_aboutdialog.h"
 
 #include "aboutdata.h"
+#include "gui_config.h"
 
 #include <math.h>
 #include <QFontMetrics>
@@ -33,13 +34,19 @@ AboutDialog::AboutDialog(QWidget *parent) :
 #endif
         QString(
         "<p>Uses <a href=https://www.qt.io>Qt framework</a> v.%1 libraries on terms of " \
-        "<a href=https://www.gnu.org/licenses/lgpl-3.0.en.html>LGPL</a>.</p>" \
+        "<a href=https://www.gnu.org/licenses/lgpl-3.0.en.html>LGPL</a>.</p>")
+        .arg(QT_VERSION_STR)
+#ifdef THREAD_WEAVER
+        + QString(
         "<p>Uses <a href=https://cgit.kde.org/threadweaver.git>ThreadWeaver library</a> " \
-        "on terms of <a href=https://www.gnu.org/licenses/lgpl-3.0.en.html>LGPL</a>.</p>" \
+        "on terms of <a href=https://www.gnu.org/licenses/lgpl-3.0.en.html>LGPL</a>.</p>")
+#endif
+#ifdef QWT_FOUND
+        + QString(
         "<p>The application is based in part on the work of the " \
         "<a href=http://qwt.sf.net>Qwt project</a> on terms of " \
         "<a href=http://qwt.sourceforge.net/qwtlicense.html>Qwt License</a>.</p>")
-        .arg(QT_VERSION_STR)
+#endif
 #ifdef WINDOWS
         + QString(
         "<p>Application icon (free for commercial use): Jack Cai " \

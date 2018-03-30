@@ -116,7 +116,7 @@ ChartOptions::Options ChartOptions::toggleOption(Options option)
 }
 
 ChartWidgetQwtPlot::ChartWidgetQwtPlot(QWidget *parent, Options options)
-    : QwtPlot(parent), m_model(nullptr), m_isSizeModel(false), ChartOptions(options),
+    : QwtPlot(parent), ChartOptions(options), m_model(nullptr), m_isSizeModel(false),
       m_zoomer(new Zoomer(this))
 {
     setCanvasBackground(Qt::white);

@@ -1,7 +1,9 @@
 #include "histogramwidgetqwtplot.h"
 #include "histogrammodel.h"
-#include "noklib.h"
 #include "util.h"
+#ifdef NO_K_LIB
+#include "noklib.h"
+#endif
 
 #include <math.h>
 

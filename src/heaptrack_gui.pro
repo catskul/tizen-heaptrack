@@ -17,20 +17,27 @@ SAMSUNG_TIZEN_BRANCH {
     TARGET = TizenMemoryProfiler
 }
 
-win32 {
-    # Third-party libraries used:
-    # QWT: http://qwt.sourceforge.net (SVN: https://svn.code.sf.net/p/qwt/code/trunk)
-    # ThreadWeaver: https://cgit.kde.org/threadweaver.git (git://anongit.kde.org/threadweaver.git)
+# uncomment the next line to disable using KDE libraries unconditionally (i.e. on Linux too)
+CONFIG *= NO_K_LIB NO_K_CHART
 
+# Third-party libraries which may be used:
+
+# QWT: http://qwt.sourceforge.net (SVN: https://svn.code.sf.net/p/qwt/code/trunk).
+# Used on Windows but not on Linux by default.
+
+# ThreadWeaver: https://cgit.kde.org/threadweaver.git (git://anongit.kde.org/threadweaver.git).
+# Used on both Windows and Linux by default.
+
+# comment the next line to not use ThreadWeaver library (used to parse data files faster)
+!NO_K_LIB:CONFIG += THREAD_WEAVER
+
+win32 {
     # comment the next line to not use QWT library (charts will not be displayed in this case)
     CONFIG += QWT_CHART
 
-    # comment the next line to not use ThreadWeaver library (used to parse data files faster)
-    CONFIG += THREAD_WEAVER
+    CONFIG *= NO_K_LIB NO_K_CHART
 
-    CONFIG += NO_K_LIB NO_K_CHART
-
-    DEFINES += NO_K_LIB NO_K_CHART WINDOWS
+    DEFINES *= WINDOWS
     INCLUDEPATH += $$(BOOST_LIB)
     LIBS += -L$$(BOOST_LIB)/stage/lib
 
@@ -45,10 +52,42 @@ win32 {
     }
 }
 
+unix {
+    # uncomment the next line to use QWT instead of KChart on Linux
+#   CONFIG += QWT_CHART
+
+    QWT_CHART {
+        CONFIG *= NO_K_CHART USE_CHART QWT_CHART
+        INCLUDEPATH += /usr/include/qwt
+        LIBS += -lqwt-qt5 # correct the library name if needed (e.g. to 'qwt')
+    }
+    else {
+        !NO_K_LIB {
+            CONFIG *= USE_CHART
+        }
+     }
+
+    LIBS += -lboost_program_options -lboost_iostreams -lpthread
+}
+
+QWT_CHART {
+    # QMAKEFEATURES and QWT_ROOT environment variables must be set (e.g. to d:\Qwt\Qwt-6.2).
+    # This is the directory where qwt.prf and qwt*.pri files reside.
+    # Windows: file qwt.dll must exist in $${DESTDIR}\release and qwtd.dll in $${DESTDIR}\debug
+    # to be able to run the application.
+    CONFIG *= USE_CHART QWT
+}
+
+# add defines if have the following values in CONFIG
+NO_K_LIB: DEFINES *= NO_K_LIB
+NO_K_CHART: DEFINES *= NO_K_CHART
+USE_CHART: DEFINES *= USE_CHART
+QWT: DEFINES *= QWT
+
 THREAD_WEAVER {
     DEFINES += THREAD_WEAVER
     win32 {
-        # ThreadWeaver shall be built beforehand (load ThreadWeaver.pro, edit it if necessary, and build)
+        # ThreadWeaver shall be built beforehand - use ThreadWeaver.pro file (edit it if necessary)
 
         # change the variable if ThreadWeaver headers are located in another directory
         THREAD_WEAVE_HEADER_PATH = ../../kf5/threadweaver/src/
@@ -65,36 +104,6 @@ THREAD_WEAVER {
         QT += ThreadWeaver
     }
 }
-
-unix {
-    CONFIG *= USE_CHART
-    DEFINES *= USE_CHART
-
-    # uncomment the next line to use QWT instead of KChart
-#   CONFIG += QWT_CHART
-
-    QWT_CHART {
-        CONFIG *= NO_K_LIB NO_K_CHART QWT_CHART
-        DEFINES *= NO_K_LIB NO_K_CHART
-        INCLUDEPATH += /usr/include/qwt
-        LIBS += -lqwt-qt5 # correct the library name if needed (e.g. to 'qwt')
-    }
-
-    LIBS += -lboost_program_options -lboost_iostreams -lpthread
-}
-
-QWT_CHART {
-    # QMAKEFEATURES and QWT_ROOT environment variables must be set (e.g. to d:\Qwt\Qwt-6.2).
-    # This is the directory where qwt.prf and qwt*.pri files reside.
-    # Windows: file qwt.dll must exist in $${DESTDIR}\release and qwtd.dll in $${DESTDIR}\debug
-    # to be able to run the application.
-    CONFIG *= USE_CHART QWT
-    DEFINES *= USE_CHART QWT
-}
-
-#Test only!
-#CONFIG *= NO_K_LIB NO_K_CHART
-#DEFINES *= NO_K_LIB NO_K_CHART
 
 SOURCES += \
     analyze/accumulatedtracedata.cpp \
@@ -194,8 +203,10 @@ NO_K_LIB {
 
     FORMS += \
         analyze/gui/mainwindow_noklib.ui \
-        analyze/gui/aboutdialog.ui
 
     RESOURCES += \
         analyze/gui/gui.qrc
 }
+
+FORMS += \
+    analyze/gui/aboutdialog.ui

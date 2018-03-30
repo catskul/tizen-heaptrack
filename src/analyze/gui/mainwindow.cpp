@@ -25,6 +25,7 @@
 #include <ui_mainwindow_noklib.h>
 #include <QAbstractButton>
 #include <QFileDialog>
+#include <QSettings>
 #else
 #include <ui_mainwindow.h>
 #include <KConfigGroup>
@@ -64,9 +65,6 @@
 #include "chartwidget.h"
 #include "histogrammodel.h"
 #include "histogramwidget.h"
-#if QWT_FOUND
-#include <QSettings>
-#endif
 #endif
 
 using namespace std;
