@@ -18,7 +18,7 @@ SAMSUNG_TIZEN_BRANCH {
 }
 
 # uncomment the next line to disable using KDE libraries unconditionally (i.e. on Linux too)
-CONFIG *= NO_K_LIB NO_K_CHART
+#CONFIG *= NO_K_LIB NO_K_CHART
 
 # Third-party libraries which may be used:
 
