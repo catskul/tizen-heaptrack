@@ -621,6 +621,8 @@ MainWindow::MainWindow(QWidget* parent)
     connect(m_closeAction, &QAction::triggered, this, &MainWindow::close);
     m_quitAction = new QAction(i18n("&Quit"), this);
     connect(m_quitAction, &QAction::triggered, qApp, &QApplication::quit);
+
+    qApp->installEventFilter(this);
 #else
     m_openAction = KStandardAction::open(this, SLOT(closeFile()), this);
     m_openAction->setEnabled(false);
@@ -636,7 +638,9 @@ MainWindow::MainWindow(QWidget* parent)
 
 MainWindow::~MainWindow()
 {
-#ifndef NO_K_LIB
+#ifdef NO_K_LIB
+    qApp->removeEventFilter(this);
+#else
     auto state = saveState(MAINWINDOW_VERSION);
     auto group = m_config->group(Config::Groups::MainWindow);
     group.writeEntry(Config::Entries::State, state);
@@ -766,6 +770,25 @@ void MainWindow::closeEvent(QCloseEvent *event)
     settings.setValue("Options", ChartOptions::GlobalOptions);
     settings.endGroup();
 #endif // QWT_FOUND
+}
+
+bool MainWindow::eventFilter(QObject* object, QEvent* event)
+{
+    // could process arrow keys (left/right) for flamegraph (to implement back/forward) only from here
+    if ((event->type() == QEvent::KeyPress) &&
+        (m_ui->tabWidget->currentWidget() == m_ui->flameGraphTab))
+    {
+        // Qt5: sometimes (e.g. if Alt is pressed) 'object' is QWidgetWindow which is not a part
+        // of Qt public API so trying to detect it indirectly (see 2nd condition below)
+        if ((object == this) || (object->parent() == nullptr))
+        {
+            if (m_ui->flameGraphTab->handleKeyPress(static_cast<QKeyEvent*>(event)))
+            {
+                return true;
+            }
+        }
+    }
+    return QMainWindow::eventFilter(object, event);
 }
 
 static void selectFile(QWidget *parent, QLineEdit *fileNameEdit)

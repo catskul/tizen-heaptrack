@@ -133,7 +133,7 @@ void ContextMenuQwt::initializeMenu(QMenu& menu, ChartOptions::Options options) 
     }
 }
 
-void ContextMenuQwt::handleKeyPress(QKeyEvent *event)
+bool ContextMenuQwt::handleKeyPress(QKeyEvent *event)
 {
     if (event->modifiers() & Qt::AltModifier)
     {
@@ -188,13 +188,10 @@ void ContextMenuQwt::handleKeyPress(QKeyEvent *event)
             }
             break;
         default:
-            event->ignore();
-            return;
+            return false;
         }
         event->accept();
+        return true;
     }
-    else
-    {
-        event->ignore();
-    }
+    return false;
 }

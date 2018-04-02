@@ -356,7 +356,10 @@ void ChartWidget::contextMenuEvent(QContextMenuEvent *event)
 
 void ChartWidget::keyPressEvent(QKeyEvent *event)
 {
-    m_contextMenuQwt->handleKeyPress(event);
+    if (!m_contextMenuQwt->handleKeyPress(event))
+    {
+        QWidget::keyPressEvent(event);
+    }
 }
 
 void ChartWidget::resetZoom()

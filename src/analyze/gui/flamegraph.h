@@ -43,10 +43,14 @@ public:
     void setBottomUpData(const TreeData& bottomUpData);
 
     void clearData();
-
+#if NO_K_LIB
+    // handling back and forward shortcuts:
+    // keyPressEvent doesn't receive arrow keys so the main window calls
+    // this function from its event filter
+    bool handleKeyPress(QKeyEvent* event);
+#endif
 protected:
     bool eventFilter(QObject* object, QEvent* event) override;
-
 private slots:
     void setData(FrameGraphicsItem* rootItem);
     void setSearchValue(const QString& value);

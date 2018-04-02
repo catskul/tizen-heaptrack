@@ -247,7 +247,10 @@ void HistogramWidget::contextMenuEvent(QContextMenuEvent *event)
 
 void HistogramWidget::keyPressEvent(QKeyEvent *event)
 {
-    m_contextMenuQwt->handleKeyPress(event);
+    if (!m_contextMenuQwt->handleKeyPress(event))
+    {
+        QWidget::keyPressEvent(event);
+    }
 }
 
 void HistogramWidget::toggleShowTotal()

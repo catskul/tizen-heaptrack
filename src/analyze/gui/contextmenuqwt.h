@@ -24,7 +24,7 @@ public:
 
     void initializeMenu(QMenu& menu, ChartOptions::Options options) const;
 
-    void handleKeyPress(QKeyEvent *event);
+    bool handleKeyPress(QKeyEvent *event);
 
 private:
     QAction* m_resetZoomAction;

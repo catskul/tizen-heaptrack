@@ -21,6 +21,7 @@
 #include <cmath>
 
 #include <QAction>
+#include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCursor>
@@ -651,9 +652,7 @@ FlameGraph::FlameGraph(QWidget* parent, Qt::WindowFlags flags)
     layout()->addWidget(m_displayLabel);
     layout()->addWidget(m_searchResultsLabel);
 
-#ifdef NO_K_LIB
-    // TODO!! implement back and forward
-#else
+#ifndef NO_K_LIB
     m_backAction = KStandardAction::back(this, SLOT(navigateBack()), this);
     addAction(m_backAction);
     m_forwardAction = KStandardAction::forward(this, SLOT(navigateForward()), this);
@@ -717,6 +716,38 @@ bool FlameGraph::eventFilter(QObject* object, QEvent* event)
     }
     return ret;
 }
+
+#if NO_K_LIB
+bool FlameGraph::handleKeyPress(QKeyEvent *event)
+{
+    if (m_view->hasFocus() || (qApp->focusWidget() == nullptr))
+    {
+        if (event->modifiers() & Qt::AltModifier)
+        {
+            switch (event->key())
+            {
+            case Qt::Key_Backspace:
+            case Qt::Key_Right:
+                navigateForward();
+                return true;
+            case Qt::Key_Left:
+                navigateBack();
+                return true;
+            }
+        }
+        else
+        {
+            switch (event->key())
+            {
+            case Qt::Key_Backspace:
+                navigateBack();
+                return true;
+            }
+        }
+    }
+    return false;
+}
+#endif
 
 void FlameGraph::setTopDownData(const TreeData& topDownData)
 {
@@ -809,6 +840,15 @@ void FlameGraph::setData(FrameGraphicsItem* rootItem)
 
     if (isVisible()) {
         selectItem(m_rootItem);
+        // trying to fix a bug (?): sometimes the flamegraph is displayed at wrong position initially
+        // (observed after switching to the flamegraph tab soon after the application starts with
+        // a data file specified in the command line)
+        static bool firstTime = true;
+        if (firstTime)
+        {
+            m_view->updateGeometry();
+            firstTime = false;
+        }
     }
 }
 

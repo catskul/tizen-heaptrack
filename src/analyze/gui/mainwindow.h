@@ -54,6 +54,7 @@ signals:
 #ifdef NO_K_LIB
 protected:
     virtual void closeEvent(QCloseEvent *event) override;
+    virtual bool eventFilter(QObject* object, QEvent* event) override;
 public slots:
     void selectOpenFile();
     void selectCompareToFile();
