@@ -51,9 +51,9 @@ public slots:
 signals:
     void clearData();
 
-#ifdef NO_K_LIB
 protected:
     virtual void closeEvent(QCloseEvent *event) override;
+#ifdef NO_K_LIB
     virtual bool eventFilter(QObject* object, QEvent* event) override;
 public slots:
     void selectOpenFile();

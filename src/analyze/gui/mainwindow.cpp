@@ -19,6 +19,7 @@
 #include "mainwindow.h"
 
 #include <cmath>
+#include <cstdlib>
 
 #ifdef NO_K_LIB
 #include "noklib.h"
@@ -340,7 +341,13 @@ MainWindow::MainWindow(QWidget* parent)
         const double peakTimeS = 0.001 * data.peakTime;
         {
             QTextStream stream(&textLeft);
-            const auto debuggee = insertWordWrapMarkers(data.debuggee);
+            QString debuggee = data.debuggee;
+            int i = debuggee.indexOf(" __AUL_SDK__");
+            if (i >= 0)
+            {
+                debuggee.resize(i); // Tizen: remove part which is not human-readable
+            }
+            debuggee = insertWordWrapMarkers(debuggee);
             stream << "<qt><dl>"
                    << (data.fromAttached ? i18n("<dt><b>debuggee</b>:</dt><dd "
                                                 "style='font-family:monospace;'>%1 <i>(attached)</i></dd>",
@@ -640,11 +647,7 @@ MainWindow::~MainWindow()
 {
 #ifdef NO_K_LIB
     qApp->removeEventFilter(this);
-#else
-    auto state = saveState(MAINWINDOW_VERSION);
-    auto group = m_config->group(Config::Groups::MainWindow);
-    group.writeEntry(Config::Entries::State, state);
-#endif // NO_K_LIB
+#endif
 }
 
 void MainWindow::loadFile(const QString& file, const QString& diffBase)
@@ -758,20 +761,35 @@ void MainWindow::setupStacks()
     m_ui->stacksDock->setVisible(false);
 }
 
-#ifdef NO_K_LIB
 void MainWindow::closeEvent(QCloseEvent *event)
 {
+#ifdef NO_K_LIB
     QMainWindow::closeEvent(event);
-    QSettings settings(QSettings::UserScope, AboutData::Organization, AboutData::applicationName());
-    settings.setValue("mainWindowGeometry", saveGeometry());
-    settings.setValue("mainWindowState", saveState());
+    {
+        QSettings settings(QSettings::UserScope, AboutData::Organization, AboutData::applicationName());
+        settings.setValue("mainWindowGeometry", saveGeometry());
+        settings.setValue("mainWindowState", saveState());
 #ifdef QWT_FOUND
-    settings.beginGroup("Charts");
-    settings.setValue("Options", ChartOptions::GlobalOptions);
-    settings.endGroup();
+        settings.beginGroup("Charts");
+        settings.setValue("Options", ChartOptions::GlobalOptions);
+        settings.endGroup();
 #endif // QWT_FOUND
+    }
+#else
+    {
+        auto state = saveState(MAINWINDOW_VERSION);
+        auto group = m_config->group(Config::Groups::MainWindow);
+        group.writeEntry(Config::Entries::State, state);
+    }
+#endif // !NO_K_LIB
+    // the simplest and safest way to close this application (without deep redesing) is to terminate it,
+    // otherwise a crash is possible if the main window is being closed (and destroyed) while some background
+    // operations (e.g. parsing a source file) are still in progress; it happens because the code running
+    // in other threads may emit signals to already destroyed objects
+    quick_exit(0); // faster alternative to 'exit'
 }
 
+#ifdef NO_K_LIB
 bool MainWindow::eventFilter(QObject* object, QEvent* event)
 {
     // could process arrow keys (left/right) for flamegraph (to implement back/forward) only from here
