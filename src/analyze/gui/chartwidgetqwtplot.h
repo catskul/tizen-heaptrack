@@ -8,6 +8,7 @@
 
 class ChartModel;
 class Zoomer;
+class QwtPanner;
 
 class ChartOptions
 {
@@ -60,6 +61,8 @@ public:
 
     bool isSizeModel() const { return m_isSizeModel; }
 
+    bool isEmpty() const { return (m_zoomer == nullptr); }
+
     virtual void setOptions(Options options) override;
 
     void rebuild(bool resetZoomAndPan);
@@ -82,6 +85,8 @@ private:
     QPen m_vLinePen;
 
     Zoomer *m_zoomer;
+
+    QwtPanner *m_panner;
 
     QwtScaleDiv m_xScaleDiv, m_yScaleDiv;
 

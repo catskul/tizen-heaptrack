@@ -79,10 +79,11 @@ ContextMenuQwt::ContextMenuQwt(QObject *parent, bool isHistogram)
     }
 }
 
-void ContextMenuQwt::initializeMenu(QMenu& menu, ChartOptions::Options options) const
+void ContextMenuQwt::initializeMenu(QMenu& menu, ChartOptions::Options options, bool isEmpty) const
 {
     if (m_resetZoomAction)
     {
+        m_resetZoomAction->setEnabled(!isEmpty);
         menu.addAction(m_resetZoomAction);
         menu.addSeparator();
     }
@@ -123,6 +124,7 @@ void ContextMenuQwt::initializeMenu(QMenu& menu, ChartOptions::Options options) 
     if (m_exportChartAction)
     {
         menu.addSeparator();
+        m_exportChartAction->setEnabled(!isEmpty);
         menu.addAction(m_exportChartAction);
     }
     if (m_showHelpAction)

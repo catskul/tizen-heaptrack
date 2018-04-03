@@ -240,7 +240,7 @@ void HistogramWidget::connectContextMenu()
 void HistogramWidget::contextMenuEvent(QContextMenuEvent *event)
 {
     QMenu menu(this);
-    m_contextMenuQwt->initializeMenu(menu, m_plot->options());
+    m_contextMenuQwt->initializeMenu(menu, m_plot->options(), false);
     menu.exec(event->globalPos());
 }
 #endif

@@ -8,6 +8,7 @@
 #include <qwt_plot_grid.h>
 #include <qwt_plot_marker.h>
 #include <qwt_plot_panner.h>
+#include <qwt_plot_textlabel.h>
 #include <qwt_plot_zoomer.h>
 #include <qwt_scale_draw.h>
 #include <qwt_symbol.h>
@@ -117,21 +118,10 @@ ChartOptions::Options ChartOptions::toggleOption(Options option)
 
 ChartWidgetQwtPlot::ChartWidgetQwtPlot(QWidget *parent, Options options)
     : QwtPlot(parent), ChartOptions(options), m_model(nullptr), m_isSizeModel(false),
-      m_zoomer(new Zoomer(this))
+      m_zoomer(nullptr), m_panner(nullptr)
 {
     setCanvasBackground(Qt::white);
-    enableAxis(QwtPlot::yRight);
     enableAxis(QwtPlot::yLeft, false);
-
-    // LeftButton for zooming
-    // Shift+LeftButton: zoom out by 1
-    // Ctrl+LeftButton: zoom out to full size
-    m_zoomer->setMousePattern(QwtEventPattern::MouseSelect2, Qt::LeftButton, Qt::ControlModifier);
-    m_zoomer->setMousePattern(QwtEventPattern::MouseSelect3, Qt::LeftButton, Qt::ShiftModifier);
-
-    // Alt+LeftButton for panning
-    auto panner = new QwtPlotPanner(canvas());
-    panner->setMouseButton(Qt::LeftButton, Qt::AltModifier);
 
     m_vLinePen.setStyle(Qt::DashLine);
     m_vLinePen.setColor(Qt::gray);
@@ -184,10 +174,6 @@ void ChartWidgetQwtPlot::rebuild(bool resetZoomAndPan)
 
     insertLegend(hasOption(ShowLegend) ? new QwtLegend() : nullptr);
 
-    auto grid = new QwtPlotGrid();
-    grid->setPen(QPen(Qt::lightGray));
-    grid->attach(this);
-
     setAxisTitle(QwtPlot::xBottom, m_model->headerData(0).toString());
     setAxisTitle(QwtPlot::yRight, m_model->headerData(1).toString());
     setAxisScaleDraw(QwtPlot::xBottom, new TimeScaleDraw());
@@ -201,13 +187,18 @@ void ChartWidgetQwtPlot::rebuild(bool resetZoomAndPan)
     {
         column += 2;
     }
+    int curvesCount = 0;
+    int curvesAdded = 0;
+    int unresolvedCount = 0;
     int columns = m_model->columnCount();
     for (; column < columns; column += 2)
     {
+        ++curvesCount;
         QString columnLabel = m_model->getColumnLabel(column);
         if (!hasOption(ShowUnresolved) &&
             Util::isUnresolvedFunction(columnLabel)) // column label starts with a function name
         {
+            ++unresolvedCount;
             continue;
         }
 
@@ -242,26 +233,92 @@ void ChartWidgetQwtPlot::rebuild(bool resetZoomAndPan)
         }
 
         curve->attach(this);
+
+        ++curvesAdded;
     }
 
-    if (hasOption(ShowVLines))
+    if (curvesAdded > 0)
     {
-        int rows = m_model->rowCount();
-        for (int row = 1; row < rows; ++row)
+        enableAxis(QwtPlot::xBottom);
+        enableAxis(QwtPlot::yRight);
+
+        auto grid = new QwtPlotGrid();
+        grid->setPen(QPen(Qt::lightGray));
+        grid->attach(this);
+
+        if (hasOption(ShowVLines))
         {
-            auto marker = new QwtPlotMarker();
-            marker->setLinePen(m_vLinePen);
-            marker->setLineStyle(QwtPlotMarker::VLine);
-            marker->setXValue(m_model->getTimestamp(row));
-            marker->attach(this);
+            int rows = m_model->rowCount();
+            for (int row = 1; row < rows; ++row)
+            {
+                auto marker = new QwtPlotMarker();
+                marker->setLinePen(m_vLinePen);
+                marker->setLineStyle(QwtPlotMarker::VLine);
+                marker->setXValue(m_model->getTimestamp(row));
+                marker->attach(this);
+            }
         }
+
+        if (!m_zoomer)
+        {
+            m_zoomer = new Zoomer(this);
+            // LeftButton for zooming
+            // Shift+LeftButton: zoom out by 1
+            // Ctrl+LeftButton: zoom out to full size
+            m_zoomer->setMousePattern(QwtEventPattern::MouseSelect2, Qt::LeftButton, Qt::ControlModifier);
+            m_zoomer->setMousePattern(QwtEventPattern::MouseSelect3, Qt::LeftButton, Qt::ShiftModifier);
+        }
+
+        if (!m_panner)
+        {
+            m_panner = new QwtPlotPanner(canvas());
+            // Alt+LeftButton for panning
+            m_panner->setMouseButton(Qt::LeftButton, Qt::AltModifier);
+        }
+    }
+    else
+    {
+        QString hint = QString("<h2>Nothing to display.</h2>");
+        if (curvesCount > 0)
+        {
+            QString reason;
+            if (!hasOption(ShowTotal))
+            {
+                reason = "Show total is off";
+            }
+            if (unresolvedCount > 0)
+            {
+                if (!reason.isEmpty())
+                {
+                    reason += ". ";
+                }
+                reason += QString("Skipped <b>%1</b> unresolved functions").arg(unresolvedCount);
+            }
+            hint += QString("<p>%1.</p>").arg(reason);
+            hint += QString("<p><i>Please use the context menu to control the chart display options.</i></p>");
+        }
+        auto hintLabel = new QwtPlotTextLabel();
+        hintLabel->setText(hint);
+        hintLabel->attach(this);
+
+        delete m_zoomer;
+        m_zoomer = nullptr;
+
+        delete m_panner;
+        m_panner = nullptr;
+
+        enableAxis(QwtPlot::xBottom, false);
+        enableAxis(QwtPlot::yRight, false);
     }
 
     replot();
 
     if (resetZoomAndPan)
     {
-        m_zoomer->setZoomBase(false);
+        if (m_zoomer)
+        {
+            m_zoomer->setZoomBase(false);
+        }
         m_xScaleDiv = axisScaleDiv(QwtPlot::xBottom);
         m_yScaleDiv = axisScaleDiv(QwtPlot::yRight);
     }
@@ -270,7 +327,7 @@ void ChartWidgetQwtPlot::rebuild(bool resetZoomAndPan)
 void ChartWidgetQwtPlot::resetZoom()
 {
     bool doReplot = false;
-    if (m_zoomer->zoomRectIndex() != 0)
+    if (m_zoomer && (m_zoomer->zoomRectIndex() != 0))
     {
         m_zoomer->zoom(0);
         doReplot = true;

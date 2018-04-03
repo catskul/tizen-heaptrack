@@ -22,7 +22,7 @@ public:
     QAction* exportChartAction() const { return m_exportChartAction; }
     QAction* showHelpAction() const { return m_showHelpAction; }
 
-    void initializeMenu(QMenu& menu, ChartOptions::Options options) const;
+    void initializeMenu(QMenu& menu, ChartOptions::Options options, bool isEmpty) const;
 
     bool handleKeyPress(QKeyEvent *event);
 

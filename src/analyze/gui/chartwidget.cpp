@@ -349,10 +349,10 @@ void ChartWidget::contextMenuEvent(QContextMenuEvent *event)
     QMenu menu(this);
     m_plot->setOption(ChartOptions::ShowHelp,
                       ChartOptions::hasOption(ChartOptions::GlobalOptions, ChartOptions::ShowHelp));
-    m_contextMenuQwt->initializeMenu(menu, m_plot->options());
+    m_contextMenuQwt->initializeMenu(menu, m_plot->options(), m_plot->isEmpty());
     menu.exec(event->globalPos());
 }
-#endif
+#endif // QT_NO_CONTEXTMENU
 
 void ChartWidget::keyPressEvent(QKeyEvent *event)
 {
