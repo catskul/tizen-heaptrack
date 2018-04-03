@@ -7,11 +7,11 @@
 #endif
 
 #ifdef SAMSUNG_TIZEN_BRANCH
-const QString& AboutData::Organization = "Samsung Electronics";
+const QString& AboutData::Organization = "Samsung Electronics Co.";
 
 const QString& AboutData::CopyrightStatement =
         i18n("Copyright 2015, Milian Wolff. " \
-             "Copyright 2018, Samsung Electronics");
+             "Copyright 2018, Samsung Electronics Co.");
 
 const QString& AboutData::ComponentName = QStringLiteral("TizenMemoryProfiler");
 
