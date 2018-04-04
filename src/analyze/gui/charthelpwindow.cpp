@@ -1,6 +1,8 @@
 #include "charthelpwindow.h"
 #include "chartwidget.h"
 
+#include <math.h>
+
 #include <QTextEdit>
 #include <QToolTip>
 

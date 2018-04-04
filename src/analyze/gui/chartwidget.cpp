@@ -36,7 +36,6 @@
 #include "charthelpwindow.h"
 
 #include <algorithm>
-#include <math.h>
 #include <QAction>
 #include <QContextMenuEvent>
 #include <QMenu>
@@ -378,6 +377,8 @@ void ChartWidget::showHelp()
 }
 #endif // QWT_FOUND
 
-// seems it's not needed; causes build errors in some environments
+#ifdef KChart_FOUND
+// build errors occur in some environments if including .moc unconditionally
 // (e.g. Qt 5.11.0 MSVC2017 64bit, Release build only)
-//#include "chartwidget.moc"
+#include "chartwidget.moc"
+#endif
