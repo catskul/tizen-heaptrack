@@ -264,4 +264,6 @@ void HistogramWidget::toggleShowUnresolved()
 }
 #endif // QWT_FOUND
 
-#include "histogramwidget.moc"
+// seems it's not needed; causes build errors in some environments
+// (e.g. Qt 5.11.0 MSVC2017 64bit, Release build only)
+//#include "histogramwidget.moc"

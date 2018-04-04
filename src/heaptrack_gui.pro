@@ -146,12 +146,14 @@ HEADERS += \
 
 QWT_CHART {
     SOURCES += \
+        analyze/gui/charthelpwindow.cpp \
         analyze/gui/chartmodel2qwtseriesdata.cpp \
         analyze/gui/chartwidgetqwtplot.cpp \
         analyze/gui/contextmenuqwt.cpp \
         analyze/gui/histogramwidgetqwtplot.cpp
 
     HEADERS += \
+        analyze/gui/charthelpwindow.h \
         analyze/gui/chartmodel2qwtseriesdata.h \
         analyze/gui/chartwidgetqwtplot.h \
         analyze/gui/contextmenuqwt.h \
