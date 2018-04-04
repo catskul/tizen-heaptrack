@@ -1,0 +1,106 @@
+﻿# Building Tizen .NET Memory Profiler GUI on Windows
+
+## Introduction
+
+Some time ago Milian Wolff created Heaptrack, an open-source memory profiler for C/C++ Linux applications (see <http://milianw.de/tag/heaptrack> and <https://github.com/KDE/heaptrack>). The profiler includes a utility which collects memory profiling data and saves them to a file and two tools for analyzing the resulting data: a command-line one and GUI-based one (heaptrack_gui). The latter application provides different views on the collected data: text-based views (a summary, different lists and tables) and graphical ones (a so-called flame graph, several charts, and an allocation histogram).
+
+Later Samsung developers modified Heaptrack to support Samsung Tizen OS to enable profiling the memory consumption of managed .NETCoreCLR applications running under Tizen. The .NET memory profiler shall beintegrated into Tizen plugin for Microsoft Visual Studio 2017. A part of this workis porting the GUI analyzing application to Windows platform.
+
+The original GUI application uses Qt framework. Qt is multi-platform supporting Windows but also the application uses several libraries from KDE Frameworks 5 (KF5): KCoreAddons, KI18n, ThreadWeaver, KChart, and others. The KDE Frameworks libraries are interrelated with Qt (they can be treated as a Qt superset). There is an ongoing project to port KDE applications and KDE Frameworks libraries to Windows (<https://community.kde.org/Windows>) but it’s not completed. Another issue is licensing: some KF5 libraries use GNU GPL v.2 license which is not acceptable according to Samsung (while LGPL is acceptable). It was easy to find replacements to most KDE libraries features used among Qt 5 libraries (Qt version 5.10 or later is recommended). The most important KDE library in question was KChart, a part of KDE KDiagram libraries. KChart is used in the original Heaptrack GUI application to draw charts and an allocation histogram. The new version of GUI uses QWT library (<http://qwt.sourceforge.net>) to draw charts on Windows platform. The library is licensed on terms of its own license based on LGPL (but less restrictive). It’s possible to use QWT instead of KChart when building the application on Linux as well (controlled by a setting in the application’s project file for Qt Creator / qmake).
+
+## Prerequisites
+
+Operating system: any Microsoft Windows 64-bit operating system starting from Windows 7 can be used to build the memory profiler GUI.
+
+All needed prerequisites can be freely downloaded from Web. The following software and libraries are needed:
+
+1. Microsoft Visual Studio 2017;
+
+2. boost C++ libraries;
+
+3. Qt 5 framework including some libraries, tools (qmake), and optionally IDE (Qt Creator);
+
+4. QWT library and any SVN client to get it from its repository;
+
+5. ThreadWeaver library and *git* software to get it from its repository.
+
+### Microsoft Visual Studio 2017
+
+Microsoft Visual Studio 2017 (<https://www.visualstudio.com/downloads>) or higher is required (Community Edition can be used). The components “VC++ 2017 v141 toolset (x86, x64)” and “MSBuild” must be installed (select them in Visual Studio installer).
+
+### Boost libraries
+
+Boost library 1.66.0 or higher can be downloaded from <https://www.boost.org>. Build instructions:
+
+1. extract files e.g. to *c:\src\boost_1_66_0*;
+
+2. open “x64 Native Tools Command Prompt for VS 2017” available in Windows Start Menu under Visual Studio 2017 submenu;
+
+3. build Boost.Build engine: go to *c:\src\boost_1_66_0* and start *bootstrap.bat*.
+
+Special handling is required to build the required boost library *iostreams* with *zlib* support enabled. Original *zlib* library sources are needed for that.
+
+4. download *zlib* sources from <http://zlib.net> (direct link to version 1.2.11 is <http://zlib.net/zlib-1.2.11.tar.gz>) and extract them to some directory, for example *c:\src\zlib-1.2.11*;
+
+5. run *b2.exe* built on step 3 with the following options:  
+`b2 -a --with-iostreams -sZLIB_SOURCE="c:/src/zlib-1.2.11"`
+
+Finally create the system environment variable BOOST_LIB and set it to *c:\src\boost_1_66_0* (you may use *System Properties \ Advanced \ Environment Variables* Windows dialog for this).
+
+### Qt 5
+
+Download open source Qt from <https://www.qt.io/download>. The software can be installed with the help of Qt Online Installer for Windows. It’s necessary to select the “MSVC 2017 64-bit” component (Qt 5.xx Prebuilt Components for MSVC 2017 64-bit) in the installer’s component tree (under “Qt \ Qt 5.xx”). To enable building the memory profiler from IDE (Qt Creator) and debugging it with help of CDB (Microsoft Symbolic Debugger for Windows) the “Qt Creator 4.xx CDB Debugger Support” shall be selected (Qt Creator itself is always selected). CDB is a part of Windows SDK (WDK) which can be installed using Windows SDK online installer (for Windows 10 it’s available from <https://developer.microsoft.com/en-us/windows/downloads/windows-10-sdk>): select *Debugging Tools for Windows* feature.
+
+### QWT
+
+QWT 6.2 or higher is needed for the memory profiler GUI. Its sources can be received using this command (presuming “svn” utility is installed):
+
+`svn checkout https://svn.code.sf.net/p/qwt/code/trunk`
+
+If the current directory was *c:\svn* then after running the command the latest QWT sources will be located at *c:\svn\trunk\qwt\src*.
+
+QWT documentation suggests downloading stable releases from <https://sourceforge.net/projects/qwt/files/qwt> but it seems the versions available there are rather obsolete.
+
+Building:
+
+1. open *Qt command prompt* (e.g. “Qt 5.11.0 64-bit for Desktop (MSVC 2017)”) available in Windows Start Menu under Qt submenu;
+
+2. go to the directory where *qwt.pro* file is located, e.g.  
+`cd c:\svn\trunk\qwt`
+
+3. (optionally) edit *qwtconfig.pri*, e.g. set the QWT_INSTALL_PREFIX variable (see *win32* section in the file) to the directory you want (the default is *C:/Qwt-$$QWT_VERSION-svn*);
+
+4. setup the 64-bit MSVC compiler environment running *vcvars64.bat* script: if Visual Studio 2017 is installed to “c:\Program Files (x86)” then run  
+`“c:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\amd64\vcvars64.bat”`
+
+5. ensure “rc.exe” for x64 platform is in the path; it’s location depends on the version of Windows Kits installed, e.g. it can be located in “c:\Program Files (x86)\Windows Kits\10\bin\10.0.16299.0\x64” – you may add this folder to PATH temporarily:  
+`set PATH=%PATH%;"C:\Program Files (x86)\Windows Kits\10\bin\10.0.16299.0\x64"`
+
+6. run `qmake qwt.pro`, then `nmake`, then `nmake install`.
+
+After successful completion of these steps QWT files including headers, documentation, and binaries will be located under *C:\Qwt-$$QWT_VERSION-svn* folder (e.g. *C:\Qwt-6.3.0-svn*). Dynamic link libraries needed to run the memory profiler GUI, *qwt.dll* and *qwtd.dll* (for Debug version), are in *lib* subfolder of that folder.
+
+### ThreadWeaver
+
+This library is a helper for multithreaded programming. It is used in the memory profiler GUI to speed-up some operations, such as parsing the source memory profiling data, on multi-CPU and multicore systems. It can be built from sources available from its repository:
+
+`git clone git://anongit.kde.org/threadweaver.git`
+
+The recommended path to clone to is *c:\git\kf5\threadweaver*. In this case the *qmake* project file for ThreadWeaver added to *heaptrack* to build the library may be used “as is”. If *heaptrack* (with Tizen Memory Profiler GUI) repository is located in “c:\git\heaptrack” then the project file is “C:\git\heaptrack\src\ThreadWeaver.pro”. You may load it to *Qt Creator* and then build or use *qmake* utility from *Qt command prompt* (the 64-bit MSVC compiler environment must be set – see above).
+
+Build DEBUG version:
+
+`qmake.exe ThreadWeaver.pro -spec win32-msvc "CONFIG+=debug" "CONFIG+=qml_debug"`  
+`nmake`
+
+Build RELEASE version:
+
+`qmake.exe ThreadWeaver.pro -spec win32-msvc`  
+`nmake`
+
+## Building the GUI application
+
+After building all libraries required it’s possible to build the GUI application itself. It can be done using *Qt Creator* or *qmake* utility. In either case the following environment variable must be set (on the system level or in *Qt Creator*, in the *heaptrack_gui* project settings – both for Debug and Release configurations) to be able to use QWT: QMAKEFEATURES must point to the QWT “features” folder (where *prf-* and *pri-* files are located), e.g.  
+`QMAKEFEATURES=c:\Qwt-6.3.0-svn\features`.
+
+After that the application shall build successfully. To be able to run it from *Qt Creator* the dynamic library *qwtd.dll* (*qwt.dll* for Release version) must be copied from QWT to *bin\debug* (*bin\release*) folders.
