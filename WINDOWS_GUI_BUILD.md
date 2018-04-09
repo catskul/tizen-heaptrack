@@ -4,9 +4,9 @@
 
 Some time ago Milian Wolff created Heaptrack, an open-source memory profiler for C/C++ Linux applications (see <http://milianw.de/tag/heaptrack> and <https://github.com/KDE/heaptrack>). The profiler includes a utility which collects memory profiling data and saves them to a file and two tools for analyzing the resulting data: a command-line one and GUI-based one (heaptrack_gui). The latter application provides different views on the collected data: text-based views (a summary, different lists and tables) and graphical ones (a so-called flame graph, several charts, and an allocation histogram).
 
-Later Samsung developers modified Heaptrack to support Samsung Tizen OS to enable profiling the memory consumption of managed .NETCoreCLR applications running under Tizen. The .NET memory profiler shall beintegrated into Tizen plugin for Microsoft Visual Studio 2017. A part of this workis porting the GUI analyzing application to Windows platform.
+Later Samsung developers modified Heaptrack to support Samsung Tizen OS to enable profiling the memory consumption of managed .NET CoreCLR applications running under Tizen. The .NET memory profiler shall be integrated into Tizen plugin for Microsoft Visual Studio 2017. A part of this workis porting the GUI analyzing application to Windows platform.
 
-The original GUI application uses Qt framework. Qt is multi-platform supporting Windows but also the application uses several libraries from KDE Frameworks 5 (KF5): KCoreAddons, KI18n, ThreadWeaver, KChart, and others. The KDE Frameworks libraries are interrelated with Qt (they can be treated as a Qt superset). There is an ongoing project to port KDE applications and KDE Frameworks libraries to Windows (<https://community.kde.org/Windows>) but it’s not completed. Another issue is licensing: some KF5 libraries use GNU GPL v.2 license which is not acceptable according to Samsung (while LGPL is acceptable). It was easy to find replacements to most KDE libraries features used among Qt 5 libraries (Qt version 5.10 or later is recommended). The most important KDE library in question was KChart, a part of KDE KDiagram libraries. KChart is used in the original Heaptrack GUI application to draw charts and an allocation histogram. The new version of GUI uses QWT library (<http://qwt.sourceforge.net>) to draw charts on Windows platform. The library is licensed on terms of its own license based on LGPL (but less restrictive). It’s possible to use QWT instead of KChart when building the application on Linux as well (controlled by a setting in the application’s project file for Qt Creator / qmake).
+The original GUI application uses Qt framework. Qt is multi-platform supporting Windows but also the application uses several libraries from KDE Frameworks 5 (KF5): KCoreAddons, KI18n, ThreadWeaver, KChart, and others. The KDE Frameworks libraries are interrelated with Qt (they can be treated as a Qt superset). There is an ongoing project to port KDE applications and KDE Frameworks libraries to Windows (<https://community.kde.org/Windows>) but it’s not completed. Another issue is licensing: some KF5 libraries use GNU GPL v.2 license which is not acceptable according to Samsung (while LGPL is acceptable). It was easy to find replacements to most KDE libraries features used among Qt 5 libraries (Qt version 5.10 or later is recommended). The most important KDE library in question was KChart, a part of KDE KDiagram libraries. KChart is used in the original Heaptrack GUI application to draw charts and an allocation histogram. The new version of GUI uses QWT library (<http://qwt.sourceforge.net>) to draw charts on Windows platform. The library is licensed on terms of its own license based on LGPL (but less restrictive). It’s possible to use QWT instead of KChart when building the application on Linux as well (controlled by a setting in the application’s project file for *Qt Creator* / *qmake*).
 
 ## Prerequisites
 
@@ -18,7 +18,7 @@ All needed prerequisites can be freely downloaded from Web. The following softwa
 
 2. boost C++ libraries;
 
-3. Qt 5 framework including some libraries, tools (qmake), and optionally IDE (Qt Creator);
+3. Qt 5 framework including some libraries, tools (*qmake*), and optionally IDE (*Qt Creator*);
 
 4. QWT library and any SVN client to get it from its repository;
 
@@ -49,7 +49,7 @@ Finally create the system environment variable BOOST_LIB and set it to *c:\src\b
 
 ### Qt 5
 
-Download open source Qt from <https://www.qt.io/download>. The software can be installed with the help of Qt Online Installer for Windows. It’s necessary to select the “MSVC 2017 64-bit” component (Qt 5.xx Prebuilt Components for MSVC 2017 64-bit) in the installer’s component tree (under “Qt \ Qt 5.xx”). To enable building the memory profiler from IDE (Qt Creator) and debugging it with help of CDB (Microsoft Symbolic Debugger for Windows) the “Qt Creator 4.xx CDB Debugger Support” shall be selected (Qt Creator itself is always selected). CDB is a part of Windows SDK (WDK) which can be installed using Windows SDK online installer (for Windows 10 it’s available from <https://developer.microsoft.com/en-us/windows/downloads/windows-10-sdk>): select *Debugging Tools for Windows* feature.
+Download open source Qt from <https://www.qt.io/download>. The software can be installed with the help of Qt Online Installer for Windows. It’s necessary to select the “MSVC 2017 64-bit” component (Qt 5.xx Prebuilt Components for MSVC 2017 64-bit) in the installer’s component tree (under “Qt \ Qt 5.xx”). To enable building the memory profiler from IDE (*Qt Creator*) and debugging it with the help of CDB (Microsoft Symbolic Debugger for Windows) the “Qt Creator 4.xx CDB Debugger Support” shall be selected (*Qt Creator* itself is always selected). CDB is a part of Windows SDK (WDK) which can be installed using Windows SDK online installer (for Windows 10 it’s available from <https://developer.microsoft.com/en-us/windows/downloads/windows-10-sdk>): select *Debugging Tools for Windows* feature.
 
 ### QWT
 
@@ -100,7 +100,34 @@ Build RELEASE version:
 
 ## Building the GUI application
 
-After building all libraries required it’s possible to build the GUI application itself. It can be done using *Qt Creator* or *qmake* utility. In either case the following environment variable must be set (on the system level or in *Qt Creator*, in the *heaptrack_gui* project settings – both for Debug and Release configurations) to be able to use QWT: QMAKEFEATURES must point to the QWT “features” folder (where *prf-* and *pri-* files are located), e.g.  
+### How to build
+
+After building all libraries required it’s possible to build the GUI application itself. It can be done using *Qt Creator* or *qmake* utility. The application's project file in *qmake* format is *heaptrack_gui.pro*. In either case the following environment variable must be set (on the system level or in *Qt Creator*, in the *heaptrack_gui* project settings – both for Debug and Release configurations) to be able to use QWT: QMAKEFEATURES must point to the QWT “features” folder (where *prf-* and *pri-* files are located), e.g.  
 `QMAKEFEATURES=c:\Qwt-6.3.0-svn\features`.
 
-After that the application shall build successfully. To be able to run it from *Qt Creator* the dynamic library *qwtd.dll* (*qwt.dll* for Release version) must be copied from QWT to *bin\debug* (*bin\release*) folders.
+If using *Qt Creator* you can load *heaptrack\src\heaptrack_gui.pro*, select the required build configuration (Debug or Release) and start the build from the project's context menu (*heaptrack_gui* project shall be selected in the Projects tree) or from the "Build" top-level menu of the main menu bar.
+
+![Build GUI from Qt Creator](screenshots/build_gui_from_qt_creator.png)
+
+If using *qmake* you can start *Qt command prompt*, go to the *heaptrack\src* path and run  
+`qmake heaptrack_gui.pro -spec win32-msvc`.
+
+After that the application shall build successfully. To be able to run it from *Qt Creator* the dynamic library *qwtd.dll* (*qwt.dll* for Release version) must be copied from the QWT output directory (e.g. *c:\Qwt-6.3.0-svn\lib*) to *bin\debug* (*bin\release*) folders.
+
+### Application's binaries
+
+The following files and directories are required to run the application (Release version) under Windows.
+
+<pre>
+TizenMemoryProfiler.exe
+Qt5Core.dll
+Qt5Gui.dll
+Qt5OpenGL.dll
+Qt5Svg.dll
+Qt5Widgets.dll
+qwt.dll
+threadweaver.dll
+<b>imageformats\</b>qjpeg.dll
+<b>platforms\</b>qwindows.dll
+<b>styles\</b>qwindowsvistastyle.dll
+</pre>
