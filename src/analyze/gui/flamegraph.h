@@ -52,7 +52,7 @@ public:
 protected:
     bool eventFilter(QObject* object, QEvent* event) override;
 private slots:
-    void setData(FrameGraphicsItem* rootItem);
+    void setData(FrameGraphicsItem* rootItem, bool depthLimited);
     void setSearchValue(const QString& value);
     void navigateBack();
     void navigateForward();
@@ -87,6 +87,7 @@ private:
     bool m_buildingScene = false;
     // cost threshold in percent, items below that value will not be shown
     double m_costThreshold = 0.1;
+    bool m_depthLimited = false;
 };
 
 #endif // FLAMEGRAPH_H
