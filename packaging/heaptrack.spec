@@ -61,11 +61,17 @@ cmake \
   -DHEAPTRACK_BUILD_GUI=OFF \
 	.
 
+%ifarch %{arm}
+%define arch_dir armel
+%else
+%define arch_dir x86
+%endif
+
 cd profiler; 
 	ROOTFS_DIR=/ \
 	CC=clang CXX=clang++ \
 	cmake \
-	-DCMAKE_TOOLCHAIN_FILE=profiler/cross/armel/toolchain.cmake \
+	-DCMAKE_TOOLCHAIN_FILE=profiler/cross/%{arch_dir}/toolchain.cmake \
 	-DCLR_BIN_DIR=%{_coreclr_devel_directory} \
 	-DCLR_SRC_DIR=%{_coreclr_devel_directory} \
 	-DCLR_ARCH=%{_target_cpu} \
