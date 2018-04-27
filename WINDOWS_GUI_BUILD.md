@@ -26,7 +26,7 @@ All needed prerequisites can be freely downloaded from Web. The following softwa
 
 ### Microsoft Visual Studio 2017
 
-Microsoft Visual Studio 2017 (<https://www.visualstudio.com/downloads>) or higher is required (Community Edition can be used). The components “VC++ 2017 v141 toolset (x86, x64)” and “MSBuild” must be installed (select them in Visual Studio installer).
+Microsoft Visual Studio 2017 (<https://www.visualstudio.com/downloads>) or higher is required (Community Edition can be used). “Desktop development with C++” workload must be selected in Visual Studio installer as well as the “VC++ 2017 v141 toolset (x86, x64)” and “MSBuild” components (see Individual components | Compilers, build tools, and runtimes).
 
 ### Boost libraries
 
