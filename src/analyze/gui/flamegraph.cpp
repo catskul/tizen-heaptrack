@@ -52,6 +52,8 @@
 
 #include "util.h"
 
+//#define DEBUG_MAX_DEPTH // to investigate which flame graph depth is safe (i.e. doesn't cause stack overflow)
+
 enum CostType
 {
     Allocations,
@@ -375,11 +377,51 @@ FrameGraphicsItem* findItemByFunction(const QList<QGraphicsItem*>& items, const 
 /**
  * Convert the top-down graph into a tree of FrameGraphicsItem.
  */
-void toGraphicsItems(const QVector<RowData>& data, FrameGraphicsItem* parent, int64_t AllocationData::Stats::*member,
+struct ToGraphicsItemsContext
+{
+    int64_t AllocationData::Stats::*member;
+    double costThreshold;
+    bool collapseRecursion;
+    int depth = 0;
+};
+
+static const int MaxRecursionDepth = 600; // 800: crashes
+#ifdef DEBUG_MAX_DEPTH
+static int maxDepthReached;
+static int lastMaxDepthReached;
+#endif
+
+// returns 'true' if flame graph was created completely, returns 'false' if its depth was limited by
+bool toGraphicsItems(const QVector<RowData>& data, ToGraphicsItemsContext& context, FrameGraphicsItem* parent);
+
+bool toGraphicsItems(const QVector<RowData>& data, FrameGraphicsItem* parent, int64_t AllocationData::Stats::*member,
                      const double costThreshold, bool collapseRecursion)
 {
+    // pack parameters to a structure to remove stack usage during recursion
+    ToGraphicsItemsContext ctx;
+    ctx.member = member;
+    ctx.costThreshold = costThreshold;
+    ctx.collapseRecursion = collapseRecursion;
+#ifdef DEBUG_MAX_DEPTH
+    maxDepthReached = 0;
+    lastMaxDepthReached = 0;
+#endif
+    bool result = toGraphicsItems(data, ctx, parent);
+#ifdef DEBUG_MAX_DEPTH
+    qDebug() << "Max flame graph depth: " << maxDepthReached;
+    if (!result)
+    {
+        qDebug() << ". Flame graph depth limited to " << MaxRecursionDepth;
+    }
+#endif
+    return result;
+}
+
+bool toGraphicsItems(const QVector<RowData>& data, ToGraphicsItemsContext& context, FrameGraphicsItem* parent)
+{
+    bool result = true;
     foreach (const auto& row, data) {
-        if (collapseRecursion
+        if (context.collapseRecursion
             && row.location->function != unresolvedFunctionName()
             && row.location->function != untrackedFunctionName()
             && row.location->function == parent->function())
@@ -389,7 +431,7 @@ void toGraphicsItems(const QVector<RowData>& data, FrameGraphicsItem* parent, in
         auto item = findItemByFunction(parent->childItems(), row.location->function);
         if (!item) {
             AllocationData::CoreCLRType clrType = row.stackType;
-            item = new FrameGraphicsItem(row.cost.*member, row.location->function, clrType, parent);
+            item = new FrameGraphicsItem(row.cost.*context.member, row.location->function, clrType, parent);
             item->setPen(parent->pen());
 
             switch (clrType)
@@ -420,12 +462,40 @@ void toGraphicsItems(const QVector<RowData>& data, FrameGraphicsItem* parent, in
                 }
             }
         } else {
-            item->setCost(item->cost() + row.cost.*member);
+            item->setCost(item->cost() + row.cost.*context.member);
         }
-        if (item->cost() > costThreshold) {
-            toGraphicsItems(row.children, item, member, costThreshold, collapseRecursion);
+        if (item->cost() > context.costThreshold) {
+            ++context.depth;
+
+            if (!row.children.isEmpty())
+            {
+                if (context.depth <= MaxRecursionDepth)
+                {
+#ifdef DEBUG_MAX_DEPTH
+                    if (context.depth > maxDepthReached)
+                    {
+                        maxDepthReached = context.depth;
+                        if (maxDepthReached - lastMaxDepthReached >= 100)
+                        {
+                            lastMaxDepthReached = maxDepthReached;
+                            qDebug() << "Depth: " << maxDepthReached;
+                        }
+                    }
+#endif
+                    if (!toGraphicsItems(row.children, context, item))
+                    {
+                        result = false;
+                    }
+                }
+                else
+                {
+                    result = false;
+                }
+            }
+            --context.depth;
         }
     }
+    return result;
 }
 
 int64_t AllocationData::Stats::*memberForType(CostType type)
@@ -448,8 +518,10 @@ int64_t AllocationData::Stats::*memberForType(CostType type)
 }
 
 FrameGraphicsItem* parseData(const QVector<RowData>& topDownData, CostType type, double costThreshold,
-                             bool collapseRecursion)
+                             bool collapseRecursion, bool& depthLimited)
 {
+    depthLimited = false;
+
     auto member = memberForType(type);
 
     double totalCost = 0;
@@ -493,7 +565,7 @@ FrameGraphicsItem* parseData(const QVector<RowData>& topDownData, CostType type,
     rootItem->setBrush(scheme.background());
 #endif
     rootItem->setPen(pen);
-    toGraphicsItems(topDownData, rootItem, member, totalCost * costThreshold / 100, collapseRecursion);
+    depthLimited = !toGraphicsItems(topDownData, rootItem, member, totalCost * costThreshold / 100, collapseRecursion);
     return rootItem;
 }
 
@@ -768,12 +840,12 @@ void FlameGraph::clearData()
     m_topDownData = {};
     m_bottomUpData = {};
 
-    setData(nullptr);
+    setData(nullptr, false);
 }
 
 void FlameGraph::showData()
 {
-    setData(nullptr);
+    setData(nullptr, false);
 
     m_buildingScene = true;
     auto data = m_showBottomUpData ? m_bottomUpData : m_topDownData;
@@ -781,12 +853,16 @@ void FlameGraph::showData()
     auto source = m_costSource->currentData().value<CostType>();
     auto threshold = m_costThreshold;
 #ifndef THREAD_WEAVER
-    setData(parseData(data, source, threshold, collapseRecursion));
+    bool depthLimited;
+    auto parsedData = parseData(data, source, threshold, collapseRecursion, depthLimited);
+    setData(parsedData, depthLimited);
 #else
     using namespace ThreadWeaver;
     stream() << make_job([data, source, threshold, collapseRecursion, this]() {
-        auto parsedData = parseData(data, source, threshold, collapseRecursion);
-        QMetaObject::invokeMethod(this, "setData", Qt::QueuedConnection, Q_ARG(FrameGraphicsItem*, parsedData));
+        bool depthLimited;
+        auto parsedData = parseData(data, source, threshold, collapseRecursion, depthLimited);
+        QMetaObject::invokeMethod(this, "setData", Qt::QueuedConnection, Q_ARG(FrameGraphicsItem*, parsedData),
+                                  Q_ARG(bool, depthLimited));
     });
 #endif
 }
@@ -805,16 +881,26 @@ void FlameGraph::setTooltipItem(const FrameGraphicsItem* item)
 
 void FlameGraph::updateTooltip()
 {
-    const auto text = m_tooltipItem ? m_tooltipItem->description() : QString();
+    auto text = m_tooltipItem ? m_tooltipItem->description() : QString();
     m_displayLabel->setToolTip(text);
     const auto metrics = m_displayLabel->fontMetrics();
+    if (m_depthLimited)
+    {
+        if (text.endsWith('.'))
+        {
+            text.resize(text.length() - 1);
+        }
+        text = text.toHtmlEscaped() + QString(
+            i18n(" <b>(graph maximum depth limited to %1)</b>")).arg(MaxRecursionDepth);
+    }
     m_displayLabel->setText(metrics.elidedText(text, Qt::ElideRight, m_displayLabel->width()));
 }
 
-void FlameGraph::setData(FrameGraphicsItem* rootItem)
+void FlameGraph::setData(FrameGraphicsItem* rootItem, bool depthLimited)
 {
     m_scene->clear();
     m_buildingScene = false;
+    m_depthLimited = depthLimited;
     m_tooltipItem = nullptr;
     m_rootItem = rootItem;
     m_selectionHistory.clear();
@@ -840,15 +926,6 @@ void FlameGraph::setData(FrameGraphicsItem* rootItem)
 
     if (isVisible()) {
         selectItem(m_rootItem);
-        // trying to fix a bug (?): sometimes the flamegraph is displayed at wrong position initially
-        // (observed after switching to the flamegraph tab soon after the application starts with
-        // a data file specified in the command line)
-        static bool firstTime = true;
-        if (firstTime)
-        {
-            m_view->updateGeometry();
-            firstTime = false;
-        }
     }
 }
 
@@ -884,6 +961,13 @@ void FlameGraph::selectItem(FrameGraphicsItem* item)
 
     // then layout all items below the selected on
     layoutItems(item);
+
+    // 1) trying to fix a bug (?): sometimes the flamegraph is displayed at a wrong position initially
+    // (observed after switching to the flamegraph tab soon after the application starts with
+    // a data file specified in the command line);
+    // 2) QGraphicsScene::sceneRect never shrinks automatically so we need to update it manually
+    // if we want to update the ranges and visibility of the scrollbars
+    m_scene->setSceneRect(m_scene->itemsBoundingRect());
 
     // and make sure it's visible
     m_view->centerOn(item);
