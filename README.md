@@ -122,4 +122,64 @@ styles\qwindowsvistastyle.dll
 These files shall be copied to the following directory:
 `SDK\tools\memory-profiler`
 
-##Running 
+## Running
+Basic instructions for Running the Memory Profiler under  Visual Studio are provided below. For more detailed guide on the Memory profiler please refer to the [Original README](docs/TIZEN_HEAPTRACK_ORIGINAL_README.md)
+
+### Step 1. Running Memory Profiler
+   * In the menu, choose Tools > Tizen > Profiler > Run Memory Profiler.
+
+     ![Run Memory Profiler](docs/image/run_memory_profiler.png)
+
+
+   * If no Tizen device is connected and no Tizen emulators are running then Emulator Manager will be started. Please launch the type of emulator you want to use for running and profiling your application.
+
+     ![Launch Emulator](docs/image/start_emulator.png)
+
+
+   * If everything is OK then the application starts as if you run it normally (using Start Debugging in Visual Studio).
+
+     ![Tizen application running](docs/image/memory_profiling_app_started.png)
+
+
+   * In case of errors the Output Window will display them (the output below corresponds to the normal operation case).
+
+     ![Memory Profiler Output Window](docs/image/memory_profiling_msvs_output.png)
+
+
+   * After finishing the application the memory profiling data file will be copied from Tizen to Windows host.
+
+### Step 2. Running Memory Profiler GUI
+   * You can open the memory profiling data file in the GUI application to analyze it. In the menu, choose Tools > Tizen > Profiler > Show Memory Profiler.
+
+     ![Run Memory Profiler GUI](docs/image/run_memory_profiler_gui.png)
+
+### Step 3. Analyzing the results
+   * The GUI application provides several views to the memory profiling data. The views include:
+
+       - summary page with information on which process was profiled, its total runtime, some memory related statistics, etc.
+       - bottom-up table tree view of the code locations that allocated memory with their aggregated cost and stack traces
+       - caller/callee table
+       - top-down table tree view of the code locations
+       - managed heap table tree view
+       - flame graph visualization (explanation: <http://www.brendangregg.com/FlameGraphs/memoryflamegraphs.html>)
+       - consumed memory size over time graph
+       - number of instances over time graph
+       - number of memory allocations over time graph
+       - size of memory allocated over time graph
+       - allocation histogram displaying the number of allocations (the total number and the several topmost code locations) belonging to one of the groups divided by allocation size (0 - 8 bytes, 9 - 16 bytes, ... , 512 bytes - 1 KB, more than 1 KB)
+
+#### Managed heap view sample
+
+   ![Managed heap view](docs/image/memory_profiler_gui_managed_heap.png)
+
+#### Flame graph view sample
+
+   ![Flame graph view](docs/image/memory_profiler_gui_flame_graph.png)
+
+#### Memory allocations graph view sample
+
+   ![Memory allocations graph view](docs/image/memory_profiler_gui_allocations_graph.png)
+
+#### Allocation histogram view sample
+
+   ![Allocation histogram view](docs/image/memory_profiler_gui_allocation_histogram.png)
