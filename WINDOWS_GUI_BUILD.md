@@ -131,3 +131,7 @@ threadweaver.dll
 <b>platforms\</b>qwindows.dll
 <b>styles\</b>qwindowsvistastyle.dll
 </pre>
+
+The dynamic link libraries (except *threadweaver.dll*) will be copied to the destination directory automatically after building the Release configuration of the GUI application (TizenMemoryProfiler.exe) using *Qt Creator* or *qmake*. The remaining *threadweaver.dll* file will be created after building *ThreadWeaver.pro* if the library was installed to the recommended directory (see [ThreadWeaver](#ThreadWeaver)), otherwise you may need to copy this file manually.
+
+You may also use the Qt Windows deployment tool *windeployqt* (see [Qt for Windows - Deployment](http://doc.qt.io/qt-5/windows-deployment.html)) to create a folder containing the Qt-related dependencies of TizenMemoryProfiler.exe (but some of the files and directories copied by the tool may be unnecessary). File *qwt.dll* (and possibly *threadweaver.dll*) shall be copied manually in this case.
