@@ -460,7 +460,6 @@ MainWindow::MainWindow(QWidget* parent)
         layout->insertWidget(idx, m_ui->loadingProgress);
         layout->insertWidget(idx + 1, m_ui->progressLabel);
         m_ui->progressLabel->setAlignment(Qt::AlignVCenter | Qt::AlignHCenter);
-        m_closeAction->setEnabled(true);
         m_openAction->setEnabled(true);
     };
     connect(m_parser, &Parser::finished, this, removeProgress);
@@ -624,8 +623,6 @@ MainWindow::MainWindow(QWidget* parent)
     m_openNewAction = new QAction(i18n("&New"), this);
     m_openNewAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_N));
     connect(m_openNewAction, &QAction::triggered, this, &MainWindow::openNewFile);
-    m_closeAction = new QAction(i18n("&Close"), this);
-    connect(m_closeAction, &QAction::triggered, this, &MainWindow::close);
     m_quitAction = new QAction(i18n("&Quit"), this);
     connect(m_quitAction, &QAction::triggered, qApp, &QApplication::quit);
 
@@ -634,12 +631,10 @@ MainWindow::MainWindow(QWidget* parent)
     m_openAction = KStandardAction::open(this, SLOT(closeFile()), this);
     m_openAction->setEnabled(false);
     m_openNewAction = KStandardAction::openNew(this, SLOT(openNewFile()), this);
-    m_closeAction = KStandardAction::close(this, SLOT(close()), this);
     m_quitAction = KStandardAction::quit(qApp, SLOT(quit()), this);
 #endif
     m_ui->menu_File->addAction(m_openAction);
     m_ui->menu_File->addAction(m_openNewAction);
-    m_ui->menu_File->addAction(m_closeAction);
     m_ui->menu_File->addAction(m_quitAction);
 }
 
@@ -653,7 +648,6 @@ MainWindow::~MainWindow()
 void MainWindow::loadFile(const QString& file, const QString& diffBase)
 {
     // TODO: support canceling of ongoing parse jobs
-    m_closeAction->setEnabled(false);
     m_ui->loadingLabel->setText(i18n("Loading file %1, please wait...", file));
     if (diffBase.isEmpty()) {
         setWindowTitle(i18nc("%1: application name; %2: file name that is open", "%1 - %2",

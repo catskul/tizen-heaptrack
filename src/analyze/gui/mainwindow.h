@@ -76,7 +76,6 @@ private:
 
     QAction* m_openAction = nullptr;
     QAction* m_openNewAction = nullptr;
-    QAction* m_closeAction = nullptr;
     QAction* m_quitAction = nullptr;
 };
 
