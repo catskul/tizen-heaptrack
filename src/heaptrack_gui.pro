@@ -90,9 +90,11 @@ THREAD_WEAVER {
         # ThreadWeaver shall be built beforehand - use ThreadWeaver.pro file (edit it if necessary)
 
         # change the variable if ThreadWeaver headers are located in another directory
-        THREAD_WEAVE_HEADER_PATH = ../../kf5/threadweaver/src/
+        THREAD_WEAVER_PATH = ../../kf5/threadweaver
 
-        INCLUDEPATH += $$THREAD_WEAVE_HEADER_PATH ThreadWeaver
+        THREAD_WEAVER_HEADER_PATH = $${THREAD_WEAVER_PATH}/src/
+
+        INCLUDEPATH += $$THREAD_WEAVER_HEADER_PATH ThreadWeaver
         CONFIG(debug, debug|release) {
             win32-msvc:LIBS += $${DESTDIR}/threadweaverd.lib
         }
@@ -212,3 +214,41 @@ NO_K_LIB {
 
 FORMS += \
     analyze/gui/aboutdialog.ui
+
+# copy extra files (Win32, release)
+win32 {
+    CONFIG(release, debug|release) {
+        # copy Qt dlls
+        EXTRA_BINFILES += \
+            $$(QTDIR)/bin/Qt5Core.dll \
+            $$(QTDIR)/bin/Qt5Gui.dll \
+            $$(QTDIR)/bin/Qt5OpenGL.dll \
+            $$(QTDIR)/bin/Qt5Svg.dll \
+            $$(QTDIR)/bin/Qt5Widgets.dll
+        QWT_CHART {
+            # ... and qwt.dll
+            EXTRA_BINFILES += $$(QWT_ROOT)/lib/qwt.dll
+        }
+        EXTRA_BINFILES_WIN = $${EXTRA_BINFILES}
+        EXTRA_BINFILES_WIN ~= s,/,\\,g
+        DESTDIR_WIN = $${DESTDIR}
+        DESTDIR_WIN ~= s,/,\\,g
+        for (FILE, EXTRA_BINFILES_WIN) {
+            QMAKE_POST_LINK += $$quote(cmd /c copy /y $${FILE} $${DESTDIR_WIN}$$escape_expand(\n\t))
+        }
+        QT_PLUGIN_DIR_WIN = $$(QTDIR)/plugins
+        QT_PLUGIN_DIR_WIN ~= s,/,\\,g
+        # copy imageformats\qjpeg.dll
+        DEST_PLUGIN_DIR = $${DESTDIR_WIN}\\imageformats
+        QMAKE_POST_LINK += $$quote(cmd /c if not exist $${DEST_PLUGIN_DIR} mkdir $${DEST_PLUGIN_DIR}$$escape_expand(\n\t))
+        QMAKE_POST_LINK += $$quote(cmd /c copy /y $${QT_PLUGIN_DIR_WIN}\\imageformats\\qjpeg.dll $${DEST_PLUGIN_DIR}$$escape_expand(\n\t))
+        # copy platforms\qwindows.dll
+        DEST_PLUGIN_DIR = $${DESTDIR_WIN}\\platforms
+        QMAKE_POST_LINK += $$quote(cmd /c if not exist $${DEST_PLUGIN_DIR} mkdir $${DEST_PLUGIN_DIR}$$escape_expand(\n\t))
+        QMAKE_POST_LINK += $$quote(cmd /c copy /y $${QT_PLUGIN_DIR_WIN}\\platforms\\qwindows.dll $${DEST_PLUGIN_DIR}$$escape_expand(\n\t))
+        # copy styles\qwindowsvistastyle.dll
+        DEST_PLUGIN_DIR = $${DESTDIR_WIN}\\styles
+        QMAKE_POST_LINK += $$quote(cmd /c if not exist $${DEST_PLUGIN_DIR} mkdir $${DEST_PLUGIN_DIR}$$escape_expand(\n\t))
+        QMAKE_POST_LINK += $$quote(cmd /c copy /y $${QT_PLUGIN_DIR_WIN}\\styles\\qwindowsvistastyle.dll $${DEST_PLUGIN_DIR}$$escape_expand(\n\t))
+    }
+}
