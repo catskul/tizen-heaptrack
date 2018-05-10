@@ -60,18 +60,18 @@ You should use compatible GBS config files to build the target-specific part for
 By default GBS store resulted RPMs and SRPMs at
 `~/GBS-ROOT/local/repos/<distro>/<arch>` directories.
 
-In the following examples option `-c` is used to specify path to the GBS config file suitable for target.
+In the following examples option `-c` is used to specify path to the GBS config file and `-P` option to select profile suitable for target.
 
 #### Build for ARM Tizen TM1 target
 
 ```console
-~/heaptrack$ gbs -c ../gbs-config/gbs-tm1.conf build -A armv7l
+~/heaptrack$ gbs -c ../gbs-config/gbs.conf build -P profile.arm.snapshot -A armv7l
 ```
 
 #### Build for x86 Tizen emulator
 
 ```console
-~/heaptrack$ gbs -c ../gbs-config/gbs-emul32.conf build -A i586
+~/heaptrack$ gbs -c ../gbs-config/gbs.conf build -P profile.emul32.snapshot -A i586
 ```
 
 ### Building GUI
