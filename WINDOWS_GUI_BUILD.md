@@ -51,7 +51,7 @@ Special handling is required to build the required boost library *iostreams* wit
 
 4. download *zlib* sources from <http://zlib.net> (direct link to version 1.2.11 is <http://zlib.net/zlib-1.2.11.tar.gz>) and extract them to some directory, for example *c:\src\zlib-1.2.11*;
 
-5. run *b2.exe* built on step 3 with the following options:
+5. run *b2.exe* built on step 3 with the following options:<br>
 `b2 -a --with-iostreams -sZLIB_SOURCE="c:/src/zlib-1.2.11"`
 
 Finally create the system environment variable BOOST_LIB and set it to *c:\src\boost_1_66_0* (you may use *System Properties \ Advanced \ Environment Variables* Windows dialog for this).
@@ -74,15 +74,15 @@ Building:
 
 1. open *Qt command prompt* (e.g. “Qt 5.11.0 64-bit for Desktop (MSVC 2017)”) available in Windows Start Menu under Qt submenu;
 
-2. go to the directory where *qwt.pro* file is located, e.g.
+2. go to the directory where *qwt.pro* file is located, e.g.<br>
 `cd c:\svn\trunk\qwt`
 
 3. (optionally) edit *qwtconfig.pri*, e.g. set the QWT_INSTALL_PREFIX variable (see *win32* section in the file) to the directory you want (the default is *C:/Qwt-$$QWT_VERSION-svn*);
 
-4. setup the 64-bit MSVC compiler environment running *vcvars64.bat* script: if Visual Studio 2017 is installed to “c:\Program Files (x86)” then run
+4. setup the 64-bit MSVC compiler environment running *vcvars64.bat* script: if Visual Studio 2017 is installed to “c:\Program Files (x86)” then run<br>
 `“c:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\amd64\vcvars64.bat”`
 
-5. ensure “rc.exe” for x64 platform is in the path; it’s location depends on the version of Windows Kits installed, e.g. it can be located in “c:\Program Files (x86)\Windows Kits\10\bin\10.0.16299.0\x64” – you may add this folder to PATH temporarily:
+5. ensure “rc.exe” for x64 platform is in the path; it’s location depends on the version of Windows Kits installed, e.g. it can be located in “c:\Program Files (x86)\Windows Kits\10\bin\10.0.16299.0\x64” – you may add this folder to PATH temporarily:<br>
 `set PATH=%PATH%;"C:\Program Files (x86)\Windows Kits\10\bin\10.0.16299.0\x64"`
 
 6. run `qmake qwt.pro`, then `nmake`, then `nmake install`.
@@ -99,26 +99,33 @@ The recommended path to clone to is *c:\git\kf5\threadweaver*. In this case the 
 
 Build DEBUG version:
 
-`qmake.exe ThreadWeaver.pro -spec win32-msvc "CONFIG+=debug" "CONFIG+=qml_debug"`
+`qmake.exe ThreadWeaver.pro -spec win32-msvc "CONFIG+=debug" "CONFIG+=qml_debug"`<br>
 `nmake`
 
 Build RELEASE version:
 
-`qmake.exe ThreadWeaver.pro -spec win32-msvc`
+`qmake.exe ThreadWeaver.pro -spec win32-msvc`<br>
 `nmake`
 
 ## Building the GUI application
 
 ### How to build
 
-After building all libraries required it’s possible to build the GUI application itself. It can be done using *Qt Creator* or *qmake* utility. The application's project file in *qmake* format is *heaptrack_gui.pro*. In either case the following environment variable must be set (on the system level or in *Qt Creator*, in the *heaptrack_gui* project settings – both for Debug and Release configurations) to be able to use QWT: QMAKEFEATURES must point to the QWT “features” folder (where *prf-* and *pri-* files are located), e.g.
+After building all libraries required it’s possible to build the GUI application itself. It can be done using *Qt Creator* or *qmake* utility. The application's project file in *qmake* format is *heaptrack_gui.pro*. In either case two environment variables must be set (on the system level or in *Qt Creator*, in the *heaptrack_gui* project settings – both for Debug and Release build configurations) to be able to use QWT. First variable, QMAKEFEATURES, must point to the QWT “features” folder (where *prf-* and *pri-* files are located), e.g.<br>
 `QMAKEFEATURES=c:\Qwt-6.3.0-svn\features`.
 
-If using *Qt Creator* you can load *heaptrack\src\heaptrack_gui.pro*, select the required build configuration (Debug or Release) and start the build from the project's context menu (*heaptrack_gui* project shall be selected in the Projects tree) or from the "Build" top-level menu of the main menu bar.
+Another variable, QWT_ROOT, must point to the base QWT folder, e.g.<br>
+`QWT_ROOT=c:\Qwt-6.3.0-svn`.
+
+For setting the variables in *Qt Creator* you need to switch to the *Projects* mode in *Mode Selector* (use *Window* | *Show Mode Selector* menu command to show the selector if it's not visible). Then ensure that *Active Project* is *heaptrack_gui* and *Build* is selected in the *Build & Run* section (see the left part of the window) under the name of the Qt Kit used (e.g. "Desktop Qt 5.11.0 MSVC2017 64bit"). In the *Build Settings* section (the right part of the window) you need to edit *Build Environment*: press *Details* button in the *Build Environment* section to expand the section and then use *Add* or *Batch Edit* button to set the variables. Do this for Debug and Release build configurations (change the configuration using the *Edit build configuration* combo box located at the top of *Build Settings*).
+
+![Build settings in Qt Creator](screenshots/build_settings.png)
+
+Then you may load *heaptrack\src\heaptrack_gui.pro*, select the required build configuration (Debug or Release) and start the build from the project's context menu (*heaptrack_gui* project shall be selected in the Projects tree) or from the "Build" top-level menu of the main menu bar.
 
 ![Build GUI from Qt Creator](screenshots/build_gui_from_qt_creator.png)
 
-If using *qmake* you can start *Qt command prompt*, go to the *heaptrack\src* path and run
+If using *qmake* you can start *Qt command prompt*, go to the *heaptrack\src* path and run<br>
 `qmake heaptrack_gui.pro -spec win32-msvc`.
 
 After that the application shall build successfully. To be able to run it from *Qt Creator* the dynamic library *qwtd.dll* (*qwt.dll* for Release version) must be copied from the QWT output directory (e.g. *c:\Qwt-6.3.0-svn\lib*) to *bin\debug* (*bin\release*) folders.
@@ -141,6 +148,6 @@ threadweaver.dll
 <b>styles\</b>qwindowsvistastyle.dll
 </pre>
 
-The dynamic link libraries (except *threadweaver.dll*) will be copied to the destination directory automatically after building the Release configuration of the GUI application (TizenMemoryProfiler.exe) using *Qt Creator* or *qmake*. The remaining *threadweaver.dll* file will be created after building *ThreadWeaver.pro* if the library was installed to the recommended directory (see [ThreadWeaver](#ThreadWeaver)), otherwise you may need to copy this file manually.
+After building the Release configuration of the GUI application (TizenMemoryProfiler.exe) using *Qt Creator* or *qmake* the required dynamic link libraries (except *threadweaver.dll*) will be copied to the destination directory *bin\release* automatically. The remaining *threadweaver.dll* file will be created after building *ThreadWeaver.pro* if the library was installed to the recommended directory (see [ThreadWeaver](#ThreadWeaver)), otherwise you may need to copy this file manually.
 
 You may also use the Qt Windows deployment tool *windeployqt* (see [Qt for Windows - Deployment](http://doc.qt.io/qt-5/windows-deployment.html)) to create a folder containing the Qt-related dependencies of TizenMemoryProfiler.exe (but some of the files and directories copied by the tool may be unnecessary). File *qwt.dll* (and possibly *threadweaver.dll*) shall be copied manually in this case.
