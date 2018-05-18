@@ -19,7 +19,8 @@ const QString& AboutData::ShortName = QStringLiteral("Tizen Memory Profiler");
 
 const QString& AboutData::DisplayName = i18n("Tizen Memory Profiler");
 
-const QString& AboutData::Version = QStringLiteral("0.2");
+// Version corresponds to CMake @HEAPTRACK_VERSION_MAJOR@.@HEAPTRACK_VERSION_MINOR@.@HEAPTRACK_VERSION_PATCH@-@HEAPTRACK_VERSION_SUFFIX@
+const QString& AboutData::Version = QStringLiteral("1.1.0-0.1");
 
 const QString& AboutData::ShortDescription = i18n("A visualizer for Tizen Memory Profiler data files");
 
@@ -35,7 +36,8 @@ const QString& AboutData::ShortName = QStringLiteral("heaptrack");
 
 const QString& AboutData::DisplayName = i18n("Heaptrack GUI");
 
-const QString& AboutData::Version = QStringLiteral("0.1");
+// Version corresponds to CMake @HEAPTRACK_VERSION_MAJOR@.@HEAPTRACK_VERSION_MINOR@.@HEAPTRACK_VERSION_PATCH@
+const QString& AboutData::Version = QStringLiteral("1.1.0");
 
 const QString& AboutData::ShortDescription = i18n("A visualizer for heaptrack data files");
 
