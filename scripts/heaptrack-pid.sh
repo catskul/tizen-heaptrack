@@ -22,8 +22,14 @@ export AUL_APPID=${APP_ID}
 export CORECLR_PROFILER={C7BAD323-25F0-4C0B-B354-566390B215CA}
 export CORECLR_PROFILER_PATH=${HEAPTRACK_DIR}/libprofiler.so
 export CORECLR_ENABLE_PROFILING=1
-export COMPlus_AltJit=*
-export COMPlus_AltJitName='liblegacyjit.so'
+
+#TODO: remove this once RyuJIT is the default and has ELT callbacks support
+legacyjit=$(find -L "/usr/share/dotnet" -name liblegacyjit.so)
+if [ ! -z "$legacyjit" ]; then
+  echo 'Using legacy JIT'
+  export COMPlus_AltJit=*
+  export COMPlus_AltJitName='liblegacyjit.so'
+fi
 
 nohup ./heaptrack /usr/bin/dotnet-launcher --standalone ${APP_PATH} &
 
