@@ -252,6 +252,10 @@ public:
             debugLog<MinimalOutput>("%s", "calling initAfterCallback done");
         }
 
+        // initialize managed mode
+        // TODO: make it user-defined, e.g. via enviroment variable
+        is_managed_mode = true;
+
         debugLog<MinimalOutput>("%s", "initialization done");
     }
 
@@ -302,7 +306,7 @@ public:
 
     void writeSMAPS(HeapTrack &heaptrack)
     {
-        if (!s_data || !s_data->out || !s_data->procSmaps) {
+        if (is_managed_mode || !s_data || !s_data->out || !s_data->procSmaps) {
             return;
         }
 
@@ -559,6 +563,11 @@ public:
         TraceTree::knownNames.insert(classId);
     }
 
+    static bool isUnmanagedTraceNeeded()
+    {
+        return !is_managed_mode;
+    }
+
 private:
     static int dl_iterate_phdr_callback(struct dl_phdr_info* info, size_t /*size*/, void* data)
     {
@@ -813,11 +822,14 @@ private:
     static LockedData* s_data;
 
     static size_t k_pageSize;
+    static bool is_managed_mode;
 };
 
 atomic<bool> HeapTrack::s_locked{false};
 HeapTrack::LockedData* HeapTrack::s_data{nullptr};
 size_t HeapTrack::k_pageSize{0u};
+bool HeapTrack::is_managed_mode{false};
+
 }
 extern "C" {
 
@@ -863,7 +875,8 @@ void heaptrack_dlopen(const vector<pair<void *, tuple<size_t, int, int>>> &newMm
         {
             trace.fill(dlopenOriginal);
         } else {
-            trace.fill(2);
+            if (HeapTrack::isUnmanagedTraceNeeded())
+                trace.fill(2);
         }
 
         HeapTrack heaptrack(guard);
@@ -897,7 +910,8 @@ void heaptrack_malloc(void* ptr, size_t size)
         debugLog<VeryVerboseOutput>("heaptrack_malloc(%p, %zu)", ptr, size);
 
         Trace trace;
-        trace.fill(2);
+        if (HeapTrack::isUnmanagedTraceNeeded())
+            trace.fill(2);
 
         HeapTrack heaptrack(guard);
         heaptrack.handleMalloc(ptr, size, trace);
@@ -925,7 +939,8 @@ void heaptrack_realloc(void* ptr_in, size_t size, void* ptr_out)
         debugLog<VeryVerboseOutput>("heaptrack_realloc(%p, %zu, %p)", ptr_in, size, ptr_out);
 
         Trace trace;
-        trace.fill(2);
+        if (HeapTrack::isUnmanagedTraceNeeded())
+            trace.fill(2);
 
         HeapTrack heaptrack(guard);
         if (ptr_in) {
@@ -945,7 +960,8 @@ void heaptrack_mmap(void* ptr, size_t length, int prot, int flags, int fd, off64
                                     ptr, length, prot, flags, fd, offset);
 
         Trace trace;
-        trace.fill(2);
+        if (HeapTrack::isUnmanagedTraceNeeded())
+            trace.fill(2);
 
         HeapTrack heaptrack(guard);
         heaptrack.handleMmap(ptr, length, prot, 0, fd, trace);
@@ -972,7 +988,8 @@ void heaptrack_objectallocate(void *objectId, unsigned long objectSize) {
     debugLog<VeryVerboseOutput>("handleObjectAllocation: %p %lu", objectId, objectSize);
 
     Trace trace;
-    trace.fill(2);
+    if (HeapTrack::isUnmanagedTraceNeeded())
+        trace.fill(2);
 
     HeapTrack heaptrack(guard);
     heaptrack.handleObjectAllocation(objectId, objectSize, trace);

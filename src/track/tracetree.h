@@ -90,12 +90,12 @@ public:
         StackEntry *stackIter = g_shadowStack;
 
         if (stackIter != nullptr) {
-            void* managedStack[Trace::MAX_SIZE];
+            void* managedStack[MANAGED_MAX_SIZE];
             int managedStackSize = 0;
 
             handleIP((void *) (uintptr_t) -1, false);
 
-            while (stackIter != nullptr && managedStackSize < Trace::MAX_SIZE) {
+            while (stackIter != nullptr && managedStackSize < MANAGED_MAX_SIZE) {
                 void *ip = reinterpret_cast<void *>(stackIter->m_funcId);
 
                 if (knownNames.find(ip) == knownNames.end()) {
@@ -143,6 +143,10 @@ public:
 private:
     TraceEdge m_root = {0, 0, {}};
     uint32_t m_index = 1;
+    enum : int
+    {
+        MANAGED_MAX_SIZE = 64
+    };
 };
 
 #endif // TRACETREE_H
