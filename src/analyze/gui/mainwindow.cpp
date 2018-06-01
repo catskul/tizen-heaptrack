@@ -18,20 +18,33 @@
 
 #include "mainwindow.h"
 
-#include <ui_mainwindow.h>
-
 #include <cmath>
+#include <cstdlib>
 
+#ifdef NO_K_LIB
+#include "noklib.h"
+#include <ui_mainwindow_noklib.h>
+#include <QAbstractButton>
+#include <QFileDialog>
+#include <QSettings>
+#else
+#include <ui_mainwindow.h>
 #include <KConfigGroup>
 #include <KLocalizedString>
 #include <KRecursiveFilterProxyModel>
 #include <KStandardAction>
+#endif
+
+#include "aboutdata.h"
+#include "aboutdialog.h"
+#include "util.h"
 
 #include <QAction>
 #include <QDebug>
 #include <QDesktopServices>
 #include <QFileDialog>
 #include <QMenu>
+#include <QMoveEvent>
 #include <QStatusBar>
 
 #include "../accumulatedtracedata.h"
@@ -47,7 +60,7 @@
 
 #include "gui_config.h"
 
-#if KChart_FOUND
+#if USE_CHART
 #include "chartmodel.h"
 #include "chartproxy.h"
 #include "chartwidget.h"
@@ -106,7 +119,7 @@ void setupTopView(TreeModel* source, QTreeView* view, TopProxy::Type type)
     addContextMenu(view, TreeModel::LocationRole);
 }
 
-#if KChart_FOUND
+#if USE_CHART
 void addChartTab(QTabWidget* tabWidget, const QString& title, ChartModel::Type type, const Parser* parser,
                  void (Parser::*dataReady)(const ChartData&), MainWindow* window)
 {
@@ -226,13 +239,37 @@ MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , m_ui(new Ui::MainWindow)
     , m_parser(new Parser(this))
+#ifndef NO_K_LIB
     , m_config(KSharedConfig::openConfig(QStringLiteral("heaptrack_gui")))
+#endif
 {
     m_ui->setupUi(this);
 
+#ifdef NO_K_LIB
+    QSettings settings(QSettings::UserScope, AboutData::Organization, AboutData::applicationName());
+    restoreGeometry(settings.value("mainWindowGeometry").toByteArray());
+    // create docks, toolbars, etc…
+    restoreState(settings.value("mainWindowState").toByteArray());
+#ifdef QWT_FOUND
+    settings.beginGroup("Charts");
+    QVariant value = settings.value("Options");
+    bool ok;
+    int options = value.toInt(&ok);
+    if (ok)
+    {
+        ChartOptions::GlobalOptions = ChartOptions::Options(options);
+    }
+    settings.endGroup();
+#if QT_VERSION >= 0x050A00
+    // seems it doesn't help under Windows (Qt 5.10.0)
+    QCoreApplication::setAttribute(Qt::AA_DontShowShortcutsInContextMenus, false);
+#endif
+#endif // QWT_FOUND
+#else
     auto group = m_config->group(Config::Groups::MainWindow);
     auto state = group.readEntry(Config::Entries::State, QByteArray());
     restoreState(state, MAINWINDOW_VERSION);
+#endif // NO_K_LIB
 
     m_ui->pages->setCurrentWidget(m_ui->openPage);
     // TODO: proper progress report
@@ -264,12 +301,12 @@ MainWindow::MainWindow(QWidget* parent)
         m_ui->tabWidget->setTabEnabled(m_ui->tabWidget->indexOf(m_ui->bottomUpTab), true);
     });
     connect(m_parser, &Parser::objectTreeBottomUpDataAvailable, this, [=](const ObjectTreeData& data) {
-        int maxGC = 0;
+        quint32 maxGC = 0;
         for (const ObjectRowData& row: data) {
             if (maxGC < row.gcNum)
                 maxGC = row.gcNum;
         }
-        for (int gc = 0; gc < maxGC; gc++) {
+        for (quint32 gc = 0; gc < maxGC; gc++) {
             m_ui->filterGC->addItem(QString::number(gc+1));
         }
         objectTreeModel->resetData(data);
@@ -297,7 +334,6 @@ MainWindow::MainWindow(QWidget* parent)
         bottomUpModelFilterOutLeaves->setSummary(data);
         topDownModel->setSummary(data);
         callerCalleeModel->setSummary(data);
-        KFormat format;
         QString textLeft;
         QString textCenter;
         QString textRight;
@@ -305,7 +341,13 @@ MainWindow::MainWindow(QWidget* parent)
         const double peakTimeS = 0.001 * data.peakTime;
         {
             QTextStream stream(&textLeft);
-            const auto debuggee = insertWordWrapMarkers(data.debuggee);
+            QString debuggee = data.debuggee;
+            int i = debuggee.indexOf(" __AUL_SDK__");
+            if (i >= 0)
+            {
+                debuggee.resize(i); // Tizen: remove part which is not human-readable
+            }
+            debuggee = insertWordWrapMarkers(debuggee);
             stream << "<qt><dl>"
                    << (data.fromAttached ? i18n("<dt><b>debuggee</b>:</dt><dd "
                                                 "style='font-family:monospace;'>%1 <i>(attached)</i></dd>",
@@ -316,7 +358,7 @@ MainWindow::MainWindow(QWidget* parent)
                    // xgettext:no-c-format
                    << i18n("<dt><b>total runtime</b>:</dt><dd>%1s</dd>", totalTimeS)
                    << i18n("<dt><b>total system memory</b>:</dt><dd>%1</dd>",
-                           format.formatByteSize(data.totalSystemMemory, 1, KFormat::JEDECBinaryDialect))
+                           Util::formatByteSize(data.totalSystemMemory, 1))
                    << "</dl></qt>";
         }
 
@@ -334,8 +376,8 @@ MainWindow::MainWindow(QWidget* parent)
                            qint64(data.cost.temporary / totalTimeS))
                    << i18n("<dt><b>bytes allocated in total</b> (ignoring "
                            "deallocations):</dt><dd>%1 (%2/s)</dd>",
-                           format.formatByteSize(data.cost.allocated, 2, KFormat::JEDECBinaryDialect),
-                           format.formatByteSize(data.cost.allocated / totalTimeS, 1, KFormat::JEDECBinaryDialect))
+                           Util::formatByteSize(data.cost.allocated, 2),
+                           Util::formatByteSize(data.cost.allocated / totalTimeS, 1))
                    << "</dl></qt>";
         }
         if (AccumulatedTraceData::isShowCoreCLRPartOption)
@@ -347,20 +389,21 @@ MainWindow::MainWindow(QWidget* parent)
                 stream << "<qt><dl>" << i18n("<dt><b>peak heap memory consumption</b>:</dt><dd>%1 "
                                              "after %2s</dd>"
                                              "</dt><dd>%3 (CoreCLR), %4 (non-CoreCLR), %5 (unknown)</dd>",
-                                             format.formatByteSize(data.cost.peak, 1, KFormat::JEDECBinaryDialect),
+                                             Util::formatByteSize(data.cost.peak, 1),
                                              peakTimeS,
-                                             format.formatByteSize(data.CoreCLRPart.peak, 1, KFormat::JEDECBinaryDialect),
-                                             format.formatByteSize(data.nonCoreCLRPart.peak, 1, KFormat::JEDECBinaryDialect),
-                                             format.formatByteSize(data.unknownPart.peak, 1, KFormat::JEDECBinaryDialect))
-                       << i18n("<dt><b>peak RSS</b> (including heaptrack "
-                               "overhead):</dt><dd>%1</dd>",
-                               format.formatByteSize(data.peakRSS, 1, KFormat::JEDECBinaryDialect))
+                                             Util::formatByteSize(data.CoreCLRPart.peak, 1),
+                                             Util::formatByteSize(data.nonCoreCLRPart.peak, 1),
+                                             Util::formatByteSize(data.unknownPart.peak, 1))
+                       << i18n("<dt><b>peak RSS</b> (including %1 "
+                               "overhead):</dt><dd>%2</dd>",
+                               AboutData::ShortName,
+                               Util::formatByteSize(data.peakRSS, 1))
                        << i18n("<dt><b>total memory leaked</b>:</dt><dd>%1</dd>"
                                "</dt><dd>%2 (CoreCLR), %3 (non-CoreCLR), %4 (unknown)</dd>",
-                               format.formatByteSize(data.cost.leaked, 1, KFormat::JEDECBinaryDialect),
-                               format.formatByteSize(data.CoreCLRPart.leaked, 1, KFormat::JEDECBinaryDialect),
-                               format.formatByteSize(data.nonCoreCLRPart.leaked, 1, KFormat::JEDECBinaryDialect),
-                               format.formatByteSize(data.unknownPart.leaked, 1, KFormat::JEDECBinaryDialect))
+                               Util::formatByteSize(data.cost.leaked, 1),
+                               Util::formatByteSize(data.CoreCLRPart.leaked, 1),
+                               Util::formatByteSize(data.nonCoreCLRPart.leaked, 1),
+                               Util::formatByteSize(data.unknownPart.leaked, 1))
                        << "</dl></qt>";
             }
             else
@@ -368,22 +411,23 @@ MainWindow::MainWindow(QWidget* parent)
                 stream << "<qt><dl>" << i18n("<dt><b>peak heap memory consumption</b>:</dt><dd>%1 "
                                              "after %2s</dd>"
                                              "</dt><dd>%3 (CoreCLR), %4 (non-CoreCLR), %5 (sbrk heap), %6 (unknown)</dd>",
-                                             format.formatByteSize(data.cost.peak, 1, KFormat::JEDECBinaryDialect),
+                                             Util::formatByteSize(data.cost.peak, 1),
                                              peakTimeS,
-                                             format.formatByteSize(data.CoreCLRPart.peak, 1, KFormat::JEDECBinaryDialect),
-                                             format.formatByteSize(data.nonCoreCLRPart.peak, 1, KFormat::JEDECBinaryDialect),
-                                             format.formatByteSize(data.untrackedPart.peak, 1, KFormat::JEDECBinaryDialect),
-                                             format.formatByteSize(data.unknownPart.peak, 1, KFormat::JEDECBinaryDialect))
-                       << i18n("<dt><b>peak RSS</b> (including heaptrack "
-                               "overhead):</dt><dd>%1</dd>",
-                               format.formatByteSize(data.peakRSS, 1, KFormat::JEDECBinaryDialect))
+                                             Util::formatByteSize(data.CoreCLRPart.peak, 1),
+                                             Util::formatByteSize(data.nonCoreCLRPart.peak, 1),
+                                             Util::formatByteSize(data.untrackedPart.peak, 1),
+                                             Util::formatByteSize(data.unknownPart.peak, 1))
+                       << i18n("<dt><b>peak RSS</b> (including %1 "
+                               "overhead):</dt><dd>%2</dd>",
+                               AboutData::ShortName,
+                               Util::formatByteSize(data.peakRSS, 1))
                        << i18n("<dt><b>total memory leaked</b>:</dt><dd>%1</dd>"
                                "</dt><dd>%2 (CoreCLR), %3 (non-CoreCLR), %4 (sbrk heap), %5 (unknown)</dd>",
-                               format.formatByteSize(data.cost.leaked, 1, KFormat::JEDECBinaryDialect),
-                               format.formatByteSize(data.CoreCLRPart.leaked, 1, KFormat::JEDECBinaryDialect),
-                               format.formatByteSize(data.nonCoreCLRPart.leaked, 1, KFormat::JEDECBinaryDialect),
-                               format.formatByteSize(data.untrackedPart.leaked, 1, KFormat::JEDECBinaryDialect),
-                               format.formatByteSize(data.unknownPart.leaked, 1, KFormat::JEDECBinaryDialect))
+                               Util::formatByteSize(data.cost.leaked, 1),
+                               Util::formatByteSize(data.CoreCLRPart.leaked, 1),
+                               Util::formatByteSize(data.nonCoreCLRPart.leaked, 1),
+                               Util::formatByteSize(data.untrackedPart.leaked, 1),
+                               Util::formatByteSize(data.unknownPart.leaked, 1))
                        << "</dl></qt>";
             }
         }
@@ -392,13 +436,14 @@ MainWindow::MainWindow(QWidget* parent)
             QTextStream stream(&textRight);
             stream << "<qt><dl>" << i18n("<dt><b>peak heap memory consumption</b>:</dt><dd>%1 "
                                          "after %2s</dd>",
-                                         format.formatByteSize(data.cost.peak, 1, KFormat::JEDECBinaryDialect),
+                                         Util::formatByteSize(data.cost.peak, 1),
                                          peakTimeS)
-                   << i18n("<dt><b>peak RSS</b> (including heaptrack "
-                           "overhead):</dt><dd>%1</dd>",
-                           format.formatByteSize(data.peakRSS, 1, KFormat::JEDECBinaryDialect))
+                   << i18n("<dt><b>peak RSS</b> (including %1 "
+                           "overhead):</dt><dd>%2</dd>",
+                           AboutData::ShortName,
+                           Util::formatByteSize(data.peakRSS, 1))
                    << i18n("<dt><b>total memory leaked</b>:</dt><dd>%1</dd>",
-                           format.formatByteSize(data.cost.leaked, 1, KFormat::JEDECBinaryDialect))
+                           Util::formatByteSize(data.cost.leaked, 1))
                    << "</dl></qt>";
         }
 
@@ -415,7 +460,6 @@ MainWindow::MainWindow(QWidget* parent)
         layout->insertWidget(idx, m_ui->loadingProgress);
         layout->insertWidget(idx + 1, m_ui->progressLabel);
         m_ui->progressLabel->setAlignment(Qt::AlignVCenter | Qt::AlignHCenter);
-        m_closeAction->setEnabled(true);
         m_openAction->setEnabled(true);
     };
     connect(m_parser, &Parser::finished, this, removeProgress);
@@ -426,7 +470,7 @@ MainWindow::MainWindow(QWidget* parent)
     });
     m_ui->messages->hide();
 
-#if KChart_FOUND
+#if USE_CHART
     addChartTab(m_ui->tabWidget, i18n("Consumed"), ChartModel::Consumed, m_parser, &Parser::consumedChartDataAvailable,
                 this);
 
@@ -460,7 +504,9 @@ MainWindow::MainWindow(QWidget* parent)
                 m_ui->tabWidget->setTabEnabled(m_ui->tabWidget->indexOf(sizesTab), true);
                 });
     }
-#endif
+#endif // USE_CHART
+
+    connect(m_ui->aboutAction, &QAction::triggered, this, &MainWindow::about);
 
     auto costDelegate = new CostDelegate(this);
 
@@ -476,6 +522,7 @@ MainWindow::MainWindow(QWidget* parent)
     setupObjectTreeModel(objectTreeModel, m_ui->objectTreeResults, m_ui->filterClass, m_ui->filterGC);
 
     auto validateInputFile = [this](const QString& path, bool allowEmpty) -> bool {
+        m_ui->messages->hide();
         if (path.isEmpty()) {
             return allowEmpty;
         }
@@ -492,7 +539,7 @@ MainWindow::MainWindow(QWidget* parent)
         }
         return false;
     };
-
+#ifndef NO_K_LIB
     auto validateInput = [this, validateInputFile]() {
         m_ui->messages->hide();
         m_ui->buttonBox->setEnabled(validateInputFile(m_ui->openFile->url().toLocalFile(), false)
@@ -507,6 +554,29 @@ MainWindow::MainWindow(QWidget* parent)
         const auto base = m_ui->compareTo->url().toLocalFile();
         loadFile(path, base);
     });
+#else
+    m_ui->buttonBox->setEnabled(true);
+
+    auto validateInputAndLoadFile = [this, validateInputFile]() {
+       const auto path = m_ui->openFileEdit->text();
+       if (!validateInputFile(path, false)) {
+           return;
+       }
+       Q_ASSERT(!path.isEmpty());
+       const auto base = m_ui->compareToEdit->text();
+       if (!validateInputFile(base, true)) {
+           return;
+       }
+       QApplication::setOverrideCursor(Qt::WaitCursor);
+       loadFile(path, base);
+       QApplication::restoreOverrideCursor();
+    };
+
+    connect(m_ui->buttonBox, &QDialogButtonBox::clicked, this, validateInputAndLoadFile);
+
+    connect(m_ui->openFileButton1, &QPushButton::clicked, this, &MainWindow::selectOpenFile);
+    connect(m_ui->openFileButton2, &QPushButton::clicked, this, &MainWindow::selectCompareToFile);
+#endif
 
     setupStacks();
 
@@ -543,37 +613,49 @@ MainWindow::MainWindow(QWidget* parent)
         m_ui->widget_12->hide();
     }
 
-    setWindowTitle(i18n("Heaptrack"));
+    setWindowTitle(AboutData::ShortName);
     // closing the current file shows the stack page to open a new one
+#ifdef NO_K_LIB
+    m_openAction = new QAction(i18n("&Open..."), this);
+    m_openAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_O));
+    connect(m_openAction, &QAction::triggered, this, &MainWindow::closeFile);
+    m_openAction->setEnabled(false);
+    m_openNewAction = new QAction(i18n("&New"), this);
+    m_openNewAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_N));
+    connect(m_openNewAction, &QAction::triggered, this, &MainWindow::openNewFile);
+    m_quitAction = new QAction(i18n("&Quit"), this);
+    connect(m_quitAction, &QAction::triggered, qApp, &QApplication::quit);
+
+    qApp->installEventFilter(this);
+#else
     m_openAction = KStandardAction::open(this, SLOT(closeFile()), this);
     m_openAction->setEnabled(false);
-    m_ui->menu_File->addAction(m_openAction);
     m_openNewAction = KStandardAction::openNew(this, SLOT(openNewFile()), this);
-    m_ui->menu_File->addAction(m_openNewAction);
-    m_closeAction = KStandardAction::close(this, SLOT(close()), this);
-    m_ui->menu_File->addAction(m_closeAction);
     m_quitAction = KStandardAction::quit(qApp, SLOT(quit()), this);
+#endif
+    m_ui->menu_File->addAction(m_openAction);
+    m_ui->menu_File->addAction(m_openNewAction);
     m_ui->menu_File->addAction(m_quitAction);
 }
 
 MainWindow::~MainWindow()
 {
-    auto state = saveState(MAINWINDOW_VERSION);
-    auto group = m_config->group(Config::Groups::MainWindow);
-    group.writeEntry(Config::Entries::State, state);
+#ifdef NO_K_LIB
+    qApp->removeEventFilter(this);
+#endif
 }
 
 void MainWindow::loadFile(const QString& file, const QString& diffBase)
 {
     // TODO: support canceling of ongoing parse jobs
-    m_closeAction->setEnabled(false);
     m_ui->loadingLabel->setText(i18n("Loading file %1, please wait...", file));
     if (diffBase.isEmpty()) {
-        setWindowTitle(i18nc("%1: file name that is open", "Heaptrack - %1", QFileInfo(file).fileName()));
+        setWindowTitle(i18nc("%1: application name; %2: file name that is open", "%1 - %2",
+                             AboutData::ShortName, QFileInfo(file).fileName()));
         m_diffMode = false;
     } else {
-        setWindowTitle(i18nc("%1, %2: file names that are open", "Heaptrack - %1 compared to %2",
-                             QFileInfo(file).fileName(), QFileInfo(diffBase).fileName()));
+        setWindowTitle(i18nc("%1: application name; %2, %3: file names that are open", "%1 - %2 compared to %3",
+                             AboutData::ShortName, QFileInfo(file).fileName(), QFileInfo(diffBase).fileName()));
         m_diffMode = true;
     }
     m_ui->pages->setCurrentWidget(m_ui->loadingPage);
@@ -598,6 +680,12 @@ void MainWindow::closeFile()
 
     m_openAction->setEnabled(false);
     emit clearData();
+}
+
+void MainWindow::about()
+{
+    AboutDialog dlg(this);
+    dlg.exec();
 }
 
 void MainWindow::showError(const QString& message)
@@ -643,9 +731,106 @@ void MainWindow::setupStacks()
             auto tree = (widget == m_ui->topDownTab) ? m_ui->topDownResults : m_ui->bottomUpResults;
             fillFromIndex(tree->selectionModel()->currentIndex());
         }
+#ifdef QWT_FOUND
+        const auto chartWidget = dynamic_cast<ChartWidget*>(widget);
+        if (chartWidget) {
+            chartWidget->updateOnSelected(this);
+            chartWidget->setFocus(); // to handle keyboard events in the widget
+        }
+        else {
+            if (ChartWidget::HelpWindow != nullptr) {
+                ChartWidget::HelpWindow->hide();
+            }
+            const auto histogramWidget = dynamic_cast<HistogramWidget*>(widget);
+            if (histogramWidget) {
+                histogramWidget->updateOnSelected();
+                histogramWidget->setFocus();
+            }
+        }
+#endif
     };
     connect(m_ui->tabWidget, &QTabWidget::currentChanged, this, tabChanged);
     connect(m_parser, &Parser::bottomUpDataAvailable, this, [tabChanged]() { tabChanged(0); });
 
     m_ui->stacksDock->setVisible(false);
 }
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+#ifdef NO_K_LIB
+    QMainWindow::closeEvent(event);
+    {
+        QSettings settings(QSettings::UserScope, AboutData::Organization, AboutData::applicationName());
+        settings.setValue("mainWindowGeometry", saveGeometry());
+        settings.setValue("mainWindowState", saveState());
+#ifdef QWT_FOUND
+        settings.beginGroup("Charts");
+        settings.setValue("Options", ChartOptions::GlobalOptions);
+        settings.endGroup();
+#endif // QWT_FOUND
+    }
+#else
+    {
+        auto state = saveState(MAINWINDOW_VERSION);
+        auto group = m_config->group(Config::Groups::MainWindow);
+        group.writeEntry(Config::Entries::State, state);
+    }
+#endif // !NO_K_LIB
+    // the simplest and safest way to close this application (without deep redesing) is to terminate it,
+    // otherwise a crash is possible if the main window is being closed (and destroyed) while some background
+    // operations (e.g. parsing a source file) are still in progress; it happens because the code running
+    // in other threads may emit signals to already destroyed objects
+    quick_exit(0); // faster alternative to 'exit'
+}
+
+#ifdef NO_K_LIB
+bool MainWindow::eventFilter(QObject* object, QEvent* event)
+{
+    // could process arrow keys (left/right) for flamegraph (to implement back/forward) only from here
+    if ((event->type() == QEvent::KeyPress) &&
+        (m_ui->tabWidget->currentWidget() == m_ui->flameGraphTab))
+    {
+        // Qt5: sometimes (e.g. if Alt is pressed) 'object' is QWidgetWindow which is not a part
+        // of Qt public API so trying to detect it indirectly (see 2nd condition below)
+        if ((object == this) || (object->parent() == nullptr))
+        {
+            if (m_ui->flameGraphTab->handleKeyPress(static_cast<QKeyEvent*>(event)))
+            {
+                return true;
+            }
+        }
+    }
+    return QMainWindow::eventFilter(object, event);
+}
+
+static void selectFile(QWidget *parent, QLineEdit *fileNameEdit)
+{
+    QString fileName = QFileDialog::getOpenFileName(parent, "Select Data File",
+        "", "GZip files (*.gz);; All files (*)");
+    if (!fileName.isEmpty())
+    {
+        fileNameEdit->setText(fileName);
+    }
+}
+
+void MainWindow::selectOpenFile()
+{
+    selectFile(this, m_ui->openFileEdit);
+}
+
+void MainWindow::selectCompareToFile()
+{
+    selectFile(this, m_ui->compareToEdit);
+}
+#endif
+
+#ifdef QWT_FOUND
+void MainWindow::moveEvent(QMoveEvent *event)
+{
+    if (ChartWidget::HelpWindow != nullptr)
+    {
+        ChartWidget::HelpWindow->move(ChartWidget::HelpWindow->pos() +
+                                      (event->pos() - event->oldPos()));
+    }
+}
+#endif

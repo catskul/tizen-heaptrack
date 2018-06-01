@@ -18,8 +18,6 @@
 
 #include "topproxy.h"
 
-#include <KLocalizedString>
-
 namespace {
 TreeModel::Columns toSource(TopProxy::Type type)
 {

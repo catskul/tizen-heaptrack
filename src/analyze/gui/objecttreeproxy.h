@@ -19,9 +19,18 @@
 #ifndef OBJECTTREEPROXY_H
 #define OBJECTTREEPROXY_H
 
+#ifdef NO_K_LIB
+#include <QSortFilterProxyModel>
+#else
 #include <KRecursiveFilterProxyModel>
+#endif
 
-class ObjectTreeProxy final : public KRecursiveFilterProxyModel
+class ObjectTreeProxy final : public
+#ifdef NO_K_LIB
+    QSortFilterProxyModel
+#else
+    KRecursiveFilterProxyModel
+#endif
 {
     Q_OBJECT
 public:
@@ -33,7 +42,11 @@ public slots:
     void setGCFilter(int gcFilter);
 
 private:
+#ifdef NO_K_LIB
+    bool acceptRow(int source_row, const QModelIndex& source_parent) const;
+#else
     bool acceptRow(int source_row, const QModelIndex& source_parent) const override;
+#endif
     bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override;
 
     int m_nameColumn;

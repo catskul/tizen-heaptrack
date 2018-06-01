@@ -19,9 +19,13 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include "gui_config.h"
+
 #include <QMainWindow>
 
+#ifndef NO_K_LIB
 #include <KSharedConfig>
+#endif
 
 namespace Ui {
 class MainWindow;
@@ -42,22 +46,36 @@ public slots:
     void loadFile(const QString& path, const QString& diffBase = {});
     void openNewFile();
     void closeFile();
+    void about();
 
 signals:
     void clearData();
 
+protected:
+    virtual void closeEvent(QCloseEvent *event) override;
+#ifdef NO_K_LIB
+    virtual bool eventFilter(QObject* object, QEvent* event) override;
+public slots:
+    void selectOpenFile();
+    void selectCompareToFile();
+#endif
+#ifdef QWT_FOUND
+protected:
+    virtual void moveEvent(QMoveEvent *event) override;
+#endif
 private:
     void showError(const QString& message);
     void setupStacks();
 
     QScopedPointer<Ui::MainWindow> m_ui;
     Parser* m_parser;
+#ifndef NO_K_LIB
     KSharedConfig::Ptr m_config;
+#endif
     bool m_diffMode = false;
 
     QAction* m_openAction = nullptr;
     QAction* m_openNewAction = nullptr;
-    QAction* m_closeAction = nullptr;
     QAction* m_quitAction = nullptr;
 };
 

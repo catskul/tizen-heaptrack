@@ -18,10 +18,20 @@
 
 #include "histogrammodel.h"
 
-#include <KChartGlobal>
+#include "gui_config.h"
 
+#ifdef KChart_FOUND
+#include <KChartGlobal>
+#endif
+
+#ifdef NO_K_LIB
+#include "noklib.h"
+#else
 #include <KFormat>
 #include <KLocalizedString>
+#endif
+
+#include "util.h"
 
 #include <QBrush>
 #include <QColor>
@@ -57,11 +67,13 @@ QVariant HistogramModel::data(const QModelIndex& index, int role) const
     if (!hasIndex(index.row(), index.column(), index.parent())) {
         return {};
     }
+#ifdef KChart_FOUND
     if (role == KChart::DatasetBrushRole) {
         return QVariant::fromValue(QBrush(colorForColumn(index.column(), columnCount())));
     } else if (role == KChart::DatasetPenRole) {
         return QVariant::fromValue(QPen(Qt::black));
     }
+#endif
 
     if (role != Qt::DisplayRole && role != Qt::ToolTipRole) {
         return {};
@@ -71,14 +83,33 @@ QVariant HistogramModel::data(const QModelIndex& index, int role) const
     const auto& column = row.columns[index.column()];
     if (role == Qt::ToolTipRole) {
         if (index.column() == 0) {
-            return i18n("%1 allocations in total", column.allocations);
+            return i18n("<b>%1</b> allocations in total", column.allocations);
         }
+        if (!column.location) {
+            return {};
+        }
+        QString tooltip;
         if (!column.location->file.isEmpty()) {
-            return i18n("%1 allocations from %2 at %3:%4 in %5", column.allocations, column.location->function,
-                        column.location->file, column.location->line, column.location->module);
+            tooltip = i18n("%1 allocations from %2 at %3:%4 in %5", column.allocations, column.location->function,
+                            column.location->file, column.location->line, column.location->module);
         }
-        return i18n("%1 allocations from %2 in %3", column.allocations, column.location->function,
-                    column.location->module);
+        else
+        {
+            tooltip = i18n("%1 allocations from %2 in %3", column.allocations, column.location->function,
+                           column.location->module);
+        }
+#ifdef QWT_FOUND
+        tooltip = Util::wrapLabel(tooltip, 96, 0, "&nbsp;<br>");
+#else
+        tooltip = tooltip.toHtmlEscaped(); // Qt wraps text in tooltips itself
+#endif
+        // enclose first word in <b> and </b> tags
+        int i = tooltip.indexOf(' ');
+        if (i >= 0)
+        {
+            tooltip = "<b>" + tooltip.left(i) + "</b>" + tooltip.mid(i);
+        }
+        return tooltip;
     }
     return column.allocations;
 }
@@ -111,4 +142,16 @@ void HistogramModel::clearData()
     beginResetModel();
     m_data = {};
     endResetModel();
+}
+
+QColor HistogramModel::getColumnColor(int column) const
+{
+    return colorForColumn(column, columnCount());
+}
+
+LocationData::Ptr HistogramModel::getLocationData(int row, int column) const
+{
+    const auto& rowData = m_data.at(row);
+    const auto& columnData = rowData.columns[column];
+    return columnData.location;
 }

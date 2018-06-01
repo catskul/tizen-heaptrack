@@ -54,6 +54,9 @@ signals:
     void objectTreeBottomUpDataAvailable(const ObjectTreeData& data);
     void finished();
     void failedToOpen(const QString& path);
+
+private:
+    void parseJob(const QString& path, const QString& diffBase);
 };
 
 #endif // PARSER_H

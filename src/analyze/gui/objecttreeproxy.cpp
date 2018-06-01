@@ -19,10 +19,19 @@
 #include "objecttreeproxy.h"
 
 ObjectTreeProxy::ObjectTreeProxy(int nameColumn, int gcColumn, QObject* parent)
+#ifdef NO_K_LIB
+    : QSortFilterProxyModel(parent)
+#else
     : KRecursiveFilterProxyModel(parent)
+#endif
     , m_nameColumn(nameColumn)
     , m_gcColumn(gcColumn)
 {
+#if QT_VERSION >= 0x050A00
+    setRecursiveFilteringEnabled(true);
+#else
+    #pragma message("Qt 5.10+ is required, otherwise text filtering in GUI will not work as expected")
+#endif
 }
 
 ObjectTreeProxy::~ObjectTreeProxy() = default;

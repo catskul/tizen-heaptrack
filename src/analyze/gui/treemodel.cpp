@@ -21,8 +21,14 @@
 #include <QDebug>
 #include <QTextStream>
 
+#ifdef NO_K_LIB
+#include "noklib.h"
+#else
 #include <KFormat>
 #include <KLocalizedString>
+#endif
+
+#include "util.h"
 
 #include <cmath>
 
@@ -143,7 +149,7 @@ QVariant TreeModel::headerData(int section, Qt::Orientation orientation, int rol
                         "called. Function symbol and file "
                         "information "
                         "may be unknown when debug information was missing when "
-                        "heaptrack was run.</qt>");
+                        "the memory profiler was run.</qt>");
         case NUM_COLUMNS:
             break;
         }
@@ -165,7 +171,7 @@ QVariant TreeModel::data(const QModelIndex& index, int role) const
             if (role == SortRole || role == MaxCostRole) {
                 return static_cast<qint64>(abs(row->cost.allocated));
             }
-            return m_format.formatByteSize(row->cost.allocated, 1, KFormat::JEDECBinaryDialect);
+            return Util::formatByteSize(row->cost.allocated, 1);
         case AllocationsColumn:
             if (role == SortRole || role == MaxCostRole) {
                 return static_cast<qint64>(abs(row->cost.allocations));
@@ -180,7 +186,7 @@ QVariant TreeModel::data(const QModelIndex& index, int role) const
             if (role == SortRole || role == MaxCostRole) {
                 return static_cast<qint64>(abs(row->cost.peak));
             } else {
-                return m_format.formatByteSize(row->cost.peak, 1, KFormat::JEDECBinaryDialect);
+                return Util::formatByteSize(row->cost.peak, 1);
             }
         case PeakInstancesColumn:
             if (role == SortRole || role == MaxCostRole) {
@@ -191,7 +197,7 @@ QVariant TreeModel::data(const QModelIndex& index, int role) const
             if (role == SortRole || role == MaxCostRole) {
                 return static_cast<qint64>(abs(row->cost.leaked));
             } else {
-                return m_format.formatByteSize(row->cost.leaked, 1, KFormat::JEDECBinaryDialect);
+                return Util::formatByteSize(row->cost.leaked, 1);
             }
         case FunctionColumn:
             return row->location->function;
@@ -225,7 +231,6 @@ QVariant TreeModel::data(const QModelIndex& index, int role) const
         }
         stream << '\n';
         stream << '\n';
-        KFormat format;
         const auto allocatedFraction =
             QString::number(double(row->cost.allocated) * 100. / m_maxCost.cost.allocated, 'g', 3);
         const auto peakFraction = QString::number(double(row->cost.peak) * 100. / m_maxCost.cost.peak, 'g', 3);
@@ -237,11 +242,11 @@ QVariant TreeModel::data(const QModelIndex& index, int role) const
         const auto temporaryFractionTotal =
             QString::number(double(row->cost.temporary) * 100. / m_maxCost.cost.temporary, 'g', 3);
         stream << i18n("allocated: %1 (%2% of total)\n",
-                       format.formatByteSize(row->cost.allocated, 1, KFormat::JEDECBinaryDialect), allocatedFraction);
+                       Util::formatByteSize(row->cost.allocated, 1), allocatedFraction);
         stream << i18n("peak contribution: %1 (%2% of total)\n",
-                       format.formatByteSize(row->cost.peak, 1, KFormat::JEDECBinaryDialect), peakFraction);
+                       Util::formatByteSize(row->cost.peak, 1), peakFraction);
         stream << i18n("leaked: %1 (%2% of total)\n",
-                       format.formatByteSize(row->cost.leaked, 1, KFormat::JEDECBinaryDialect), leakedFraction);
+                       Util::formatByteSize(row->cost.leaked, 1), leakedFraction);
         stream << i18n("allocations: %1 (%2% of total)\n", row->cost.allocations, allocationsFraction);
         stream << i18n("temporary: %1 (%2% of allocations, %3% of total)\n", row->cost.temporary, temporaryFraction,
                        temporaryFractionTotal);

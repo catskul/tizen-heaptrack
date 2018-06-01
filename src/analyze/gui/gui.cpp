@@ -18,10 +18,16 @@
 
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QMessageBox>
 
+#ifdef NO_K_LIB
+#include "noklib.h"
+#else
 #include <KAboutData>
 #include <KLocalizedString>
+#endif
 
+#include "aboutdata.h"
 #include "../accumulatedtracedata.h"
 #include "../allocationdata.h"
 #include "mainwindow.h"
@@ -30,12 +36,16 @@ int main(int argc, char** argv)
 {
     QApplication app(argc, argv);
 
-    KLocalizedString::setApplicationDomain("heaptrack");
+#ifndef NO_K_LIB
+    KLocalizedString::setApplicationDomain(AboutData::ShortName.toStdString().c_str());
 
-    KAboutData aboutData(QStringLiteral("heaptrack_gui"), i18n("Heaptrack GUI"), QStringLiteral("0.1"),
-                         i18n("A visualizer for heaptrack data files."), KAboutLicense::LGPL,
-                         i18n("Copyright 2015, Milian Wolff <mail@milianw.de>"), QString(),
-                         QStringLiteral("mail@milianw.de"));
+    const auto LicenseType = KAboutLicense::LGPL;
+
+    typedef AboutData A;
+
+    KAboutData aboutData(A::ComponentName, A::DisplayName, A::Version, A::ShortDescription,
+                         LicenseType, A::CopyrightStatement, QString(),
+                         QString(), A::BugAddress);
 
     aboutData.addAuthor(i18n("Milian Wolff"), i18n("Original author, maintainer"), QStringLiteral("mail@milianw.de"),
                         QStringLiteral("http://milianw.de"));
@@ -43,12 +53,15 @@ int main(int argc, char** argv)
     aboutData.setOrganizationDomain("kde.org");
 
     KAboutData::setApplicationData(aboutData);
+#endif
     app.setWindowIcon(QIcon::fromTheme(QStringLiteral("office-chart-area")));
 
     QCommandLineParser parser;
     parser.addVersionOption();
     parser.addHelpOption();
+#ifndef NO_K_LIB
     aboutData.setupCommandLine(&parser);
+#endif
 
     QCommandLineOption diffOption{{QStringLiteral("d"), QStringLiteral("diff")},
                                   i18n("Base profile data to compare other files to."),
@@ -75,7 +88,9 @@ int main(int argc, char** argv)
     parser.addOption(showCoreCLRPartOption);
 
     parser.process(app);
+#ifndef NO_K_LIB
     aboutData.processCommandLine(&parser);
+#endif
 
     bool isShowMalloc = parser.isSet(showMallocOption);
     bool isShowManaged = parser.isSet(showManagedOption);
@@ -91,7 +106,12 @@ int main(int argc, char** argv)
         + (isShowPrivateClean ? 1 : 0)
         + (isShowShared ? 1 : 0) != 1) {
 
-        qFatal("One of --malloc, --managed, --private_dirty, --private_clean or --shared options is necessary. Please, use exactly only one of the options for each start of GUI.");
+        const auto msg = "One of --malloc, --managed, --private_dirty, --private_clean or --shared options is necessary. " \
+                         "Please, use exactly only one of the options for each start of GUI.";
+
+        QMessageBox::critical(nullptr, AboutData::DisplayName + " Error", msg, QMessageBox::Ok);
+
+        qFatal(msg);
 
         return 1;
     } else if (isShowMalloc)

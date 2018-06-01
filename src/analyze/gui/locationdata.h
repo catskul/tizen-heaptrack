@@ -25,7 +25,11 @@
 
 #include <boost/functional/hash.hpp>
 
+#ifdef NO_K_LIB
+#include "noklib.h"
+#else
 #include <KLocalizedString>
+#endif
 
 struct LocationData
 {
@@ -81,7 +85,7 @@ inline uint qHash(const LocationData& location, uint seed_ = 0)
     boost::hash_combine(seed, qHash(location.file));
     boost::hash_combine(seed, qHash(location.module));
     boost::hash_combine(seed, location.line);
-    return seed;
+    return (uint)seed;
 }
 
 inline uint qHash(const LocationData::Ptr& location, uint seed = 0)

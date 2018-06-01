@@ -21,6 +21,7 @@
 #include <cmath>
 
 #include <QAction>
+#include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCursor>
@@ -37,10 +38,21 @@
 #include <QWheelEvent>
 #include <QLineEdit>
 
+#ifdef NO_K_LIB
+#include "noklib.h"
+#ifdef THREAD_WEAVER
+#include <threadweaver.h>
+#endif // THREAD_WEAVER
+#else
 #include <KColorScheme>
 #include <KLocalizedString>
 #include <KStandardAction>
 #include <ThreadWeaver/ThreadWeaver>
+#endif // NO_K_LIB
+
+#include "util.h"
+
+//#define DEBUG_MAX_DEPTH // to investigate which flame graph depth is safe (i.e. doesn't cause stack overflow)
 
 enum CostType
 {
@@ -201,7 +213,6 @@ QString FrameGraphicsItem::description() const
     // we build the tooltip text on demand, which is much faster than doing that
     // for potentially thousands of items when we load the data
     QString tooltip;
-    KFormat format;
     qint64 totalCost = 0;
     {
         auto item = this;
@@ -231,7 +242,7 @@ QString FrameGraphicsItem::description() const
             i18nc("%1: peak consumption in bytes, %2: relative number, %3: "
                   "function label",
                   "%1 (%2%) contribution to peak consumption in %3 and below.",
-                  format.formatByteSize(m_cost, 1, KFormat::JEDECBinaryDialect), fraction, function);
+                  Util::formatByteSize(m_cost, 1), fraction, function);
         break;
     case PeakInstances:
         tooltip =
@@ -242,12 +253,12 @@ QString FrameGraphicsItem::description() const
         break;
     case Leaked:
         tooltip = i18nc("%1: leaked bytes, %2: relative number, %3: function label", "%1 (%2%) leaked in %3 and below.",
-                        format.formatByteSize(m_cost, 1, KFormat::JEDECBinaryDialect), fraction, function);
+                        Util::formatByteSize(m_cost, 1), fraction, function);
         break;
     case Allocated:
         tooltip = i18nc("%1: allocated bytes, %2: relative number, %3: function label",
                         "%1 (%2%) allocated in %3 and below.",
-                        format.formatByteSize(m_cost, 1, KFormat::JEDECBinaryDialect), fraction, function);
+                        Util::formatByteSize(m_cost, 1), fraction, function);
         break;
     }
 
@@ -366,11 +377,51 @@ FrameGraphicsItem* findItemByFunction(const QList<QGraphicsItem*>& items, const 
 /**
  * Convert the top-down graph into a tree of FrameGraphicsItem.
  */
-void toGraphicsItems(const QVector<RowData>& data, FrameGraphicsItem* parent, int64_t AllocationData::Stats::*member,
+struct ToGraphicsItemsContext
+{
+    int64_t AllocationData::Stats::*member;
+    double costThreshold;
+    bool collapseRecursion;
+    int depth = 0;
+};
+
+static const int MaxRecursionDepth = 600; // 800: crashes
+#ifdef DEBUG_MAX_DEPTH
+static int maxDepthReached;
+static int lastMaxDepthReached;
+#endif
+
+// returns 'true' if flame graph was created completely, returns 'false' if its depth was limited by
+bool toGraphicsItems(const QVector<RowData>& data, ToGraphicsItemsContext& context, FrameGraphicsItem* parent);
+
+bool toGraphicsItems(const QVector<RowData>& data, FrameGraphicsItem* parent, int64_t AllocationData::Stats::*member,
                      const double costThreshold, bool collapseRecursion)
 {
+    // pack parameters to a structure to remove stack usage during recursion
+    ToGraphicsItemsContext ctx;
+    ctx.member = member;
+    ctx.costThreshold = costThreshold;
+    ctx.collapseRecursion = collapseRecursion;
+#ifdef DEBUG_MAX_DEPTH
+    maxDepthReached = 0;
+    lastMaxDepthReached = 0;
+#endif
+    bool result = toGraphicsItems(data, ctx, parent);
+#ifdef DEBUG_MAX_DEPTH
+    qDebug() << "Max flame graph depth: " << maxDepthReached;
+    if (!result)
+    {
+        qDebug() << ". Flame graph depth limited to " << MaxRecursionDepth;
+    }
+#endif
+    return result;
+}
+
+bool toGraphicsItems(const QVector<RowData>& data, ToGraphicsItemsContext& context, FrameGraphicsItem* parent)
+{
+    bool result = true;
     foreach (const auto& row, data) {
-        if (collapseRecursion
+        if (context.collapseRecursion
             && row.location->function != unresolvedFunctionName()
             && row.location->function != untrackedFunctionName()
             && row.location->function == parent->function())
@@ -380,7 +431,7 @@ void toGraphicsItems(const QVector<RowData>& data, FrameGraphicsItem* parent, in
         auto item = findItemByFunction(parent->childItems(), row.location->function);
         if (!item) {
             AllocationData::CoreCLRType clrType = row.stackType;
-            item = new FrameGraphicsItem(row.cost.*member, row.location->function, clrType, parent);
+            item = new FrameGraphicsItem(row.cost.*context.member, row.location->function, clrType, parent);
             item->setPen(parent->pen());
 
             switch (clrType)
@@ -411,12 +462,40 @@ void toGraphicsItems(const QVector<RowData>& data, FrameGraphicsItem* parent, in
                 }
             }
         } else {
-            item->setCost(item->cost() + row.cost.*member);
+            item->setCost(item->cost() + row.cost.*context.member);
         }
-        if (item->cost() > costThreshold) {
-            toGraphicsItems(row.children, item, member, costThreshold, collapseRecursion);
+        if (item->cost() > context.costThreshold) {
+            ++context.depth;
+
+            if (!row.children.isEmpty())
+            {
+                if (context.depth <= MaxRecursionDepth)
+                {
+#ifdef DEBUG_MAX_DEPTH
+                    if (context.depth > maxDepthReached)
+                    {
+                        maxDepthReached = context.depth;
+                        if (maxDepthReached - lastMaxDepthReached >= 100)
+                        {
+                            lastMaxDepthReached = maxDepthReached;
+                            qDebug() << "Depth: " << maxDepthReached;
+                        }
+                    }
+#endif
+                    if (!toGraphicsItems(row.children, context, item))
+                    {
+                        result = false;
+                    }
+                }
+                else
+                {
+                    result = false;
+                }
+            }
+            --context.depth;
         }
     }
+    return result;
 }
 
 int64_t AllocationData::Stats::*memberForType(CostType type)
@@ -439,8 +518,10 @@ int64_t AllocationData::Stats::*memberForType(CostType type)
 }
 
 FrameGraphicsItem* parseData(const QVector<RowData>& topDownData, CostType type, double costThreshold,
-                             bool collapseRecursion)
+                             bool collapseRecursion, bool& depthLimited)
 {
+    depthLimited = false;
+
     auto member = memberForType(type);
 
     double totalCost = 0;
@@ -448,10 +529,14 @@ FrameGraphicsItem* parseData(const QVector<RowData>& topDownData, CostType type,
         totalCost += frame.cost.*member;
     }
 
+#ifdef NO_K_LIB
+    QPalette pal;
+    const QPen pen(pal.color(QPalette::Active, QPalette::Foreground));
+#else
     KColorScheme scheme(QPalette::Active);
     const QPen pen(scheme.foreground().color());
+#endif
 
-    KFormat format;
     QString label;
     switch (type) {
     case Allocations:
@@ -461,22 +546,26 @@ FrameGraphicsItem* parseData(const QVector<RowData>& topDownData, CostType type,
         label = i18n("%1 temporary allocations in total", totalCost);
         break;
     case Peak:
-        label = i18n("%1 contribution to peak consumption", format.formatByteSize(totalCost, 1, KFormat::JEDECBinaryDialect));
+        label = i18n("%1 contribution to peak consumption", Util::formatByteSize(totalCost, 1));
         break;
     case PeakInstances:
         label = i18n("%1 contribution to peak number of instances", totalCost);
         break;
     case Leaked:
-        label = i18n("%1 leaked in total", format.formatByteSize(totalCost, 1, KFormat::JEDECBinaryDialect));
+        label = i18n("%1 leaked in total", Util::formatByteSize(totalCost, 1));
         break;
     case Allocated:
-        label = i18n("%1 allocated in total", format.formatByteSize(totalCost, 1, KFormat::JEDECBinaryDialect));
+        label = i18n("%1 allocated in total", Util::formatByteSize(totalCost, 1));
         break;
     }
     auto rootItem = new FrameGraphicsItem(totalCost, type, label, AllocationData::CoreCLRType::nonCoreCLR);
+#ifdef NO_K_LIB
+    rootItem->setBrush(pal.color(QPalette::Active, QPalette::Background));
+#else
     rootItem->setBrush(scheme.background());
+#endif
     rootItem->setPen(pen);
-    toGraphicsItems(topDownData, rootItem, member, totalCost * costThreshold / 100, collapseRecursion);
+    depthLimited = !toGraphicsItems(topDownData, rootItem, member, totalCost * costThreshold / 100, collapseRecursion);
     return rootItem;
 }
 
@@ -635,10 +724,12 @@ FlameGraph::FlameGraph(QWidget* parent, Qt::WindowFlags flags)
     layout()->addWidget(m_displayLabel);
     layout()->addWidget(m_searchResultsLabel);
 
+#ifndef NO_K_LIB
     m_backAction = KStandardAction::back(this, SLOT(navigateBack()), this);
     addAction(m_backAction);
     m_forwardAction = KStandardAction::forward(this, SLOT(navigateForward()), this);
     addAction(m_forwardAction);
+#endif
     m_resetAction = new QAction(QIcon::fromTheme(QStringLiteral("go-first")), i18n("Reset View"), this);
     m_resetAction->setShortcut(Qt::Key_Escape);
     connect(m_resetAction, &QAction::triggered, this, [this]() {
@@ -698,6 +789,38 @@ bool FlameGraph::eventFilter(QObject* object, QEvent* event)
     return ret;
 }
 
+#if NO_K_LIB
+bool FlameGraph::handleKeyPress(QKeyEvent *event)
+{
+    if (m_view->hasFocus() || (qApp->focusWidget() == nullptr))
+    {
+        if (event->modifiers() & Qt::AltModifier)
+        {
+            switch (event->key())
+            {
+            case Qt::Key_Backspace:
+            case Qt::Key_Right:
+                navigateForward();
+                return true;
+            case Qt::Key_Left:
+                navigateBack();
+                return true;
+            }
+        }
+        else
+        {
+            switch (event->key())
+            {
+            case Qt::Key_Backspace:
+                navigateBack();
+                return true;
+            }
+        }
+    }
+    return false;
+}
+#endif
+
 void FlameGraph::setTopDownData(const TreeData& topDownData)
 {
     m_topDownData = topDownData;
@@ -717,23 +840,31 @@ void FlameGraph::clearData()
     m_topDownData = {};
     m_bottomUpData = {};
 
-    setData(nullptr);
+    setData(nullptr, false);
 }
 
 void FlameGraph::showData()
 {
-    setData(nullptr);
+    setData(nullptr, false);
 
     m_buildingScene = true;
-    using namespace ThreadWeaver;
     auto data = m_showBottomUpData ? m_bottomUpData : m_topDownData;
     bool collapseRecursion = m_collapseRecursion;
     auto source = m_costSource->currentData().value<CostType>();
     auto threshold = m_costThreshold;
+#ifndef THREAD_WEAVER
+    bool depthLimited;
+    auto parsedData = parseData(data, source, threshold, collapseRecursion, depthLimited);
+    setData(parsedData, depthLimited);
+#else
+    using namespace ThreadWeaver;
     stream() << make_job([data, source, threshold, collapseRecursion, this]() {
-        auto parsedData = parseData(data, source, threshold, collapseRecursion);
-        QMetaObject::invokeMethod(this, "setData", Qt::QueuedConnection, Q_ARG(FrameGraphicsItem*, parsedData));
+        bool depthLimited;
+        auto parsedData = parseData(data, source, threshold, collapseRecursion, depthLimited);
+        QMetaObject::invokeMethod(this, "setData", Qt::QueuedConnection, Q_ARG(FrameGraphicsItem*, parsedData),
+                                  Q_ARG(bool, depthLimited));
     });
+#endif
 }
 
 void FlameGraph::setTooltipItem(const FrameGraphicsItem* item)
@@ -750,16 +881,26 @@ void FlameGraph::setTooltipItem(const FrameGraphicsItem* item)
 
 void FlameGraph::updateTooltip()
 {
-    const auto text = m_tooltipItem ? m_tooltipItem->description() : QString();
+    auto text = m_tooltipItem ? m_tooltipItem->description() : QString();
     m_displayLabel->setToolTip(text);
     const auto metrics = m_displayLabel->fontMetrics();
+    if (m_depthLimited)
+    {
+        if (text.endsWith('.'))
+        {
+            text.resize(text.length() - 1);
+        }
+        text = text.toHtmlEscaped() + QString(
+            i18n(" <b>(graph maximum depth limited to %1)</b>")).arg(MaxRecursionDepth);
+    }
     m_displayLabel->setText(metrics.elidedText(text, Qt::ElideRight, m_displayLabel->width()));
 }
 
-void FlameGraph::setData(FrameGraphicsItem* rootItem)
+void FlameGraph::setData(FrameGraphicsItem* rootItem, bool depthLimited)
 {
     m_scene->clear();
     m_buildingScene = false;
+    m_depthLimited = depthLimited;
     m_tooltipItem = nullptr;
     m_rootItem = rootItem;
     m_selectionHistory.clear();
@@ -821,6 +962,13 @@ void FlameGraph::selectItem(FrameGraphicsItem* item)
     // then layout all items below the selected on
     layoutItems(item);
 
+    // 1) trying to fix a bug (?): sometimes the flamegraph is displayed at a wrong position initially
+    // (observed after switching to the flamegraph tab soon after the application starts with
+    // a data file specified in the command line);
+    // 2) QGraphicsScene::sceneRect never shrinks automatically so we need to update it manually
+    // if we want to update the ranges and visibility of the scrollbars
+    m_scene->setSceneRect(m_scene->itemsBoundingRect());
+
     // and make sure it's visible
     m_view->centerOn(item);
 
@@ -839,7 +987,6 @@ void FlameGraph::setSearchValue(const QString& value)
         m_searchResultsLabel->hide();
     } else {
         QString label;
-        KFormat format;
         const auto costFraction = fraction(match.directCost, m_rootItem->cost());
         switch (m_costSource->currentData().value<CostType>()) {
         case Allocations:
@@ -852,8 +999,8 @@ void FlameGraph::setSearchValue(const QString& value)
         case Leaked:
         case Allocated:
             label = i18n("%1 (%2% of total of %3) matched by search.",
-                         format.formatByteSize(match.directCost, 1, KFormat::JEDECBinaryDialect), costFraction,
-                         format.formatByteSize(m_rootItem->cost(), 1, KFormat::JEDECBinaryDialect));
+                         Util::formatByteSize(match.directCost, 1), costFraction,
+                         Util::formatByteSize(m_rootItem->cost(), 1));
             break;
         }
         m_searchResultsLabel->setText(label);
@@ -877,7 +1024,11 @@ void FlameGraph::navigateForward()
 
 void FlameGraph::updateNavigationActions()
 {
-    m_backAction->setEnabled(m_selectedItem > 0);
-    m_forwardAction->setEnabled(m_selectedItem + 1 < m_selectionHistory.size());
+    if (m_backAction) {
+        m_backAction->setEnabled(m_selectedItem > 0);
+    }
+    if (m_forwardAction) {
+        m_forwardAction->setEnabled(m_selectedItem + 1 < m_selectionHistory.size());
+    }
     m_resetAction->setEnabled(m_selectedItem > 0);
 }

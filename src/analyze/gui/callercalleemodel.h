@@ -22,7 +22,11 @@
 #include <QAbstractTableModel>
 #include <QVector>
 
+#ifdef NO_K_LIB
+#include "noklib.h"
+#else
 #include <KFormat>
+#endif
 
 #include "../allocationdata.h"
 #include "locationdata.h"
@@ -89,7 +93,9 @@ public:
 private:
     QVector<CallerCalleeData> m_rows;
     CallerCalleeData m_maxCost;
+#ifndef NO_K_LIB
     KFormat m_format;
+#endif
 };
 
 #endif // CALLERCALLEEMODEL_H

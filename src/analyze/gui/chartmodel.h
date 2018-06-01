@@ -71,6 +71,19 @@ public:
     int rowCount(const QModelIndex& parent = QModelIndex()) const override;
     int columnCount(const QModelIndex& parent = QModelIndex()) const override;
 
+    qint64 getTimestamp(int row) const;
+    qint64 getCost(int row, int column) const;
+    QString getColumnLabel(int column) const;
+    const QPen& getColumnDataSetPen(int column) const;
+    const QBrush& getColumnDataSetBrush(int column) const;
+
+    // get an index of the chart row which timestamp is less than or equal to 'timestamp'
+    // and also it's the maximum from all such timestamps (i.e. the row's timestamp is the
+    // nearest to 'timestamp' to the left or is equal to 'timestamp') - if 'timestamp' is
+    // not less than the minimum timestamp and not greater than the maximum timestamp
+    // of all rows, otherwise return -1
+    int getRowForTimestamp(qreal timestamp) const;
+
 public slots:
     void resetData(const ChartData& data);
     void clearData();
@@ -78,6 +91,7 @@ public slots:
 private:
     ChartData m_data;
     Type m_type;
+    QVector<qint64> m_timestamps;
     // we cache the pens and brushes as constructing them requires allocations
     // otherwise
     QVector<QPen> m_columnDataSetPens;

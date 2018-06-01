@@ -19,14 +19,29 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-#include <qglobal.h>
+#include "gui_config.h"
 
-class QString;
+#include <qglobal.h>
+#include <QString>
+
+#ifdef QWT_FOUND
+#include <QWidget>
+#endif
 
 namespace Util {
 
 QString formatTime(qint64 ms);
 
+QString formatByteSize(double size, int precision = 1);
+
+QString wrapLabel(QString label, int maxLineLength, int lastLineExtra = 0,
+                  const QString &delimiter = QString("<br>"));
+
+#ifdef QWT_FOUND
+bool isUnresolvedFunction(const QString &functionName);
+
+bool exportChart(QWidget *parent, QWidget &chartWidget, const QString &chartName);
+#endif
 }
 
 #endif // UTIL_H

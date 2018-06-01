@@ -19,13 +19,29 @@
 #ifndef CHARTWIDGET_H
 #define CHARTWIDGET_H
 
+#include "gui_config.h"
+
+#include <memory>
 #include <QWidget>
+
+//!! for debugging
+//#define SHOW_TABLES
+
+#ifdef SHOW_TABLES
+#include <QTableView>
+#endif
 
 class ChartModel;
 
+#if defined(KChart_FOUND)
 namespace KChart {
 class Chart;
 }
+#elif defined(QWT_FOUND)
+#include "chartwidgetqwtplot.h"
+#include "contextmenuqwt.h"
+class QAction;
+#endif
 
 class QAbstractItemModel;
 
@@ -40,8 +56,47 @@ public:
 
     QSize sizeHint() const override;
 
+#ifdef QWT_FOUND
+    void updateOnSelected(QWidget *mainWindow);
+
+    static QWidget* HelpWindow;
+    static QWidget* MainWindow;
+
+public slots:
+    void modelReset();
+protected:
+#ifndef QT_NO_CONTEXTMENU
+    virtual void contextMenuEvent(QContextMenuEvent *event) override;
+#endif
+    // workaround for handling the context menu shortcuts
+    virtual void keyPressEvent(QKeyEvent *event) override;
+#endif // QWT_FOUND
+
 private:
+#if defined(KChart_FOUND)
     KChart::Chart* m_chart;
+#elif defined(QWT_FOUND)
+private slots:
+    void resetZoom();
+    void toggleShowTotal();
+    void toggleShowUnresolved();
+    void toggleShowLegend();
+    void toggleShowCurveBorders();
+    void toggleShowSymbols();
+    void toggleShowVLines();
+    void toggleShowHelp();
+private:
+    void connectContextMenu();
+
+    void showHelp();
+
+    ChartWidgetQwtPlot* m_plot;
+    std::unique_ptr<ContextMenuQwt> m_contextMenuQwt;
+#endif // QWT_FOUND, KChart_FOUND
+#ifdef SHOW_TABLES
+    QTableView* m_tableViewTotal;
+    QTableView* m_tableViewNoTotal;
+#endif
 };
 
 #endif // CHARTWIDGET_H

@@ -19,9 +19,18 @@
 #ifndef TREEPROXY_H
 #define TREEPROXY_H
 
+#ifdef NO_K_LIB
+#include <QSortFilterProxyModel>
+#else
 #include <KRecursiveFilterProxyModel>
+#endif
 
-class TreeProxy final : public KRecursiveFilterProxyModel
+class TreeProxy final : public
+#ifdef NO_K_LIB
+    QSortFilterProxyModel
+#else
+    KRecursiveFilterProxyModel
+#endif
 {
     Q_OBJECT
 public:
@@ -34,7 +43,12 @@ public slots:
     void setModuleFilter(const QString& moduleFilter);
 
 private:
+#ifdef NO_K_LIB
+    bool acceptRow(int source_row, const QModelIndex& source_parent) const;
+    bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override;
+#else
     bool acceptRow(int source_row, const QModelIndex& source_parent) const override;
+#endif
 
     int m_functionColumn;
     int m_fileColumn;

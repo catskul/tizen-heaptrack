@@ -43,12 +43,16 @@ public:
     void setBottomUpData(const TreeData& bottomUpData);
 
     void clearData();
-
+#if NO_K_LIB
+    // handling back and forward shortcuts:
+    // keyPressEvent doesn't receive arrow keys so the main window calls
+    // this function from its event filter
+    bool handleKeyPress(QKeyEvent* event);
+#endif
 protected:
     bool eventFilter(QObject* object, QEvent* event) override;
-
 private slots:
-    void setData(FrameGraphicsItem* rootItem);
+    void setData(FrameGraphicsItem* rootItem, bool depthLimited);
     void setSearchValue(const QString& value);
     void navigateBack();
     void navigateForward();
@@ -83,6 +87,7 @@ private:
     bool m_buildingScene = false;
     // cost threshold in percent, items below that value will not be shown
     double m_costThreshold = 0.1;
+    bool m_depthLimited = false;
 };
 
 #endif // FLAMEGRAPH_H
