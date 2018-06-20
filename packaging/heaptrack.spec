@@ -12,6 +12,8 @@ Source1002: 0001-Target-build
 %define	heaptrack_build build-%{_target_platform}
 AutoReqProv: no
 
+ExcludeArch: aarch64 x86_64
+
 BuildRequires: cmake
 BuildRequires: gcc
 BuildRequires: clang
