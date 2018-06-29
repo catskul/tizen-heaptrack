@@ -27,7 +27,7 @@ BuildRequires: pkgconfig(zlib)
 BuildRequires: coreclr-devel
 
 # .NET Core Runtime
-%define dotnet_version  2.0.0
+%define dotnet_version  2.1.0
 %define dotnetdir       dotnet
 %define netshareddir    %{dotnetdir}/shared
 %define netcoreappdir   %{netshareddir}/Microsoft.NETCore.App/%{dotnet_version}
