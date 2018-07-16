@@ -27,10 +27,8 @@ BuildRequires: pkgconfig(zlib)
 BuildRequires: coreclr-devel
 
 # .NET Core Runtime
-%define dotnet_version  2.1.0
-%define dotnetdir       dotnet
-%define netshareddir    %{dotnetdir}/shared
-%define netcoreappdir   %{netshareddir}/Microsoft.NETCore.App/%{dotnet_version}
+%define dotnettizendir  dotnet.tizen
+%define netcoreappdir   %{dotnettizendir}/netcoreapp
 
 %description
 Heaptrack for Tizen applications
@@ -56,7 +54,7 @@ export CFLAGS="--target=%{_host}"
 export CXXFLAGS="--target=%{_host}"
 
 %define _heaptrack_build_conf RelWithDebInfo
-%define _coreclr_devel_directory /usr/share/%{netcoreappdir}
+%define _coreclr_devel_directory %{_datarootdir}/%{netcoreappdir}
 
 cmake \
   -DCMAKE_INSTALL_PREFIX=%{_prefix} \
