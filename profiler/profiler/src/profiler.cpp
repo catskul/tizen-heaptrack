@@ -33,19 +33,19 @@ const CLSID CLSID_Profiler = {
     0x4C0B,
     {0xB3, 0x54, 0x56, 0x63, 0x90, 0xB2, 0x15, 0xCA}};
 
-#ifdef __i686__
+#ifdef __i386__
 #define ELT_PARAMETER
 #define SetupHooks	SetEnterLeaveFunctionHooks3
-#else // __i686__
+#else // __i386__
 #define ELT_PARAMETER , COR_PRF_ELT_INFO eltInfo
 #define SetupHooks	SetEnterLeaveFunctionHooks3WithInfo
-#endif // __i686__
+#endif // __i386__
 
 extern "C" {
 #ifdef __llvm__
 __attribute__((used))
 #endif // __llvm__
-HRESULT STDMETHODCALLTYPE
+HRESULT __stdcall // STDMETHODCALLTYPE
     DllGetClassObject(REFCLSID rclsid, REFIID riid, void **ppv) {
   if (ppv == NULL || rclsid != CLSID_Profiler)
     return E_FAIL;
@@ -581,6 +581,9 @@ HRESULT STDMETHODCALLTYPE Profiler::RuntimeThreadResumed(ThreadID threadId) {
   return S_OK;
 }
 
+#if defined(__SSE2__) && defined(__ILP32__)
+    __attribute__ ((force_align_arg_pointer))
+#endif /* defined(__SSE2__) && defined(__ILP32__) */
 HRESULT STDMETHODCALLTYPE
     Profiler::ObjectAllocated(ObjectID objectId, ClassID classId) {
 
