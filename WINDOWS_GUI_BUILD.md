@@ -58,15 +58,15 @@ Finally create the system environment variable BOOST_LIB and set it to *c:\src\b
 
 ### Qt 5
 
-Download open source Qt from <https://www.qt.io/download>. The software can be installed with the help of Qt Online Installer for Windows. It’s necessary to select the “MSVC 2017 64-bit” component (Qt 5.xx Prebuilt Components for MSVC 2017 64-bit) in the installer’s component tree (under “Qt \ Qt 5.xx”). To enable building the memory profiler from IDE (*Qt Creator*) and debugging it with the help of CDB (Microsoft Symbolic Debugger for Windows) the “Qt Creator 4.xx CDB Debugger Support” shall be selected (*Qt Creator* itself is always selected). CDB is a part of Windows SDK (WDK) which can be installed using Windows SDK online installer (for Windows 10 it’s available from <https://developer.microsoft.com/en-us/windows/downloads/windows-10-sdk>): select *Debugging Tools for Windows* feature.
+Download open source Qt from <https://www.qt.io/download>. The software can be installed with the help of Qt Online Installer for Windows. It’s necessary to select the “MSVC 2017 64-bit” component (Qt 5.xx Prebuilt Components for MSVC 2017 64-bit) in the installer’s component tree (under “Qt \ Qt 5.xx”). To enable building the memory profiler from IDE (*Qt Creator*) and debugging it with the help of CDB (Microsoft Symbolic Debugger for Windows) the “Qt Creator 4.xx CDB Debugger Support” shall be selected (*Qt Creator* itself is always selected). CDB is a part of Windows SDK (WDK) which can be installed using Windows SDK online installer (for Windows 10 it’s available from <https://developer.microsoft.com/en-us/windows/downloads/windows-10-sdk>): select *Debugging Tools for Windows* feature. Building dependent libraries and applications was verified for 5.11.1 version.
 
 ### QWT
 
 QWT 6.2 or higher is needed for the memory profiler GUI. Its sources can be received using this command (presuming “svn” utility is installed):
 
-`svn checkout https://svn.code.sf.net/p/qwt/code/trunk`
+`svn checkout -r 2808 http://svn.code.sf.net/p/qwt/code/trunk/qwt/`
 
-If the current directory was *c:\svn* then after running the command the latest QWT sources will be located at *c:\svn\trunk\qwt\src*.
+If the current directory was *c:\svn* then after running the command the latest QWT sources will be located at *c:\svn\qwt\src*.
 
 QWT documentation suggests downloading stable releases from <https://sourceforge.net/projects/qwt/files/qwt> but it seems the versions available there are rather obsolete.
 
@@ -75,17 +75,14 @@ Building:
 1. open *Qt command prompt* (e.g. “Qt 5.11.0 64-bit for Desktop (MSVC 2017)”) available in Windows Start Menu under Qt submenu;
 
 2. go to the directory where *qwt.pro* file is located, e.g.<br>
-`cd c:\svn\trunk\qwt`
+`cd c:\svn\qwt`
 
 3. (optionally) edit *qwtconfig.pri*, e.g. set the QWT_INSTALL_PREFIX variable (see *win32* section in the file) to the directory you want (the default is *C:/Qwt-$$QWT_VERSION-svn*);
 
-4. setup the 64-bit MSVC compiler environment running *vcvars64.bat* script: if Visual Studio 2017 is installed to “c:\Program Files (x86)” then run<br>
-`“c:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\amd64\vcvars64.bat”`
+4. setup the 64-bit MSVC compiler environment running *vcvarsall.bat* script with *amd64* argument: if Visual Studio 2017 is installed to “c:\Program Files (x86)” then run<br>
+`"c:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvarsall.bat" amd64`
 
-5. ensure “rc.exe” for x64 platform is in the path; it’s location depends on the version of Windows Kits installed, e.g. it can be located in “c:\Program Files (x86)\Windows Kits\10\bin\10.0.16299.0\x64” – you may add this folder to PATH temporarily:<br>
-`set PATH=%PATH%;"C:\Program Files (x86)\Windows Kits\10\bin\10.0.16299.0\x64"`
-
-6. run `qmake qwt.pro`, then `nmake`, then `nmake install`.
+5. run `qmake qwt.pro`, then `nmake`, then `nmake install`.
 
 After successful completion of these steps QWT files including headers, documentation, and binaries will be located under *C:\Qwt-$$QWT_VERSION-svn* folder (e.g. *C:\Qwt-6.3.0-svn*). Dynamic link libraries needed to run the memory profiler GUI, *qwt.dll* and *qwtd.dll* (for Debug version), are in *lib* subfolder of that folder.
 
@@ -95,7 +92,7 @@ This library is a helper for multithreaded programming. It is used in the memory
 
 `git clone git://anongit.kde.org/threadweaver.git`
 
-The recommended path to clone to is *c:\git\kf5\threadweaver*. In this case the *qmake* project file for ThreadWeaver added to *heaptrack* to build the library may be used “as is”. If *heaptrack* (with Tizen Memory Profiler GUI) repository is located in “c:\git\heaptrack” then the project file is “C:\git\heaptrack\src\ThreadWeaver.pro”. You may load it to *Qt Creator* and then build or use *qmake* utility from *Qt command prompt* (the 64-bit MSVC compiler environment must be set – see above).
+The recommended path to clone to is *c:\git\kf5\threadweaver*. In this case the *qmake* project file for ThreadWeaver added to *heaptrack* to build the library may be used “as is”. If *heaptrack* (with Tizen Memory Profiler GUI) repository is located in “c:\git\heaptrack” then the project file is “C:\git\heaptrack\src\ThreadWeaver.pro”. You may load it to *Qt Creator* and then build or use *qmake* utility from *Qt command prompt* (the 64-bit MSVC compiler environment must be set – see above(QWT)).
 
 Build DEBUG version:
 
@@ -125,8 +122,13 @@ Then you may load *heaptrack\src\heaptrack_gui.pro*, select the required build c
 
 ![Build GUI from Qt Creator](screenshots/build_gui_from_qt_creator.png)
 
-If using *qmake* you can start *Qt command prompt*, go to the *heaptrack\src* path and run<br>
-`qmake heaptrack_gui.pro -spec win32-msvc`.
+If using *qmake* you can start *Qt command prompt*  – see above(QWT), set QMAKEFEATURES, QWT_ROOT and QTDIR the follwing way<br>
+`set QMAKEFEATURES=c:\Qwt-6.3.0-svn\features`<br>
+`set QWT_ROOT=c:\Qwt-6.3.0-svn`<br>
+`set QTDIR=c:\Qt\5.11.1\msvc2017_64`<br>
+Then go to the *heaptrack\src* path and run<br>
+`qmake heaptrack_gui.pro -spec win32-msvc`
+`nmake`.
 
 After that the application shall build successfully. To be able to run it from *Qt Creator* the dynamic library *qwtd.dll* (*qwt.dll* for Release version) must be copied from the QWT output directory (e.g. *c:\Qwt-6.3.0-svn\lib*) to *bin\debug* (*bin\release*) folders.
 
@@ -141,6 +143,7 @@ Qt5Gui.dll
 Qt5OpenGL.dll
 Qt5Svg.dll
 Qt5Widgets.dll
+Qt5PrintSupport.dll
 qwt.dll
 threadweaver.dll
 <b>imageformats\</b>qjpeg.dll
