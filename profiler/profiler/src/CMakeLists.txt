@@ -23,7 +23,7 @@ set(PROFILER_SOURCES
 set(CLR_INCLUDES
   ${CLR_SRC_DIR}/src/pal/inc/rt
   ${CLR_SRC_DIR}/src/pal/prebuilt/inc
-  ${CLR_SRC_DIR}/src/pal/inc 
+  ${CLR_SRC_DIR}/src/pal/inc
   ${CLR_SRC_DIR}/src/inc
   ${CLR_BIN_DIR}/inc)
 include_directories(AFTER ${CLR_INCLUDES})
@@ -31,4 +31,4 @@ include_directories(AFTER ${CLR_INCLUDES})
 add_library(profiler SHARED ${PROFILER_SOURCES})
 target_link_libraries(profiler ${PROFILER_LIBRARIES})
 
-install(TARGETS profiler DESTINATION lib)
+install(TARGETS profiler DESTINATION lib/heaptrack)

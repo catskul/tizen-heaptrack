@@ -30,6 +30,8 @@ BuildRequires: coreclr-devel
 %define dotnettizendir  dotnet.tizen
 %define netcoreappdir   %{dotnettizendir}/netcoreapp
 
+%define sdk_install_prefix /home/owner/share/tmp/sdk_tools/%{name}
+
 %description
 Heaptrack for Tizen applications
 
@@ -56,11 +58,15 @@ export CXXFLAGS="--target=%{_host}"
 %define _heaptrack_build_conf RelWithDebInfo
 %define _coreclr_devel_directory %{_datarootdir}/%{netcoreappdir}
 
+mkdir build
+cd build
 cmake \
-  -DCMAKE_INSTALL_PREFIX=%{_prefix} \
+  -DCMAKE_INSTALL_PREFIX=install \
   -DCMAKE_BUILD_TYPE=%{_heaptrack_build_conf} \
   -DHEAPTRACK_BUILD_GUI=OFF \
-	.
+  ..
+
+make %{?jobs:-j%jobs} VERBOSE=1
 
 %ifarch %{arm}
 %define arch_dir armel
@@ -68,38 +74,27 @@ cmake \
 %define arch_dir x86
 %endif
 
-cd profiler;
-	ROOTFS_DIR=/ \
-	CC=clang CXX=clang++ \
-	cmake \
-	-DCMAKE_TOOLCHAIN_FILE=profiler/cross/%{arch_dir}/toolchain.cmake \
-	-DCLR_BIN_DIR=%{_coreclr_devel_directory} \
-	-DCLR_SRC_DIR=%{_coreclr_devel_directory} \
-	-DCLR_ARCH=%{_target_cpu} \
-	profiler \
-	; \
-	make
+cd ../profiler
+ROOTFS_DIR=/ \
+CC=clang CXX=clang++ \
+cmake \
+  -DCMAKE_INSTALL_PREFIX=../build/install \
+  -DCMAKE_TOOLCHAIN_FILE=profiler/cross/%{arch_dir}/toolchain.cmake \
+  -DCLR_BIN_DIR=%{_coreclr_devel_directory} \
+  -DCLR_SRC_DIR=%{_coreclr_devel_directory} \
+  -DCLR_ARCH=%{_target_cpu} \
+  profiler
+make
 cd -
 
-make %{?jobs:-j%jobs} VERBOSE=1
-
 %install
-rm -rf %{buildroot}
-%make_install
-
-#mkdir -p %{buildroot}%{_native_lib_dir}
-#ln -sf %{_libdir}/libheaptrack_preload.so.1 %{buildroot}%{_native_lib_dir}/libheaptrack_preload.so
-#ln -sf %{_libdir}/libheaptrack_inject.so.1 %{buildroot}%{_native_lib_dir}/libheaptrack_inject.so
-
-pwd
-cp profiler/src/libprofiler.so %{buildroot}%{_prefix}/lib/heaptrack/libprofiler.so
-echo %{buildroot}
-ls %{buildroot}
-echo %{_prefix}
+cd build
+make install
+make -C ../profiler install
+mkdir -p %{buildroot}%{sdk_install_prefix}
+cp install/lib/heaptrack/*.so %{buildroot}%{sdk_install_prefix}
+cp install/lib/heaptrack/libexec/* %{buildroot}%{sdk_install_prefix}
 
 %files
 %manifest heaptrack.manifest
-%{_prefix}/lib/heaptrack/libheaptrack_preload.so*
-%{_prefix}/lib/heaptrack/libheaptrack_inject.so*
-%{_prefix}/lib/heaptrack/libprofiler.so
-%{_prefix}/lib/heaptrack/libexec/heaptrack_interpret
+%{sdk_install_prefix}/*
