@@ -224,7 +224,8 @@ win32 {
             $$(QTDIR)/bin/Qt5Gui.dll \
             $$(QTDIR)/bin/Qt5OpenGL.dll \
             $$(QTDIR)/bin/Qt5Svg.dll \
-            $$(QTDIR)/bin/Qt5Widgets.dll
+            $$(QTDIR)/bin/Qt5Widgets.dll \
+            $$(QTDIR)/bin/Qt5PrintSupport.dll
         QWT_CHART {
             # ... and qwt.dll
             EXTRA_BINFILES += $$(QWT_ROOT)/lib/qwt.dll
