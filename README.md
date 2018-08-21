@@ -62,13 +62,13 @@ In the following examples option `-c` is used to specify path to the GBS config 
 #### Build for ARM Tizen TM1 target
 
 ```console
-~/heaptrack$ gbs -c ../gbs-config/gbs.conf build -P profile.arm.snapshot -A armv7l
+~/heaptrack$ gbs -c docs/gbs-config/gbs.conf build -P profile.arm.snapshot -A armv7l
 ```
 
 #### Build for x86 Tizen emulator
 
 ```console
-~/heaptrack$ gbs -c ../gbs-config/gbs.conf build -P profile.emul32.snapshot -A i586
+~/heaptrack$ gbs -c docs/gbs-config/gbs.conf build -P profile.emul32.snapshot -A i586
 ```
 
 ### Building GUI
@@ -115,29 +115,33 @@ Basic instructions for Running the Memory Profiler under  Visual Studio are prov
      ![Run Memory Profiler](docs/image/run_memory_profiler.png)
 
 
-   * If no Tizen device is connected and no Tizen emulators are running then Emulator Manager will be started. Please launch the type of emulator you want to use for running and profiling your application.
+   * If no Tizen device is connected and no Tizen emulators are running then Emulator Manager will be started. Please launch the type of emulator you want to use for running and profiling your application. 
 
      ![Launch Emulator](docs/image/start_emulator.png)
 
-
-   * If everything is OK then the application starts as if you run it normally (using Start Debugging in Visual Studio).
+   
+   * If everything is OK then the application starts as if you run it normally (using Start Debugging in Visual Studio). 
 
      ![Tizen application running](docs/image/memory_profiling_app_started.png)
 
 
-   * In case of errors the Output Window will display them (the output below corresponds to the normal operation case).
+   * Output Window will display any information messages (debug, warnings, etc). 
 
      ![Memory Profiler Output Window](docs/image/memory_profiling_msvs_output.png)
 
 
-   * After finishing the application the memory profiling data file will be copied from Tizen to Windows host.
+   * After finishing the application the memory profiling data will be displayed with the GUI application (for closing application you may press "Home" or "Back" keys). 
 
-### Step 2. Running Memory Profiler GUI
-   * You can open the memory profiling data file in the GUI application to analyze it. In the menu, choose Tools > Tizen > Profiler > Show Memory Profiler.
+     ![Close Application](docs/image/close_application.png)
 
-     ![Run Memory Profiler GUI](docs/image/run_memory_profiler_gui.png)
 
-### Step 3. Analyzing the results
+   * Also you can display any previous debug session with Session Explorer (In the menu, Tools > Tizen > Profiler > Session Explorer).
+
+     ![Open Session Explorer](docs/image/open_session_explorer.png)
+
+     ![Open Session Explorer](docs/image/session_explorer_memory_profiler.png)
+
+### Step 2. Analyzing the results
    * The GUI application provides several views to the memory profiling data. The views include:
 
        - summary page with information on which process was profiled, its total runtime, some memory related statistics, etc.
@@ -150,7 +154,7 @@ Basic instructions for Running the Memory Profiler under  Visual Studio are prov
        - number of instances over time graph
        - number of memory allocations over time graph
        - size of memory allocated over time graph
-       - allocation histogram displaying the number of allocations (the total number and the several topmost code locations) belonging to one of the groups divided by allocation size (0 - 8 bytes, 9 - 16 bytes, ... , 512 bytes - 1 KB, more than 1 KB)
+       - allocation histogram displaying the number of allocations (the total number and the several topmost code locations) belonging to one of the groups divided by allocation size (0 - 8 bytes, 9 - 16 bytes, docs. , 512 bytes - 1 KB, more than 1 KB)
 
 #### Managed heap view sample
 
