@@ -130,7 +130,7 @@ Basic instructions for Running the Memory Profiler under  Visual Studio are prov
      ![Memory Profiler Output Window](docs/image/memory_profiling_msvs_output.png)
 
 
-   * After finishing the application the memory profiling data will be displayed with the GUI application (for closing application you may press "Home" or "Back" keys). 
+   * The memory profiling data will be displayed with the Memory Profiler GUI after finishing the application or after closing it. The application can be closed by pressing "Home" or "Back" buttons). 
 
      ![Close Application](docs/image/close_application.png)
 
