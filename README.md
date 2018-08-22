@@ -85,7 +85,7 @@ After successfull build on the Linux host, resulting target-specific RPMs will b
 
 The resulting RPMs shall be copied to the Windows host into the following specific directory:
 
-`<Tizen SDK installation dir>\platforms\tizen-4.0\common\on-demand`
+`<Tizen SDK installation dir>\platforms\tizen-5.0\common\on-demand`
 
 The RPMs will be auhomatically installed by on demand installation procedure.
 
