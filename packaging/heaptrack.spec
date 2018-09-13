@@ -7,7 +7,6 @@ Group:      Application Framework/Application State Management
 License:    GPL
 Source0:    %{name}-%{version}.tar.gz
 Source1001: heaptrack.manifest
-Source1002: 0001-Target-build
 %define	heaptrack_src heaptrack-%{version}
 %define	heaptrack_build build-%{_target_platform}
 AutoReqProv: no
@@ -37,11 +36,7 @@ Heaptrack for Tizen applications
 
 %prep
 %setup -q
-# 0001-Target-build.patch
 cp %{SOURCE1001} .
-cp %{SOURCE1002} .
-# Gbp-Patch-Macros
-patch -p2 < 0001-Target-build
 
 %build
 
@@ -64,6 +59,7 @@ cmake \
   -DCMAKE_INSTALL_PREFIX=install \
   -DCMAKE_BUILD_TYPE=%{_heaptrack_build_conf} \
   -DHEAPTRACK_BUILD_GUI=OFF \
+  -DTIZEN=ON \
   ..
 
 make %{?jobs:-j%jobs} VERBOSE=1
