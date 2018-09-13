@@ -375,6 +375,7 @@ void overwrite_symbols() noexcept
 }
 
 extern "C" {
+
 void heaptrack_inject(const char* outputFileName) noexcept
 {
     heaptrack_init(outputFileName, []() { overwrite_symbols(); }, [](FILE* out) { fprintf(out, "A\n"); },
@@ -383,4 +384,34 @@ void heaptrack_inject(const char* outputFileName) noexcept
                        dl_iterate_phdr(&iterate_phdrs, &do_shutdown);
                    });
 }
+
+#if TIZEN
+int dotnet_launcher_inject() noexcept
+{
+    int res = -1;
+    char *env = nullptr;
+    char* output = nullptr;
+
+    env = getenv("DUMP_HEAPTRACK_OUTPUT");
+    if (env == nullptr) {
+        goto ret;
+    }
+
+    output = strdup(env);
+    if (output == nullptr) {
+        goto ret;
+    }
+
+    heaptrack_inject(output);
+    res = 0;
+
+ret:
+    unsetenv("DUMP_HEAPTRACK_OUTPUT");
+
+    free(output);
+
+    return res;
+}
+#endif
+
 }
