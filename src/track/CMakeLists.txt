@@ -8,9 +8,11 @@ configure_file(heaptrack.sh.cmake
     ${PROJECT_BINARY_DIR}/${BIN_INSTALL_DIR}/heaptrack @ONLY
 )
 
-install(PROGRAMS ${PROJECT_BINARY_DIR}/${BIN_INSTALL_DIR}/heaptrack
-    DESTINATION ${BIN_INSTALL_DIR}
-)
+if (NOT TIZEN)
+    install(PROGRAMS ${PROJECT_BINARY_DIR}/${BIN_INSTALL_DIR}/heaptrack
+       DESTINATION ${BIN_INSTALL_DIR}
+    )
+endif()
 
 # heaptrack_preload: track a newly started process
 add_library(heaptrack_preload MODULE
@@ -61,7 +63,9 @@ install(TARGETS heaptrack_inject
     LIBRARY DESTINATION ${LIB_INSTALL_DIR}/heaptrack/
 )
 
-# public API for custom pool allocators or static binaries
-install(FILES heaptrack_api.h
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/include
-)
+if (NOT TIZEN)
+    # public API for custom pool allocators or static binaries
+    install(FILES heaptrack_api.h
+       DESTINATION ${CMAKE_INSTALL_PREFIX}/include
+    )
+endif()

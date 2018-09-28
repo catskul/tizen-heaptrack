@@ -27,7 +27,11 @@
 
 #include <sys/mman.h>
 
+#include <map>
+#include <tuple>
 #include <type_traits>
+#include <utility>
+#include <vector>
 
 /**
  * @file heaptrack_inject.cpp
@@ -42,6 +46,93 @@
 #else
 #error unsupported word size
 #endif
+
+static int isCoreCLR(const char *filename)
+{
+    const char *localFilename = strrchr(filename,'/');
+    if (!localFilename)
+    {
+        localFilename = filename;
+    }
+    else
+    {
+        ++localFilename;
+    }
+
+    if (strcmp(localFilename, "libclrjit.so") == 0
+        || strcmp(localFilename, "libcoreclr.so") == 0
+        || strcmp(localFilename, "libcoreclrtraceptprovider.so") == 0
+        || strcmp(localFilename, "libdbgshim.so") == 0
+        || strcmp(localFilename, "libmscordaccore.so") == 0
+        || strcmp(localFilename, "libmscordbi.so") == 0
+        || strcmp(localFilename, "libprotojit.so") == 0
+        || strcmp(localFilename, "libsosplugin.so") == 0
+        || strcmp(localFilename, "libsos.so") == 0
+        || strcmp(localFilename, "libsuperpmi-shim-collector.so") == 0
+        || strcmp(localFilename, "libsuperpmi-shim-counter.so") == 0
+        || strcmp(localFilename, "libsuperpmi-shim-simple.so") == 0
+        || strcmp(localFilename, "System.Globalization.Native.so") == 0
+        || strcmp(localFilename, "System.IO.Compression.Native.so") == 0
+        || strcmp(localFilename, "System.Native.so") == 0
+        || strcmp(localFilename, "System.Net.Http.Native.so") == 0
+        || strcmp(localFilename, "System.Net.Security.Native.so") == 0
+        || strcmp(localFilename, "System.Security.Cryptography.Native.OpenSsl.so") == 0
+        || strcmp(localFilename, "System.Security.Cryptography.Native.so") == 0)
+    {
+        return 1;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+static bool isExiting = false;
+
+static int dl_iterate_phdr_get_maps(struct dl_phdr_info* info, size_t /*size*/, void* data)
+{
+    auto maps = (std::map<void *, std::tuple<size_t, int, int>> *) data;
+
+    const char* fileName = info->dlpi_name;
+    if (!fileName || !fileName[0]) {
+        fileName = "x";
+    }
+
+    int isCoreclr = isCoreCLR(fileName);
+
+    debugLog<VerboseOutput>("dl_iterate_phdr_get_maps: %s %zx", fileName, info->dlpi_addr);
+
+    for (int i = 0; i < info->dlpi_phnum; i++) {
+        const auto& phdr = info->dlpi_phdr[i];
+
+        if (phdr.p_type == PT_LOAD) {
+            constexpr uintptr_t pageMask = (uintptr_t) 0xfff;
+
+            uintptr_t start = (info->dlpi_addr + phdr.p_vaddr) & ~pageMask;
+            uintptr_t end = (info->dlpi_addr + phdr.p_vaddr + phdr.p_memsz + pageMask) & ~pageMask;
+
+            void *addr = (void *) start;
+            size_t size = (size_t) (end - start);
+
+            int prot = 0;
+
+            if (phdr.p_flags & PF_R)
+                prot |= PROT_READ;
+            if (phdr.p_flags & PF_W)
+                prot |= PROT_WRITE;
+            if (phdr.p_flags & PF_X)
+                prot |= PROT_EXEC;
+
+            if (maps->find(addr) == maps->end()) {
+                maps->insert(std::make_pair(addr, std::make_tuple(size, prot, isCoreclr)));
+            } else {
+                debugLog<VerboseOutput>("dl_iterate_phdr_get_maps: repeated section address %s %zx", fileName, info->dlpi_addr);
+            }
+        }
+    }
+
+    return 0;
+}
 
 namespace {
 
@@ -137,10 +228,47 @@ struct dlopen
 
     static void* hook(const char* filename, int flag) noexcept
     {
+        std::map<void *, std::tuple<size_t, int, int>> map_before, map_after;
+
+        if (!RecursionGuard::isActive) {
+            RecursionGuard guard;
+            dl_iterate_phdr(&dl_iterate_phdr_get_maps, &map_before);
+        }
+
         auto ret = original(filename, flag);
+
         if (ret) {
             heaptrack_invalidate_module_cache();
             overwrite_symbols();
+
+            if (!RecursionGuard::isActive) {
+                RecursionGuard guard;
+                dl_iterate_phdr(&dl_iterate_phdr_get_maps, &map_after);
+            }
+
+            if(map_after.size() < map_before.size()) {
+                debugLog<VerboseOutput>("dlopen: count of sections after dlopen is less than before: %p %s %x", ret, filename, flag);
+            } else if (map_after.size() != map_before.size()) {
+                std::vector<std::pair<void *, std::tuple<size_t, int, int>>> newMmaps;
+
+                if (!RecursionGuard::isActive) {
+                    RecursionGuard guard;
+
+                    for (const auto & section_after : map_after) {
+                        if (map_before.find(section_after.first) == map_before.end()) {
+                            newMmaps.push_back(section_after);
+                        }
+                    }
+                }
+
+                heaptrack_dlopen(newMmaps, false, reinterpret_cast<void *>(hooks::dlopen::original));
+
+                if (!RecursionGuard::isActive) {
+                    RecursionGuard guard;
+
+                    newMmaps.clear();
+                }
+            }
         }
         return ret;
     }
@@ -153,9 +281,49 @@ struct dlclose
 
     static int hook(void* handle) noexcept
     {
+        std::map<void *, std::tuple<size_t, int, int>> map_before, map_after;
+
+        if (!isExiting) {
+            if (!RecursionGuard::isActive) {
+                RecursionGuard guard;
+                dl_iterate_phdr(&dl_iterate_phdr_get_maps, &map_before);
+            }
+        }
+
         auto ret = original(handle);
         if (!ret) {
             heaptrack_invalidate_module_cache();
+
+            if (!isExiting) {
+                if (!RecursionGuard::isActive) {
+                    RecursionGuard guard;
+                    dl_iterate_phdr(&dl_iterate_phdr_get_maps, &map_after);
+                }
+
+                if(map_after.size() > map_before.size()) {
+                    debugLog<VerboseOutput>("dlopen: count of sections after dlclose is greater than before: %p", handle);
+                } else if (map_after.size() != map_before.size()) {
+                    std::vector<std::pair<void *, size_t>> munmaps;
+
+                    if (!RecursionGuard::isActive) {
+                        RecursionGuard guard;
+
+                        for (const auto & section_before : map_before) {
+                            if (map_after.find(section_before.first) == map_after.end()) {
+                                munmaps.push_back(std::make_pair(section_before.first, std::get<0>(section_before.second)));
+                            }
+                        }
+                    }
+
+                    heaptrack_dlclose(munmaps);
+
+                    if (!RecursionGuard::isActive) {
+                        RecursionGuard guard;
+
+                        munmaps.clear();
+                    }
+                }
+            }
         }
         return ret;
     }
@@ -188,7 +356,7 @@ struct mmap
                       int prot,
                       int flags,
                       int fd,
-                      off_t offset)
+                      off_t offset) noexcept
     {
         void *ret = original(addr, length, prot, flags, fd, offset);
 
@@ -210,7 +378,7 @@ struct mmap64
                       int prot,
                       int flags,
                       int fd,
-                      off64_t offset)
+                      off64_t offset) noexcept
     {
         void *ret = original(addr, length, prot, flags, fd, offset);
 
@@ -375,12 +543,61 @@ void overwrite_symbols() noexcept
 }
 
 extern "C" {
+
 void heaptrack_inject(const char* outputFileName) noexcept
 {
+    atexit([]() {
+        isExiting = true;
+    });
+
     heaptrack_init(outputFileName, []() { overwrite_symbols(); }, [](FILE* out) { fprintf(out, "A\n"); },
                    []() {
                        bool do_shutdown = true;
                        dl_iterate_phdr(&iterate_phdrs, &do_shutdown);
                    });
+
+   {
+       std::map<void *, std::tuple<size_t, int, int>> map;
+
+       dl_iterate_phdr(&dl_iterate_phdr_get_maps, &map);
+
+       std::vector<std::pair<void *, std::tuple<size_t, int, int>>> newMmaps;
+
+       for (const auto & section : map) {
+           newMmaps.push_back(section);
+       }
+
+       heaptrack_dlopen(newMmaps, true, reinterpret_cast<void *>(hooks::dlopen::original));
+   }
 }
+
+#if TIZEN
+int dotnet_launcher_inject() noexcept
+{
+    int res = -1;
+    char *env = nullptr;
+    char* output = nullptr;
+
+    env = getenv("DUMP_HEAPTRACK_OUTPUT");
+    if (env == nullptr) {
+        goto ret;
+    }
+
+    output = strdup(env);
+    if (output == nullptr) {
+        goto ret;
+    }
+
+    heaptrack_inject(output);
+    res = 0;
+
+ret:
+    unsetenv("DUMP_HEAPTRACK_OUTPUT");
+
+    free(output);
+
+    return res;
+}
+#endif
+
 }

@@ -35,6 +35,13 @@ option(
   On
 )
 
+option(
+  TIZEN
+  "Tizen platform"
+  Off
+)
+add_definitions(-DTIZEN=$<BOOL:${TIZEN}>)
+
 if(HEAPTRACK_BUILD_GUI)
     find_package(Qt5 5.2.0 NO_MODULE OPTIONAL_COMPONENTS Widgets)
     find_package(ECM 1.0.0 NO_MODULE)
