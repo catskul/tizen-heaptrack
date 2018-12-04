@@ -12,6 +12,7 @@
 #include <qwt_plot_multi_barchart.h>
 #include <qwt_plot_picker.h>
 #include <qwt_scale_draw.h>
+#include <qwt_text.h>
 
 #include <QHash>
 #include <QPair>

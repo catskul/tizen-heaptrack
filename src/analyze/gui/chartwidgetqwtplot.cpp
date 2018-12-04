@@ -12,6 +12,7 @@
 #include <qwt_plot_zoomer.h>
 #include <qwt_scale_draw.h>
 #include <qwt_symbol.h>
+#include <qwt_text.h>
 
 #include <QToolTip>
 
