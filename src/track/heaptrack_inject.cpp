@@ -18,6 +18,7 @@
 
 #include "libheaptrack.h"
 #include "util/config.h"
+#include "outstream/outstream.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -550,7 +551,7 @@ void heaptrack_inject(const char* outputFileName) noexcept
         isExiting = true;
     });
 
-    heaptrack_init(outputFileName, []() { overwrite_symbols(); }, [](FILE* out) { fprintf(out, "A\n"); },
+    heaptrack_init(outputFileName, []() { overwrite_symbols(); }, [](outStream* out) { fprintf(out, "A\n"); },
                    []() {
                        bool do_shutdown = true;
                        dl_iterate_phdr(&iterate_phdrs, &do_shutdown);

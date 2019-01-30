@@ -53,6 +53,7 @@
 #include "objectgraph.h"
 #include "util/config.h"
 #include "util/libunwind_config.h"
+#include "outstream/outstream_file.h"
 
 /**
  * uncomment this to get extended debug code for known pointers
@@ -85,12 +86,12 @@ atomic<bool> s_atexit{false};
  */
 atomic<bool> s_forceCleanup{false};
 
-void writeVersion(FILE* out)
+void writeVersion(outStream* out)
 {
     fprintf(out, "v %x %x\n", HEAPTRACK_VERSION, HEAPTRACK_FILE_FORMAT_VERSION);
 }
 
-void writeExe(FILE* out)
+void writeExe(outStream* out)
 {
     const int BUF_SIZE = 1023;
     char buf[BUF_SIZE + 1];
@@ -101,7 +102,7 @@ void writeExe(FILE* out)
     }
 }
 
-void writeCommandLine(FILE* out)
+void writeCommandLine(outStream* out)
 {
     fputc('X', out);
     const int BUF_SIZE = 4096;
@@ -120,12 +121,12 @@ void writeCommandLine(FILE* out)
     fputc('\n', out);
 }
 
-void writeSystemInfo(FILE* out)
+void writeSystemInfo(outStream* out)
 {
     fprintf(out, "I %lx %lx\n", sysconf(_SC_PAGESIZE), sysconf(_SC_PHYS_PAGES));
 }
 
-FILE* createFile(const char* fileName)
+outStream* createFile(const char* fileName)
 {
     string outputFileName;
     if (fileName) {
@@ -134,10 +135,10 @@ FILE* createFile(const char* fileName)
 
     if (outputFileName == "-" || outputFileName == "stdout") {
         debugLog<VerboseOutput>("%s", "will write to stdout");
-        return stdout;
+        return OpenStream<outStreamFILE, FILE*>(stdout);
     } else if (outputFileName == "stderr") {
         debugLog<VerboseOutput>("%s", "will write to stderr");
-        return stderr;
+        return OpenStream<outStreamFILE, FILE*>(stderr);
     }
 
     if (outputFileName.empty()) {
@@ -147,10 +148,8 @@ FILE* createFile(const char* fileName)
 
     boost::replace_all(outputFileName, "$$", to_string(getpid()));
 
-    auto out = fopen(outputFileName.c_str(), "w");
+    auto out = OpenStream<outStreamFILE, const char*>(outputFileName.c_str());
     debugLog<VerboseOutput>("will write to %s/%p\n", outputFileName.c_str(), out);
-    // we do our own locking, this speeds up the writing significantly
-    __fsetlocking(out, FSETLOCKING_BYCALLER);
     return out;
 }
 
@@ -223,7 +222,7 @@ public:
             });
         });
 
-        FILE* out = createFile(fileName);
+        outStream* out = createFile(fileName);
 
         if (!out) {
             fprintf(stderr, "ERROR: Failed to open heaptrack output file: %s\n", fileName);
@@ -706,7 +705,7 @@ private:
 
     struct LockedData
     {
-        LockedData(FILE* out, heaptrack_callback_t stopCallback)
+        LockedData(outStream* out, heaptrack_callback_t stopCallback)
             : out(out)
             , stopCallback(stopCallback)
         {
@@ -773,7 +772,7 @@ private:
             }
 
             if (out) {
-                fclose(out);
+                delete out;
             }
 
             if (procSmaps) {
@@ -791,7 +790,7 @@ private:
          *       Esp. in multi-threaded environments this is much faster
          *       to produce non-per-line-interleaved output.
          */
-        FILE* out = nullptr;
+        outStream* out = nullptr;
 
         /// /proc/self/smaps file stream to read address range data from
         FILE* procSmaps = nullptr;

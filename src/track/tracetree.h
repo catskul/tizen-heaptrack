@@ -31,6 +31,7 @@
 #include <unordered_set>
 
 #include "trace.h"
+#include "outstream/outstream.h"
 
 #include "../profiler/src/stackentry.h"
 
@@ -68,7 +69,7 @@ public:
      *
      * Unknown instruction pointers will be printed to @p out.
      */
-    uint32_t index(const Trace& trace, FILE* out)
+    uint32_t index(const Trace& trace, outStream* out)
     {
         uint32_t index = 0;
         TraceEdge* parent = &m_root;

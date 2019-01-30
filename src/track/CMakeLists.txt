@@ -18,6 +18,8 @@ endif()
 add_library(heaptrack_preload MODULE
     heaptrack_preload.cpp
     libheaptrack.cpp
+    outstream/outstream.cpp
+    outstream/outstream_file.cpp
 )
 
 target_compile_options(heaptrack_preload PRIVATE "-ftls-model=initial-exec")
@@ -44,6 +46,8 @@ install(TARGETS heaptrack_preload
 add_library(heaptrack_inject MODULE
     heaptrack_inject.cpp
     libheaptrack.cpp
+    outstream/outstream.cpp
+    outstream/outstream_file.cpp
 )
 
 target_link_libraries(heaptrack_inject LINK_PRIVATE

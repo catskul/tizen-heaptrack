@@ -16,7 +16,7 @@ public:
     void *classId;
     bool visited;
 
-    void print(size_t gcCounter, FILE *out) {
+    void print(size_t gcCounter, outStream *out) {
         // To make things more compact, if the node was already visited, don't
         // traverse its children. It's enough to note that it is there.
         if (visited) {
@@ -63,7 +63,7 @@ public:
         keyIt->second.children.push_back(&(valIt->second));
     }
 
-    void print(size_t gcCounter, FILE* out) {
+    void print(size_t gcCounter, outStream* out) {
         auto it = m_graph.find(nullptr);
         if (it == m_graph.end()) {
             return;
