@@ -34,6 +34,7 @@ public:
 
     int Putc(int Char) noexcept override;
     int Puts(const char *String) noexcept override;
+    bool Flush() noexcept override;
 
     static constexpr int MinAllowedSocketPort = 1;
     static constexpr int MaxAllowedSocketPort = 65535;

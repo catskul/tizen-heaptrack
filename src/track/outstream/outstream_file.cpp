@@ -58,3 +58,12 @@ int outStreamFILE::Puts(const char *String) noexcept
     }
     return fputs(String, Stream_);
 }
+
+bool outStreamFILE::Flush() noexcept
+{
+    if (!Stream_) {
+        errno = EIO;
+        return false;
+    }
+    return fflush(Stream_) != EOF;
+}

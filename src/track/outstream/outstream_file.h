@@ -31,6 +31,7 @@ public:
 
     int Putc(int Char) noexcept override;
     int Puts(const char *String) noexcept override;
+    bool Flush() noexcept override;
 
 private:
     FILE *Stream_;

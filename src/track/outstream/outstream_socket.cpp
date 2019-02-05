@@ -163,3 +163,12 @@ int outStreamSOCKET::Puts(const char *String) noexcept
 
     return EOF;
 }
+
+bool outStreamSOCKET::Flush() noexcept
+{
+    if (Socket_ == -1) {
+        errno = EIO;
+        return false;
+    }
+    return FlushBuffer();
+}

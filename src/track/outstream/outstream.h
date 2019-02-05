@@ -18,6 +18,7 @@ public:
 
     virtual int Putc(int Char) noexcept = 0;
     virtual int Puts(const char *String) noexcept = 0;
+    virtual bool Flush() noexcept = 0;
 };
 
 template <class Implementation, class Initialization>

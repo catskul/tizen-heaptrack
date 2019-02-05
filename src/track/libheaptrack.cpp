@@ -164,8 +164,20 @@ outStream* createFile(const char* fileName)
             }
             unsetenv("DUMP_HEAPTRACK_SOCKET");
         }
-        debugLog<VerboseOutput>("%s", "will write to socket");
-        return OpenStream<outStreamSOCKET, uint16_t>(Port);
+
+        outStream *tmpStream = OpenStream<outStreamSOCKET, uint16_t>(Port);
+
+        env = getenv("DUMP_HEAPTRACK_SOCKET_PROMPT");
+        if (env) {
+            if (fprintf(tmpStream, "%s\n", env) < 0
+                || !tmpStream->Flush()) {
+                fprintf(stderr, "WARNING: can't send socket prompt \"%s\".\n", env);
+            }
+            unsetenv("DUMP_HEAPTRACK_SOCKET_PROMPT");
+        }
+
+        debugLog<VerboseOutput>("will write to socket/%p\n", tmpStream);
+        return tmpStream;
     }
 
     if (outputFileName.empty()) {
