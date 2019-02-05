@@ -20,6 +20,7 @@ add_library(heaptrack_preload MODULE
     libheaptrack.cpp
     outstream/outstream.cpp
     outstream/outstream_file.cpp
+    outstream/outstream_socket.cpp
 )
 
 target_compile_options(heaptrack_preload PRIVATE "-ftls-model=initial-exec")
@@ -48,6 +49,7 @@ add_library(heaptrack_inject MODULE
     libheaptrack.cpp
     outstream/outstream.cpp
     outstream/outstream_file.cpp
+    outstream/outstream_socket.cpp
 )
 
 target_link_libraries(heaptrack_inject LINK_PRIVATE

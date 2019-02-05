@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright 2014-2017 Milian Wolff <mail@milianw.de>
  *
  * This library is free software; you can redistribute it and/or
@@ -54,6 +54,7 @@
 #include "util/config.h"
 #include "util/libunwind_config.h"
 #include "outstream/outstream_file.h"
+#include "outstream/outstream_socket.h"
 
 /**
  * uncomment this to get extended debug code for known pointers
@@ -139,6 +140,32 @@ outStream* createFile(const char* fileName)
     } else if (outputFileName == "stderr") {
         debugLog<VerboseOutput>("%s", "will write to stderr");
         return OpenStream<outStreamFILE, FILE*>(stderr);
+    } else if (outputFileName == "socket") {
+        uint16_t Port = outStreamSOCKET::DefaultSocketPort;
+        char *env = nullptr;
+        env = getenv("DUMP_HEAPTRACK_SOCKET");
+        if (env) {
+            try {
+                int tmpPort = std::stoi(std::string(env));
+                if (tmpPort < outStreamSOCKET::MinAllowedSocketPort
+                    || tmpPort > outStreamSOCKET::MaxAllowedSocketPort) {
+                    fprintf(stderr, "WARNING: DUMP_HEAPTRACK_SOCKET socket port is out of allowed range.\n");
+                    throw std::out_of_range("DUMP_HEAPTRACK_SOCKET socket port is out of allowed range");
+                }
+                Port = static_cast<uint16_t>(tmpPort);
+            } catch (...) {
+                // do nothing, use default port
+                fprintf(stderr,
+                        "WARNING: DUMP_HEAPTRACK_SOCKET should be number in %i-%i range\n",
+                        outStreamSOCKET::MinAllowedSocketPort,
+                        outStreamSOCKET::MaxAllowedSocketPort);
+                fprintf(stderr, "WARNING: switched to default port %i\n",
+                        static_cast<int>(outStreamSOCKET::DefaultSocketPort));
+            }
+            unsetenv("DUMP_HEAPTRACK_SOCKET");
+        }
+        debugLog<VerboseOutput>("%s", "will write to socket");
+        return OpenStream<outStreamSOCKET, uint16_t>(Port);
     }
 
     if (outputFileName.empty()) {

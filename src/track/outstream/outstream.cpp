@@ -38,7 +38,7 @@ int fprintf(outStream *stream, const char* format, ...) noexcept
     }
 
     int ret = stream->Puts(Buf.get());
-    if (ret > 0) {
+    if (ret >= 0) {
         // make proper return code, since it different from fputs()
         ret = tmpStrSize;
     }

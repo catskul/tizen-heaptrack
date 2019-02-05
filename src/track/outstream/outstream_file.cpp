@@ -42,7 +42,7 @@ int outStreamFILE::Putc(int Char) noexcept
 {
     if (!Stream_) {
         errno = EIO;
-        return -1;
+        return EOF;
     }
     return fputc(Char, Stream_);
 }
@@ -51,10 +51,10 @@ int outStreamFILE::Puts(const char *String) noexcept
 {
     if (!Stream_) {
         errno = EIO;
-        return -1;
+        return EOF;
     } else if (!String) {
         errno = EINVAL;
-        return -1;
+        return EOF;
     }
     return fputs(String, Stream_);
 }
