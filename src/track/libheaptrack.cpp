@@ -127,6 +127,25 @@ void writeSystemInfo(outStream* out)
     fprintf(out, "I %lx %lx\n", sysconf(_SC_PAGESIZE), sysconf(_SC_PHYS_PAGES));
 }
 
+// NOTE: all changes in this function must be also reflected in
+// createStream() (src/heaptrack_interpret.cpp)
+//
+// heaptrack output:
+//      heaptrack [stdout/stderr/socket/file] ==> OUT
+// configured by
+//      DUMP_HEAPTRACK_OUTPUT=stdout/stderr/socket/path_to_file
+//      (optional) DUMP_HEAPTRACK_SOCKET
+//      (optional) DUMP_HEAPTRACK_SOCKET_PROMPT
+//
+// TODO (required by VS plugin):
+// heaptrack output with async interpret parsing:
+//      heaptrack [pipe] ==> heaptrack_interpret [stdout/stderr/socket/file] ==> OUT
+// configured by
+//      DUMP_HEAPTRACK_OUTPUT=interpret
+//      DUMP_HEAPTRACK_INTERPRET=/path/to/heaptrack_interpret
+//      DUMP_HEAPTRACK_INTERPRET_OUTPUT=stdout/stderr/socket/path_to_file
+//      (optional) DUMP_HEAPTRACK_SOCKET
+//      (optional) DUMP_HEAPTRACK_SOCKET_PROMPT
 outStream* createFile(const char* fileName)
 {
     string outputFileName;

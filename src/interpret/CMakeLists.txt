@@ -6,6 +6,9 @@ include_directories(
 
 add_executable(heaptrack_interpret
     heaptrack_interpret.cpp
+    ../track/outstream/outstream.cpp
+    ../track/outstream/outstream_file.cpp
+    ../track/outstream/outstream_socket.cpp
 )
 
 target_link_libraries(heaptrack_interpret

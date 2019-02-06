@@ -34,11 +34,16 @@
 #include <cxxabi.h>
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/algorithm/string/replace.hpp>
 
 #include "libbacktrace/backtrace.h"
 #include "libbacktrace/internal.h"
 #include "util/linereader.h"
 #include "util/pointermap.h"
+
+#include "track/outstream/outstream.h"
+#include "track/outstream/outstream_file.h"
+#include "track/outstream/outstream_socket.h"
 
 #include <unistd.h>
 
@@ -181,8 +186,11 @@ struct Module
 
 struct AccumulatedTraceData
 {
-    AccumulatedTraceData()
+    AccumulatedTraceData(outStream *Stream, bool StreamOwner) :
+        Stream_(Stream),
+        StreamOwner_(StreamOwner)
     {
+        assert(Stream_);
         m_modules.reserve(256);
         m_backtraceStates.reserve(64);
         m_internedData.reserve(4096);
@@ -192,7 +200,10 @@ struct AccumulatedTraceData
 
     ~AccumulatedTraceData()
     {
-        fprintf(stdout, "# strings: %zu\n# ips: %zu\n", m_internedData.size(), m_encounteredIps.size());
+        fprintf(Stream_, "# strings: %zu\n# ips: %zu\n", m_internedData.size(), m_encounteredIps.size());
+        if (Stream_ && StreamOwner_) {
+            delete Stream_;
+        }
     }
 
     ResolvedIP resolve(const uintptr_t ip)
@@ -263,7 +274,7 @@ struct AccumulatedTraceData
         if (internedString) {
             *internedString = it->first;
         }
-        fprintf(stdout, "s %s\n", str.c_str());
+        fprintf(Stream_, "s %s\n", str.c_str());
         return id;
     }
 
@@ -303,20 +314,20 @@ struct AccumulatedTraceData
         if (isManaged) {
             size_t functionIndex = intern(m_managedNames[instructionPointer]);
 
-            fprintf(stdout, "i %llx 1 0 0 %zx\n", (1ull << 63) | instructionPointer, functionIndex);
+            fprintf(Stream_, "i %llx 1 0 0 %zx\n", (1ull << 63) | instructionPointer, functionIndex);
         } else {
             const auto ip = resolve(instructionPointer);
-            fprintf(stdout, "i %zx 0 %zx %zx", instructionPointer, ip.moduleIndex, ip.frame.moduleOffset);
+            fprintf(Stream_, "i %zx 0 %zx %zx", instructionPointer, ip.moduleIndex, ip.frame.moduleOffset);
             if (ip.frame.functionIndex || ip.frame.fileIndex) {
-                fprintf(stdout, " %zx", ip.frame.functionIndex);
+                fprintf(Stream_, " %zx", ip.frame.functionIndex);
                 if (ip.frame.fileIndex) {
-                    fprintf(stdout, " %zx %x", ip.frame.fileIndex, ip.frame.line);
+                    fprintf(Stream_, " %zx %x", ip.frame.fileIndex, ip.frame.line);
                     for (const auto& inlined : ip.inlined) {
-                        fprintf(stdout, " %zx %zx %x", inlined.functionIndex, inlined.fileIndex, inlined.line);
+                        fprintf(Stream_, " %zx %zx %x", inlined.functionIndex, inlined.fileIndex, inlined.line);
                     }
                 }
             }
-            fputc('\n', stdout);
+            fputc('\n', Stream_);
         }
 
         return ipId;
@@ -335,7 +346,7 @@ struct AccumulatedTraceData
         size_t classIndex = intern(m_managedNames[classPointer]);
         m_encounteredClasses.insert(it, make_pair(classPointer, classIndex));
 
-        fprintf(stdout, "C %zx\n", classIndex);
+        fprintf(Stream_, "C %zx\n", classIndex);
         return classIndex;
     }
 
@@ -417,6 +428,9 @@ struct AccumulatedTraceData
     }
 
 private:
+    outStream *Stream_;
+    bool StreamOwner_;
+
     vector<Module> m_modules;
     unordered_map<std::string, backtrace_state*> m_backtraceStates;
     bool m_modulesDirty = false;
@@ -428,6 +442,75 @@ private:
 };
 }
 
+// Should be close to createFile() (src/track/libheaptrack.cpp) code,
+// since we could route output from heaptrack to heaptrack_interpret via pipe
+// and use heaptrack's output configuration environment variables directly.
+// Note, should provide only stdout/stderr/socket/file output stream support.
+outStream* createStream(const char* fileName)
+{
+    string outputFileName;
+    if (fileName) {
+        outputFileName.assign(fileName);
+    }
+
+    if (outputFileName == "-" || outputFileName == "stdout") {
+        fprintf(stderr, "will write to stdout");
+        return OpenStream<outStreamFILE, FILE*>(stdout);
+    } else if (outputFileName == "stderr") {
+        fprintf(stderr, "will write to stderr");
+        return OpenStream<outStreamFILE, FILE*>(stderr);
+    } else if (outputFileName == "socket") {
+        uint16_t Port = outStreamSOCKET::DefaultSocketPort;
+        char *env = nullptr;
+        env = getenv("DUMP_HEAPTRACK_SOCKET");
+        if (env) {
+            try {
+                int tmpPort = std::stoi(std::string(env));
+                if (tmpPort < outStreamSOCKET::MinAllowedSocketPort
+                    || tmpPort > outStreamSOCKET::MaxAllowedSocketPort) {
+                    fprintf(stderr, "WARNING: DUMP_HEAPTRACK_SOCKET socket port is out of allowed range.\n");
+                    throw std::out_of_range("DUMP_HEAPTRACK_SOCKET socket port is out of allowed range");
+                }
+                Port = static_cast<uint16_t>(tmpPort);
+            } catch (...) {
+                // do nothing, use default port
+                fprintf(stderr,
+                        "WARNING: DUMP_HEAPTRACK_SOCKET should be number in %i-%i range\n",
+                        outStreamSOCKET::MinAllowedSocketPort,
+                        outStreamSOCKET::MaxAllowedSocketPort);
+                fprintf(stderr, "WARNING: switched to default port %i\n",
+                        static_cast<int>(outStreamSOCKET::DefaultSocketPort));
+            }
+            unsetenv("DUMP_HEAPTRACK_SOCKET");
+        }
+
+        outStream *tmpStream = OpenStream<outStreamSOCKET, uint16_t>(Port);
+
+        env = getenv("DUMP_HEAPTRACK_SOCKET_PROMPT");
+        if (env) {
+            if (fprintf(tmpStream, "%s\n", env) < 0
+                || !tmpStream->Flush()) {
+                fprintf(stderr, "WARNING: can't send socket prompt \"%s\".\n", env);
+            }
+            unsetenv("DUMP_HEAPTRACK_SOCKET_PROMPT");
+        }
+
+        fprintf(stderr, "will write to socket/%p\n", tmpStream);
+        return tmpStream;
+    }
+
+    if (outputFileName.empty()) {
+        // env var might not be set when linked directly into an executable
+        outputFileName = "heaptrack.$$";
+    }
+
+    boost::replace_all(outputFileName, "$$", to_string(getpid()));
+
+    auto out = OpenStream<outStreamFILE, const char*>(outputFileName.c_str());
+    fprintf(stderr, "will write to %s/%p\n", outputFileName.c_str(), out);
+    return out;
+}
+
 int main(int /*argc*/, char** /*argv*/)
 {
     // optimize: we only have a single thread
@@ -435,7 +518,21 @@ int main(int /*argc*/, char** /*argv*/)
     __fsetlocking(stdout, FSETLOCKING_BYCALLER);
     __fsetlocking(stdin, FSETLOCKING_BYCALLER);
 
-    AccumulatedTraceData data;
+    char *env = getenv("DUMP_HEAPTRACK_INTERPRET_OUTPUT");
+    outStream* outStream;
+    if (env) {
+        outStream = createStream(env);
+        unsetenv("DUMP_HEAPTRACK_INTERPRET_OUTPUT");
+    } else {
+        outStream = createStream("stdout");
+    }
+
+    if (!outStream) {
+        fprintf(stderr, "WARNING: can't open output stream.\n");
+        return 1;
+    }
+
+    AccumulatedTraceData data{outStream, true};
 
     unordered_map<string, int> managed_name_ids;
 
@@ -499,7 +596,7 @@ int main(int /*argc*/, char** /*argv*/)
             // ensure ip is encountered
             const auto ipId = data.addIp(instructionPointer, is_managed);
             // trace point, map current output index to parent index
-            fprintf(stdout, "t %zx %zx\n", ipId, parentIndex);
+            fprintf(outStream, "t %zx %zx\n", ipId, parentIndex);
         } else if (reader.mode() == '^') {
             if (isGCInProcess) {
                 cerr << "[W] wrong trace format (allocation during GC - according to Book of the Runtime, concurrent GC is turned off in case profiling is enabled)" << endl;
@@ -518,12 +615,12 @@ int main(int /*argc*/, char** /*argv*/)
 
             AllocationIndex index;
             if (allocationInfos.add(size, traceId, &index, 1)) {
-                fprintf(stdout, "a %" PRIx64 " %x 1\n", size, traceId.index);
+                fprintf(outStream, "a %" PRIx64 " %x 1\n", size, traceId.index);
             }
             ptrToIndex.addPointer(ptr, index);
             managedPointersSet.insert(ptr);
             lastPtr = ptr;
-            fprintf(stdout, "^ %x\n", index.index);
+            fprintf(outStream, "^ %x\n", index.index);
         } else if (reader.mode() == 'G') {
             int isStart;
 
@@ -564,7 +661,7 @@ int main(int /*argc*/, char** /*argv*/)
                         continue;
                     }
 
-                    fprintf(stdout, "~ %x\n", allocation.first.index);
+                    fprintf(outStream, "~ %x\n", allocation.first.index);
 
                     --leakedManagedAllocations;
                 }
@@ -618,7 +715,7 @@ int main(int /*argc*/, char** /*argv*/)
 
                         managedPointersSet.erase(target);
 
-                        fprintf(stdout, "~ %x\n", allocationAtTarget.first.index);
+                        fprintf(outStream, "~ %x\n", allocationAtTarget.first.index);
 
                         --leakedManagedAllocations;
                     }
@@ -658,11 +755,11 @@ int main(int /*argc*/, char** /*argv*/)
 
             AllocationIndex index;
             if (allocationInfos.add(size, traceId, &index, 0)) {
-                fprintf(stdout, "a %" PRIx64 " %x 0\n", size, traceId.index);
+                fprintf(outStream, "a %" PRIx64 " %x 0\n", size, traceId.index);
             }
             ptrToIndex.addPointer(ptr, index);
             lastPtr = ptr;
-            fprintf(stdout, "+ %x\n", index.index);
+            fprintf(outStream, "+ %x\n", index.index);
         } else if (reader.mode() == '-') {
             uint64_t ptr = 0;
             if (!(reader >> ptr)) {
@@ -675,7 +772,7 @@ int main(int /*argc*/, char** /*argv*/)
             if (!allocation.second) {
                 continue;
             }
-            fprintf(stdout, "- %x\n", allocation.first.index);
+            fprintf(outStream, "- %x\n", allocation.first.index);
             if (temporary) {
                 ++temporaryAllocations;
             }
@@ -722,7 +819,7 @@ int main(int /*argc*/, char** /*argv*/)
             if (!objectId.second)
                 cerr << "[W] unknown object id (" << objectPointer << ") here: " << reader.line() << endl;
             // trace point, map current output index to parent index
-            fprintf(stdout, "e %zx %zx %zx %zx %zx\n", gcCounter, numChildren, objectPointer, classId, objectId.first.index);
+            fprintf(outStream, "e %zx %zx %zx %zx %zx\n", gcCounter, numChildren, objectPointer, classId, objectId.first.index);
         } else if (reader.mode() == 'C') {
             uintptr_t classPointer = 0;
             if (!(reader >> classPointer)) {
@@ -731,8 +828,8 @@ int main(int /*argc*/, char** /*argv*/)
             }
             data.addClass(classPointer);
         } else {
-            fputs(reader.line().c_str(), stdout);
-            fputc('\n', stdout);
+            fputs(reader.line().c_str(), outStream);
+            fputc('\n', outStream);
         }
     }
 
