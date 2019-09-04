@@ -744,6 +744,7 @@ resolve_realname (const char *filename, char *buffer,
       if (filename_len < 1)
 	goto exit;
 
+      buffer[filename_len] = 0;
       temp_filename_len = strlen (buffer);
 
       /* Full path.  */
@@ -844,6 +845,10 @@ search_for_debugfile (char *realname, char *debug_filename,
   valid_buffer = 0;
 
   path_len = pathlen (realname);
+
+  if (path_len < 1)
+    goto exit;
+
   debug_filename_len = strlen ((const char *) debug_filename);
 
   if (debug_filename_len < 1)
@@ -932,8 +937,10 @@ open_debugfile_by_gnulink (char *realname, unsigned char *section_data,
   /* Check the crc32 checksum if it not the same return -1.  */
 
   if (!check_sum (debug_descriptor, (char *) section_data,
-		  strlen ((char *) section_data), section_data_len))
+		  strlen ((char *) section_data), section_data_len)) {
+    close(debug_descriptor);
     debug_descriptor = -1;
+  }
 
  exit:
   return debug_descriptor;
@@ -986,6 +993,9 @@ get_build_id_name (unsigned char *section_data, int *len,
   hash_start = section_data + offset;
   *len = hash_size * 2 + debug_postfix_len + debug_prefix_len + 1;
   build_id_name = backtrace_alloc (state, *len, error_callback, data);
+
+  if (build_id_name == NULL)
+    return NULL;
 
   memset (build_id_name, 0, *len);
   memcpy (build_id_name, debug_prefix, debug_prefix_len);

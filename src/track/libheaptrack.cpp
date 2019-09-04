@@ -109,16 +109,21 @@ void writeCommandLine(outStream* out)
     const int BUF_SIZE = 4096;
     char buf[BUF_SIZE + 1];
     auto fd = open("/proc/self/cmdline", O_RDONLY);
-    int bytesRead = read(fd, buf, BUF_SIZE);
-    char* end = buf + bytesRead;
-    for (char* p = buf; p < end;) {
-        fputc(' ', out);
-        fputs(p, out);
-        while (*p++)
-            ; // skip until start of next 0-terminated section
-    }
+    if (fd >= 0) {
+        int bytesRead = read(fd, buf, BUF_SIZE);
+        if (bytesRead >= 0) {
+            buf[bytesRead] = 0;
+            char* end = buf + bytesRead;
+            for (char* p = buf; p < end;) {
+                fputc(' ', out);
+                fputs(p, out);
+                while (*p++)
+                    ; // skip until start of next 0-terminated section
+            }
+        }
 
-    close(fd);
+        close(fd);
+    }
     fputc('\n', out);
 }
 
@@ -653,7 +658,7 @@ private:
                     }
                     segmentAddr += sizeof(ElfW(Nhdr)) + nhdr->n_namesz + nhdr->n_descsz;
                 }
-                if (nhdr->n_type == NT_GNU_BUILD_ID) {
+                if (nhdr && nhdr->n_type == NT_GNU_BUILD_ID) {
                     const auto buildIdAddr = segmentAddr + sizeof(ElfW(Nhdr)) + nhdr->n_namesz;
                     if (buildIdAddr + nhdr->n_descsz <= segmentEnd && nhdr->n_descsz <= MAX_BUILD_ID_SIZE) {
                         const auto* buildId = reinterpret_cast<const unsigned char*>(buildIdAddr);

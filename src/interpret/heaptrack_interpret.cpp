@@ -75,6 +75,7 @@ struct Frame
         : function(function)
         , file(file)
         , line(line)
+        , moduleOffset(moduleOffset)
     {}
 
     bool isValid() const
@@ -411,7 +412,7 @@ struct AccumulatedTraceData
 
         if (state) {
             const int descriptor = backtrace_open(data.fileName, errorHandler, &data, nullptr);
-            if (descriptor >= 1) {
+            if (descriptor >= 0) {
                 int foundSym = 0;
                 int foundDwarf = 0;
                 auto ret = elf_add(state, descriptor, addressStart, errorHandler, &data, &state->fileline_fn, &foundSym,
