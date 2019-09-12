@@ -9,16 +9,30 @@
 // Make sure, that errno provide proper error code in Putc() and Puts(),
 // since heaptrack use it in writeError().
 
+#include <mutex>
+
 class outStream {
+friend int fprintf(outStream *stream, const char* format, ...) noexcept;
+
 public:
     outStream() = default;
-    virtual ~outStream() = default;
+    virtual ~outStream()
+    {
+        delete [] fprintfBuf;
+    }
     outStream(const outStream &) = delete;
     outStream &operator = (const outStream &) = delete;
 
     virtual int Putc(int Char) noexcept = 0;
     virtual int Puts(const char *String) noexcept = 0;
     virtual bool Flush() noexcept = 0;
+
+private:
+    // make sure, that fprintf's buffers have same lifetime as output stream and fprintf will work
+    // during global/static objects deallocation, since it called from hooks
+    char *fprintfBuf = nullptr;
+    std::mutex m_fprintfBuf;
+    size_t fprintfBufSize = 0;
 };
 
 template <class Implementation, class Initialization>
