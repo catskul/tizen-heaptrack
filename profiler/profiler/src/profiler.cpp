@@ -33,14 +33,6 @@ const CLSID CLSID_Profiler = {
     0x4C0B,
     {0xB3, 0x54, 0x56, 0x63, 0x90, 0xB2, 0x15, 0xCA}};
 
-#ifdef __i386__
-#define ELT_PARAMETER
-#define SetupHooks	SetEnterLeaveFunctionHooks3
-#else // __i386__
-#define ELT_PARAMETER , COR_PRF_ELT_INFO eltInfo
-#define SetupHooks	SetEnterLeaveFunctionHooks3WithInfo
-#endif // __i386__
-
 extern "C" {
 #ifdef __llvm__
 __attribute__((used))
@@ -292,7 +284,7 @@ void encodeWChar(WCHAR *orig, char *encoded) {
   encoded[i] = 0;
 }
 
-void STDMETHODCALLTYPE OnFunctionEnter(FunctionIDOrClientID functionID ELT_PARAMETER) {
+void STDMETHODCALLTYPE OnFunctionEnter(FunctionIDOrClientID functionID, COR_PRF_ELT_INFO eltInfo) {
   ICorProfilerInfo3 *info;
   HRESULT hr = g_pICorProfilerInfoUnknown->QueryInterface(IID_ICorProfilerInfo3,
                                                           (void **)&info);
@@ -320,8 +312,7 @@ void STDMETHODCALLTYPE OnFunctionEnter(FunctionIDOrClientID functionID ELT_PARAM
   info->Release();
 }
 
-void STDMETHODCALLTYPE OnFunctionLeave(FunctionIDOrClientID functionID
-		      ELT_PARAMETER) {
+void STDMETHODCALLTYPE OnFunctionLeave(FunctionIDOrClientID functionID, COR_PRF_ELT_INFO eltInfo) {
   PopShadowStack();
 }
 
@@ -335,7 +326,10 @@ HRESULT STDMETHODCALLTYPE Profiler::Initialize(IUnknown *pICorProfilerInfoUnk) {
         COR_PRF_ENABLE_FUNCTION_RETVAL | COR_PRF_ENABLE_FRAME_INFO |
         COR_PRF_ENABLE_STACK_SNAPSHOT | COR_PRF_MONITOR_CLASS_LOADS |
         COR_PRF_ENABLE_OBJECT_ALLOCATED | COR_PRF_MONITOR_OBJECT_ALLOCATED | COR_PRF_MONITOR_GC);
-    info->SetupHooks(OnFunctionEnter, OnFunctionLeave, NULL);
+    // NOTE ProfileEnterNaked(), ProfileLeaveNaked() and ProfileTailcallNaked() not implemented in CoreCLR for i386
+#ifndef __i386__
+    info->SetEnterLeaveFunctionHooks3WithInfo(OnFunctionEnter, OnFunctionLeave, NULL);
+#endif // __i386__
     info->Release();
     info = NULL;
   }
