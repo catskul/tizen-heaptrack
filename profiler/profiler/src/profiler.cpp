@@ -659,14 +659,21 @@ HRESULT STDMETHODCALLTYPE
   }
 
   for (int i = 0; i < cRootRefs; ++i) {    
+    // NOTE: It is possible to get NULL ObjectIDs in the RootReferences callback.
+    // For example, all object references declared on the stack are treated as
+    // roots by the GC, and will always be reported.
+    // https://github.sec.samsung.net/dotnet/coreclr/blob/release/3.0.0_tizen_5.5/src/inc/corprof.idl#L1616
+    // In this case, GetClassFromObject() call will always return E_INVALIDARG error code
+    if (rootRefIds[i] == 0) {
+      continue;
+    }
+
     ClassID rootClass;
     hr = info->GetClassFromObject(rootRefIds[i], &rootClass);
 
     // We still want the best estimate, even though something went wrong.
     if (hr != S_OK) {
-      // Silently ignore null objects - we're not interested in these
-      if (rootRefIds[0] != 0)
-          fprintf(stderr, "[W] Unknown type for object %x, HRESULT=%x\n", rootRefIds[i], hr);
+      fprintf(stderr, "[W] Unknown type for object %x, HRESULT=%x\n", rootRefIds[i], hr);
       continue;
     }
 
