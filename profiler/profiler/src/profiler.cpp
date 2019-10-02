@@ -88,8 +88,8 @@ extern __thread StackEntry* g_shadowStack;
 __thread StackEntry* g_freeStackEntryListItems = nullptr;
 
 StackEntry::StackEntry(unsigned int funcId,
-                       char* className,
-                       char* methodName,
+                       const char* className,
+                       const char* methodName,
                        bool isType,
                        StackEntry *next)
   : m_funcId(funcId), m_isType(isType), m_next(next)

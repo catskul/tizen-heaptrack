@@ -496,7 +496,7 @@ outStream* createStream(const char* fileName)
             unsetenv("DUMP_HEAPTRACK_SOCKET_PROMPT");
         }
 
-        fprintf(stderr, "will write to socket/%p\n", tmpStream);
+        fprintf(stderr, "will write to socket/%p\n", (void*)tmpStream);
         return tmpStream;
     }
 
@@ -508,7 +508,7 @@ outStream* createStream(const char* fileName)
     boost::replace_all(outputFileName, "$$", to_string(getpid()));
 
     auto out = OpenStream<outStreamFILE, const char*>(outputFileName.c_str());
-    fprintf(stderr, "will write to %s/%p\n", outputFileName.c_str(), out);
+    fprintf(stderr, "will write to %s/%p\n", outputFileName.c_str(), (void*)out);
     return out;
 }
 

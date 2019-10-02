@@ -6,7 +6,7 @@ static constexpr size_t MAX_NAME_LENGTH = 512;
 class StackEntry {
 
 public:
-  StackEntry(unsigned int funcId, char* className, char* methodName, bool isType, StackEntry *next);
+  StackEntry(unsigned int funcId, const char* className, const char* methodName, bool isType, StackEntry *next);
 
   unsigned int m_funcId;
   char m_className[MAX_NAME_LENGTH + 1];
