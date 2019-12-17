@@ -49,7 +49,7 @@ HRESULT __stdcall // STDMETHODCALLTYPE
 }
 }
 
-Profiler::Profiler() : m_referenceCount(1) {}
+Profiler::Profiler() : m_referenceCount(1), info() {}
 
 Profiler::~Profiler() {}
 
