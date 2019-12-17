@@ -47,9 +47,6 @@ echo %{_target_arch}
 echo %{_target_os}
 echo %{_target_platform}
 
-export CFLAGS="--target=%{_host}"
-export CXXFLAGS="--target=%{_host}"
-
 %define _heaptrack_build_conf RelWithDebInfo
 %define _coreclr_devel_directory %{_datarootdir}/%{netcoreappdir}
 
@@ -69,6 +66,8 @@ make %{?jobs:-j%jobs} VERBOSE=1
 %else
 %define arch_dir x86
 %endif
+
+export ENV_GCC_LIB_PATH=`gcc -print-file-name=`
 
 cd ../profiler
 ROOTFS_DIR=/ \
