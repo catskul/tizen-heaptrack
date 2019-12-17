@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "profiler.h"
 #include "pal_excerpts.h"
 #include "classfactory.h"
@@ -94,8 +95,8 @@ StackEntry::StackEntry(unsigned int funcId,
                        StackEntry *next)
   : m_funcId(funcId), m_isType(isType), m_next(next)
 {
-    strncpy(m_className, className, sizeof (m_className));
-    strncpy(m_methodName, methodName, sizeof (m_methodName));
+    snprintf(m_className, sizeof(m_className), "%s", className);
+    snprintf(m_methodName, sizeof(m_methodName), "%s", methodName);
 }
 
 void PushShadowStack(FunctionID functionId, char* className, char* methodName)
