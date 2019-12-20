@@ -69,6 +69,11 @@ make %{?jobs:-j%jobs} VERBOSE=1
 
 export ENV_GCC_LIB_PATH=`gcc -print-file-name=`
 
+%ifarch armv7l
+export CFLAGS=`echo $CFLAGS | sed s/-Wa,-mimplicit-it=thumb\ //`
+export CXXFLAGS=`echo $CXXLAGS | sed s/-Wa,-mimplicit-it=thumb\ //`
+%endif
+
 cd ../profiler
 ROOTFS_DIR=/ \
 CC=clang CXX=clang++ \
