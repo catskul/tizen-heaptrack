@@ -14,34 +14,36 @@ if (NOT TIZEN)
     )
 endif()
 
-# heaptrack_preload: track a newly started process
-add_library(heaptrack_preload MODULE
-    heaptrack_preload.cpp
-    libheaptrack.cpp
-    outstream/outstream.cpp
-    outstream/outstream_file.cpp
-    outstream/outstream_socket.cpp
-)
+if (BUILD_PRELOAD)
+    # heaptrack_preload: track a newly started process
+    add_library(heaptrack_preload MODULE
+        heaptrack_preload.cpp
+        libheaptrack.cpp
+        outstream/outstream.cpp
+        outstream/outstream_file.cpp
+        outstream/outstream_socket.cpp
+    )
 
-target_compile_options(heaptrack_preload PRIVATE "-ftls-model=initial-exec")
+    target_compile_options(heaptrack_preload PRIVATE "-ftls-model=initial-exec")
 
-target_link_libraries(heaptrack_preload LINK_PRIVATE
-    ${CMAKE_DL_LIBS}
-    ${CMAKE_THREAD_LIBS_INIT}
-    ${LIBUNWIND_LIBRARY}
-    rt
-    -ftls-model=initial-exec
-)
+    target_link_libraries(heaptrack_preload LINK_PRIVATE
+        ${CMAKE_DL_LIBS}
+        ${CMAKE_THREAD_LIBS_INIT}
+        ${LIBUNWIND_LIBRARY}
+        rt
+        -ftls-model=initial-exec
+    )
 
-set_target_properties(heaptrack_preload PROPERTIES
-    VERSION ${HEAPTRACK_LIB_VERSION}
-    SOVERSION ${HEAPTRACK_LIB_SOVERSION}
-    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/${LIB_INSTALL_DIR}/heaptrack"
-)
+    set_target_properties(heaptrack_preload PROPERTIES
+        VERSION ${HEAPTRACK_LIB_VERSION}
+        SOVERSION ${HEAPTRACK_LIB_SOVERSION}
+        LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/${LIB_INSTALL_DIR}/heaptrack"
+    )
 
-install(TARGETS heaptrack_preload
-    LIBRARY DESTINATION ${LIB_INSTALL_DIR}/heaptrack/
-)
+    install(TARGETS heaptrack_preload
+        LIBRARY DESTINATION ${LIB_INSTALL_DIR}/heaptrack/
+    )
+endif()
 
 # heaptrack_inject: track an already running process
 add_library(heaptrack_inject MODULE
