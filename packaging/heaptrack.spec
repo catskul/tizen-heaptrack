@@ -83,6 +83,9 @@ export ENV_GCC_LIB_PATH=`gcc -print-file-name=`
 export CFLAGS="--target=%{_host}"
 export CXXFLAGS="--target=%{_host}"
 
+export CFLAGS=`echo $CFLAGS | sed -E s/\(-f\|--param=\)annobin[a-z\-]*=[a-z0-9]*//g`
+export CXXFLAGS=`echo $CXXLAGS | sed -E s/\(-f\|--param=\)annobin[a-z\-]*=[a-z0-9]*//g`
+
 cd ../profiler
 ROOTFS_DIR=/ \
 CC=clang CXX=clang++ \
