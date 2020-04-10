@@ -69,6 +69,9 @@ make %{?jobs:-j%jobs} VERBOSE=1
 
 export ENV_GCC_LIB_PATH=`gcc -print-file-name=`
 
+export CFLAGS=`echo $CFLAGS | sed s/-frecord-gcc-switches\ //`
+export CXXFLAGS=`echo $CXXFLAGS | sed s/-frecord-gcc-switches\ //`
+
 %ifarch armv7l
 export CFLAGS=`echo $CFLAGS | sed s/-Wa,-mimplicit-it=thumb\ //`
 export CXXFLAGS=`echo $CXXLAGS | sed s/-Wa,-mimplicit-it=thumb\ //`
