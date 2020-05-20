@@ -47,6 +47,11 @@ echo %{_target_arch}
 echo %{_target_os}
 echo %{_target_platform}
 
+%ifarch %{ix86}
+export CFLAGS=$(echo $CFLAGS | sed -e 's/-mstackrealign//')
+export CXXFLAGS=$(echo $CXXFLAGS | sed -e 's/-mstackrealign//')
+%endif
+
 %define _heaptrack_build_conf RelWithDebInfo
 %define _coreclr_devel_directory %{_datarootdir}/%{netcoreappdir}
 
