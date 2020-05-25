@@ -82,6 +82,9 @@ export CFLAGS=`echo $CFLAGS | sed s/-Wa,-mimplicit-it=thumb\ //`
 export CXXFLAGS=`echo $CXXLAGS | sed s/-Wa,-mimplicit-it=thumb\ //`
 %endif
 
+export CFLAGS=$(echo $CFLAGS | sed 's/-flto//')
+export CXXFLAGS=$(echo $CXXFLAGS | sed 's/-flto//')
+
 cd ../profiler
 ROOTFS_DIR=/ \
 CC=clang CXX=clang++ \
