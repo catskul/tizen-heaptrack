@@ -1,8 +1,8 @@
 Name:       heaptrack
 Summary:    heaptrack for dotnet apps
 # Version corresponds to CMake @HEAPTRACK_VERSION_MAJOR@.@HEAPTRACK_VERSION_MINOR@.@HEAPTRACK_VERSION_PATCH@-@HEAPTRACK_VERSION_SUFFIX@
-Version:    1.1.0
-Release:    0.1
+Version:    1.2.0
+Release:    3
 Group:      Application Framework/Application State Management
 License:    GPL
 Source0:    %{name}-%{version}.tar.gz
