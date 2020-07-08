@@ -11,7 +11,7 @@ Source1001: heaptrack.manifest
 %define	heaptrack_build build-%{_target_platform}
 AutoReqProv: no
 
-ExcludeArch: aarch64 x86_64
+ExcludeArch: x86_64
 
 BuildRequires: cmake
 BuildRequires: gcc
@@ -68,22 +68,20 @@ make %{?jobs:-j%jobs} VERBOSE=1
 
 %ifarch %{arm}
 %define arch_dir armel
-%else
+%endif
+
+%ifarch aarch64
+%define arch_dir arm64
+%endif
+
+%ifarch %{ix86}
 %define arch_dir x86
 %endif
 
 export ENV_GCC_LIB_PATH=`gcc -print-file-name=`
 
-export CFLAGS=`echo $CFLAGS | sed s/-frecord-gcc-switches\ //`
-export CXXFLAGS=`echo $CXXFLAGS | sed s/-frecord-gcc-switches\ //`
-
-%ifarch armv7l
-export CFLAGS=`echo $CFLAGS | sed s/-Wa,-mimplicit-it=thumb\ //`
-export CXXFLAGS=`echo $CXXLAGS | sed s/-Wa,-mimplicit-it=thumb\ //`
-%endif
-
-export CFLAGS=$(echo $CFLAGS | sed 's/-flto//')
-export CXXFLAGS=$(echo $CXXFLAGS | sed 's/-flto//')
+export CFLAGS="--target=%{_host}"
+export CXXFLAGS="--target=%{_host}"
 
 cd ../profiler
 ROOTFS_DIR=/ \
