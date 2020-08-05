@@ -64,7 +64,7 @@ test_sdb_version() {
         read_file "sdb was not found. Enter sdb path [] " SDB
     fi
     ver=( $($SDB version | sed -r 's/.*([0-9]+)\.([0-9]+)\.([0-9]+).*/\1 \2 \3/g') )
-    if [[ "${ver[0]}" < "2" ]] || [[ "${ver[1]}" < "3" ]]; then
+    if [[ "${ver[0]}" < "2" ]] || [[ "${ver[0]}" == "2" && "${ver[1]}" < "3" ]]; then
         echo "Unsupported sdb version:  ${ver[0]}.${ver[1]}.${ver[2]}. Please update sdb to at least 2.3.0"
         exit 1
     fi
